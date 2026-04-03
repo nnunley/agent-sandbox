@@ -41,20 +41,32 @@ push_source() {
   echo "==> Source pushed."
 }
 
+build_and_activate() {
+  echo "==> Building NixOS configuration..."
+  local build_path
+  build_path=$(incus exec "${REMOTE}:${CONTAINER}" -- bash -c \
+    "cd ${FLAKE_DIR} && nix --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.agent-host.config.system.build.toplevel --no-link --print-out-paths")
+
+  echo "==> Built: ${build_path}"
+  echo "==> Setting system profile..."
+  incus exec "${REMOTE}:${CONTAINER}" -- \
+    nix-env -p /nix/var/nix/profiles/system --set "${build_path}"
+
+  echo "==> Registering for next boot..."
+  incus exec "${REMOTE}:${CONTAINER}" -- \
+    "${build_path}/bin/switch-to-configuration" boot
+
+  echo "==> Restarting container to activate..."
+  incus restart "${REMOTE}:${CONTAINER}" --force
+  wait_for_container
+}
+
 cmd_init() {
   echo "==> Creating NixOS container on ${REMOTE}..."
 
   # Launch NixOS container
   incus launch images:nixos/25.11 "${REMOTE}:${CONTAINER}"
   wait_for_container
-
-  # Mount shared /nix volume
-  echo "==> Mounting shared /nix volume..."
-  incus stop "${REMOTE}:${CONTAINER}"
-
-  # Add the shared nix-store volume mounted at /nix
-  incus config device add "${REMOTE}:${CONTAINER}" nix-store disk \
-    pool=default source="${NIX_VOLUME}" path=/nix
 
   # Configure KVM passthrough
   echo "==> Configuring KVM passthrough..."
@@ -64,34 +76,32 @@ cmd_init() {
   echo "==> Enabling security.nesting..."
   incus config set "${REMOTE}:${CONTAINER}" security.nesting=true
 
-  # Start with new config
-  incus start "${REMOTE}:${CONTAINER}"
+  # Restart to pick up device and config changes
+  incus restart "${REMOTE}:${CONTAINER}" --force
   wait_for_container
-
-  # Check if /nix/store exists (shared volume was seeded)
-  echo "==> Checking if shared /nix is seeded..."
-  if ! incus exec "${REMOTE}:${CONTAINER}" -- test -d /nix/store; then
-    echo "ERROR: Shared /nix volume is empty. Seed it first:"
-    echo ""
-    echo "  # Mount temporarily on an existing NixOS container:"
-    echo "  incus config device add ${REMOTE}:nativelink-worker nix-shared disk pool=default source=${NIX_VOLUME} path=/nix-shared"
-    echo "  incus exec ${REMOTE}:nativelink-worker -- bash -c 'cp -a /nix/. /nix-shared/'"
-    echo "  incus config device remove ${REMOTE}:nativelink-worker nix-shared"
-    echo ""
-    echo "  Then re-run: ./scripts/deploy.sh destroy && ./scripts/deploy.sh init"
-    exit 1
-  fi
 
   # Verify KVM is available
   echo "==> Verifying KVM..."
   incus exec "${REMOTE}:${CONTAINER}" -- ls -la /dev/kvm
 
-  # Push source and rebuild
-  push_source
+  # Seed the shared /nix volume from this container's store
+  echo "==> Seeding shared /nix volume from container's store..."
+  incus config device add "${REMOTE}:${CONTAINER}" nix-shared disk \
+    pool=default source="${NIX_VOLUME}" path=/nix-shared
+  incus exec "${REMOTE}:${CONTAINER}" -- bash -c 'cp -an /nix/. /nix-shared/'
+  incus config device remove "${REMOTE}:${CONTAINER}" nix-shared
 
-  echo "==> Running nixos-rebuild switch (this will take a while on first run)..."
-  incus exec "${REMOTE}:${CONTAINER}" -- bash -c \
-    "cd ${FLAKE_DIR} && nixos-rebuild switch --flake .#agent-host"
+  # Stop, mount shared /nix, restart
+  echo "==> Switching to shared /nix volume..."
+  incus stop "${REMOTE}:${CONTAINER}" --force
+  incus config device add "${REMOTE}:${CONTAINER}" nix-store disk \
+    pool=default source="${NIX_VOLUME}" path=/nix
+  incus start "${REMOTE}:${CONTAINER}"
+  wait_for_container
+
+  # Push source and build
+  push_source
+  build_and_activate
 
   echo ""
   echo "==> Deploy complete! Container '${CONTAINER}' is running on '${REMOTE}'."
@@ -104,10 +114,7 @@ cmd_update() {
   echo "==> Updating ${REMOTE}:${CONTAINER}..."
 
   push_source
-
-  echo "==> Running nixos-rebuild switch..."
-  incus exec "${REMOTE}:${CONTAINER}" -- bash -c \
-    "cd ${FLAKE_DIR} && nixos-rebuild switch --flake .#agent-host"
+  build_and_activate
 
   echo "==> Update complete."
 }
