@@ -24,7 +24,6 @@
   system.stateVersion = "25.11";
 
   documentation.enable = false;
-  environment.noXlibs = lib.mkDefault true;
 
   # Networking via DHCP from host's dnsmasq
   networking = {
