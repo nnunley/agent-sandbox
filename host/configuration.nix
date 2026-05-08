@@ -4,6 +4,7 @@
 {
   imports = [
     ./networking.nix
+    ../modules/llm-proxy.nix
   ];
 
   # Basic system
@@ -33,6 +34,9 @@
     "d /var/lib/agent-sandbox 0755 root root -"
     "d /var/lib/agent-sandbox/runs 0755 root root -"
   ];
+
+  # LLM proxy on the bridge gateway
+  services.llm-proxy.enable = true;
 
   # microvm.nix host defaults
   microvm.host.enable = true;

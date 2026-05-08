@@ -1,2 +1,3 @@
 result
 .direnv
+modules/llm-proxy/llm-proxy
