@@ -3,6 +3,45 @@
 All notable changes to agent-sandbox are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.1.0] - 2026-05-09
+
+Closes the open review findings from the v0.1.0.0 cutpoint and adds the
+first Go test suite for the proxy.
+
+### Added
+- 15 Go tests for `llm-proxy` covering header injection, client-credential
+  stripping (including the no-key case), missing-required-key 503,
+  path-traversal cleaning, prefix boundary, hop-by-hop stripping, body
+  size cap, accurate `bytes_in` for chunked uploads, streaming flush,
+  upstream-failure 502, `/health`, and concurrent log-line integrity.
+  Suite passes under `-race`.
+- `services.llm-proxy.localFastUrl` and `localLargeUrl` Nix options so
+  the LAN IPs aren't baked into the system closure.
+- `services.llm-proxy.maxBodyBytes` Nix option (default 32 MiB),
+  passed to the proxy via `LLM_PROXY_MAX_BODY`.
+
+### Changed
+- Replaced `http.ListenAndServe` with an explicit `http.Server` carrying
+  `ReadHeaderTimeout=30s` and `IdleTimeout=2m`. Long-running streaming
+  reads/writes still have no per-request deadline.
+- Logs go through a buffered, mutex-protected writer to stdout, ending
+  per-line interleaving under concurrent load. Each entry ends in `\n`.
+- Streaming responses now flush per chunk via `http.Flusher`. SSE chunks
+  reach the agent as they arrive instead of being buffered.
+- `bytes_in` is computed from a counting wrapper around the request body,
+  so chunked uploads (no Content-Length) report accurate sizes.
+- Request bodies above `maxBodyBytes` are truncated by `http.MaxBytesReader`.
+- `newRoute` now returns `(route, error)` and rejects URLs missing a
+  scheme or host at startup, so the proxy fails fast instead of producing
+  502s at runtime.
+- Refactored: routing/forwarding logic moved to `proxy.go`; `main.go` is
+  now thin wiring (env, server lifecycle).
+
+### Fixed
+- CLAUDE.md description of `scripts/deploy.sh` corrected — it uses
+  `switch-to-configuration boot` followed by an Incus container restart,
+  not `switch`.
+
 ## [0.1.0.0] - 2026-05-09
 
 First named cutpoint. Establishes the baseline state of the agent-sandbox
@@ -41,3 +80,5 @@ bridges them to cloud + local LLMs through a credential-injecting proxy.
   bridge can spend the host's API budget.
 - No request body size cap.
 - `LOCAL_FAST_URL` / `LOCAL_LARGE_URL` defaults bake in a specific LAN IP.
+
+(All four were addressed in v0.1.1.0.)

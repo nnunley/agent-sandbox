@@ -20,9 +20,13 @@ those VMs access to LLM APIs without exposing host credentials.
 ## Important behaviors
 
 - **No `nixos-rebuild switch` inside the container.** LXC has no bootloader
-  and no kernel to swap. `scripts/deploy.sh` uses
-  `nix-env --profile -p /nix/var/nix/profiles/system --set` followed by
-  `/nix/var/nix/profiles/system/bin/switch-to-configuration switch`.
+  and no kernel to swap. `scripts/deploy.sh` builds the new system closure,
+  sets it as the system profile via
+  `nix-env -p /nix/var/nix/profiles/system --set <path>`, runs
+  `<path>/bin/switch-to-configuration boot` to register it for next boot,
+  then restarts the container with `incus restart --force`. A live
+  `switch-to-configuration switch` would also work for most changes but the
+  current script always does a full container restart for predictability.
 - **Bridge is `trustedInterface`.** Anything on `br-microvm` (10.88.0.0/24)
   can reach the proxy. There is no per-VM auth or rate limit. Only run
   trusted code in the VMs until that changes.
@@ -33,9 +37,10 @@ those VMs access to LLM APIs without exposing host credentials.
 
 ## Testing
 
-- Go: `cd modules/llm-proxy && go vet ./... && go build ./...`. No `go test`
-  yet — adding table-driven tests against `httptest.NewServer` is the
-  obvious next step.
+- Go: `cd modules/llm-proxy && go vet ./... && go test -race ./...`. The
+  test suite uses `httptest.NewServer` and exercises header injection,
+  credential stripping, body size cap, streaming flush, etc. Always run
+  with `-race`.
 - Nix: `nix flake check` (run on a Linux/Nix host — macOS dev machine has
   no `nix` installed).
 - Deploy: `scripts/deploy.sh`. It activates a new system profile and
