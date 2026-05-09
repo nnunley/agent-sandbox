@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"time"
 )
@@ -38,29 +39,48 @@ type logEntry struct {
 }
 
 type route struct {
-	prefix   string
-	upstream *url.URL
-	apiKey   string
-	provider string
+	prefix      string
+	upstream    *url.URL
+	apiKey      string
+	provider    string
+	requiresKey bool
 }
 
-func newRoute(prefix, upstreamStr, apiKey, provider string) route {
+// Hop-by-hop headers (RFC 7230 §6.1) — must be stripped at proxy boundaries.
+var hopByHopHeaders = []string{
+	"Connection",
+	"Keep-Alive",
+	"Proxy-Authenticate",
+	"Proxy-Authorization",
+	"Te",
+	"Trailer",
+	"Transfer-Encoding",
+	"Upgrade",
+}
+
+func newRoute(prefix, upstreamStr, apiKey, provider string, requiresKey bool) route {
 	u, err := url.Parse(upstreamStr)
 	if err != nil {
 		log.Fatalf("invalid upstream URL %q: %v", upstreamStr, err)
 	}
-	return route{prefix: prefix, upstream: u, apiKey: apiKey, provider: provider}
+	return route{
+		prefix:      prefix,
+		upstream:    u,
+		apiKey:      apiKey,
+		provider:    provider,
+		requiresKey: requiresKey,
+	}
 }
 
 func main() {
 	listenAddr := envOrDefault("LLM_PROXY_ADDR", ":12071")
 
 	routes := []route{
-		newRoute("/anthropic", "https://api.anthropic.com", os.Getenv("ANTHROPIC_API_KEY"), "anthropic"),
-		newRoute("/openai", "https://api.openai.com", os.Getenv("OPENAI_API_KEY"), "openai"),
+		newRoute("/anthropic", "https://api.anthropic.com", os.Getenv("ANTHROPIC_API_KEY"), "anthropic", true),
+		newRoute("/openai", "https://api.openai.com", os.Getenv("OPENAI_API_KEY"), "openai", true),
 		// Local llama.cpp instances on ndn.local — no API key needed
-		newRoute("/local-fast", envOrDefault("LOCAL_FAST_URL", "http://ndn.local:8081"), "", "local-fast"),
-		newRoute("/local-large", envOrDefault("LOCAL_LARGE_URL", "http://ndn.local:8082"), "", "local-large"),
+		newRoute("/local-fast", envOrDefault("LOCAL_FAST_URL", "http://ndn.local:8081"), "", "local-fast", false),
+		newRoute("/local-large", envOrDefault("LOCAL_LARGE_URL", "http://ndn.local:8082"), "", "local-large", false),
 	}
 
 	mux := http.NewServeMux()
@@ -92,11 +112,13 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, rt route) {
 		Provider:  rt.provider,
 	}
 
-	// Strip route prefix to get upstream path
+	// Strip route prefix to get upstream path, then clean to neutralize
+	// any "../" segments a client might send.
 	upstreamPath := strings.TrimPrefix(r.URL.Path, rt.prefix)
 	if upstreamPath == "" {
 		upstreamPath = "/"
 	}
+	upstreamPath = path.Clean(upstreamPath)
 
 	target := *rt.upstream
 	target.Path = upstreamPath
@@ -119,10 +141,28 @@ func proxyRequest(w http.ResponseWriter, r *http.Request, rt route) {
 		return
 	}
 
-	// Copy headers from client request
+	// Copy headers from client request, minus hop-by-hop and any auth the
+	// client tried to supply. We never want client-provided credentials to
+	// reach upstream — the proxy's job is to inject its own.
 	copyHeaders(outReq.Header, r.Header)
+	for _, h := range hopByHopHeaders {
+		outReq.Header.Del(h)
+	}
+	outReq.Header.Del("Authorization")
+	outReq.Header.Del("x-api-key")
 
-	// Inject API key (overrides any client-supplied key)
+	// Routes that need an API key MUST have one — otherwise the request would
+	// pass through unauthenticated, returning 401 from upstream and giving the
+	// caller a confusing error. Fail fast with a clear message.
+	if rt.requiresKey && rt.apiKey == "" {
+		entry.Error = "no API key configured"
+		entry.StatusCode = http.StatusServiceUnavailable
+		entry.DurationMs = time.Since(start).Milliseconds()
+		writeLog(entry)
+		http.Error(w, "proxy: no API key configured for "+rt.provider, http.StatusServiceUnavailable)
+		return
+	}
+
 	if rt.apiKey != "" {
 		outReq.Header.Set("Authorization", "Bearer "+rt.apiKey)
 	}
