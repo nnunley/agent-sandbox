@@ -26,6 +26,31 @@ in {
       default = "10.88.0.1:12071";
       description = "Address and port to listen on (should be the bridge gateway).";
     };
+
+    localFastUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "http://192.168.86.49:8081";
+      description = ''
+        Upstream URL for the /local-fast/* route. Defaults to a llama.cpp
+        instance on the host LAN. Override per-deployment to avoid baking
+        a specific LAN address into the system closure.
+      '';
+    };
+
+    localLargeUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "http://192.168.86.49:8082";
+      description = ''
+        Upstream URL for the /local-large/* route. Defaults to a llama.cpp
+        instance on the host LAN. Override per-deployment.
+      '';
+    };
+
+    maxBodyBytes = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 32 * 1024 * 1024;
+      description = "Maximum request body size in bytes. Larger requests get 413.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -60,10 +85,10 @@ in {
       };
 
       environment = {
-        LLM_PROXY_ADDR = cfg.listenAddr;
-        # ndn.local mDNS doesn't resolve inside the Incus container — use IP
-        LOCAL_FAST_URL  = "http://192.168.86.49:8081";
-        LOCAL_LARGE_URL = "http://192.168.86.49:8082";
+        LLM_PROXY_ADDR        = cfg.listenAddr;
+        LOCAL_FAST_URL        = cfg.localFastUrl;
+        LOCAL_LARGE_URL       = cfg.localLargeUrl;
+        LLM_PROXY_MAX_BODY    = toString cfg.maxBodyBytes;
       };
 
       # Read credentials from $CREDENTIALS_DIRECTORY into env vars before exec
