@@ -1,11 +1,12 @@
 // llm-proxy: path-prefix reverse proxy with API key injection and JSONL logging.
 //
 // Routes:
-//   /anthropic/*   → https://api.anthropic.com/*  (injects Authorization: Bearer $ANTHROPIC_API_KEY)
-//   /openai/*      → https://api.openai.com/*      (injects Authorization: Bearer $OPENAI_API_KEY)
-//   /local-fast/*  → $LOCAL_FAST_URL  (default: http://ndn.local:8081, Gemma 4 E4B)
-//   /local-large/* → $LOCAL_LARGE_URL (default: http://ndn.local:8082, Qwen3-Coder-Next)
-//   /health        → 200 OK
+//
+//	/anthropic/*   → https://api.anthropic.com/*  (injects Authorization: Bearer $ANTHROPIC_API_KEY + x-api-key)
+//	/openai/*      → https://api.openai.com/*      (injects Authorization: Bearer $OPENAI_API_KEY)
+//	/local-fast/*  → $LOCAL_FAST_URL  (default: http://ndn.local:8081)
+//	/local-large/* → $LOCAL_LARGE_URL (default: http://ndn.local:8082)
+//	/health        → 200 OK
 //
 // Agents configure: ANTHROPIC_BASE_URL=http://10.88.0.1:12071/anthropic
 //
@@ -14,206 +15,95 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
+	"bufio"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
-	"strings"
+	"strconv"
+	"sync"
 	"time"
 )
-
-type logEntry struct {
-	Timestamp  string `json:"ts"`
-	Method     string `json:"method"`
-	Path       string `json:"path"`
-	Provider   string `json:"provider"`
-	StatusCode int    `json:"status"`
-	DurationMs int64  `json:"duration_ms"`
-	BytesIn    int64  `json:"bytes_in"`
-	BytesOut   int64  `json:"bytes_out"`
-	Error      string `json:"error,omitempty"`
-}
-
-type route struct {
-	prefix      string
-	upstream    *url.URL
-	apiKey      string
-	provider    string
-	requiresKey bool
-}
-
-// Hop-by-hop headers (RFC 7230 §6.1) — must be stripped at proxy boundaries.
-var hopByHopHeaders = []string{
-	"Connection",
-	"Keep-Alive",
-	"Proxy-Authenticate",
-	"Proxy-Authorization",
-	"Te",
-	"Trailer",
-	"Transfer-Encoding",
-	"Upgrade",
-}
-
-func newRoute(prefix, upstreamStr, apiKey, provider string, requiresKey bool) route {
-	u, err := url.Parse(upstreamStr)
-	if err != nil {
-		log.Fatalf("invalid upstream URL %q: %v", upstreamStr, err)
-	}
-	return route{
-		prefix:      prefix,
-		upstream:    u,
-		apiKey:      apiKey,
-		provider:    provider,
-		requiresKey: requiresKey,
-	}
-}
 
 func main() {
 	listenAddr := envOrDefault("LLM_PROXY_ADDR", ":12071")
 
-	routes := []route{
-		newRoute("/anthropic", "https://api.anthropic.com", os.Getenv("ANTHROPIC_API_KEY"), "anthropic", true),
-		newRoute("/openai", "https://api.openai.com", os.Getenv("OPENAI_API_KEY"), "openai", true),
-		// Local llama.cpp instances on ndn.local — no API key needed
-		newRoute("/local-fast", envOrDefault("LOCAL_FAST_URL", "http://ndn.local:8081"), "", "local-fast", false),
-		newRoute("/local-large", envOrDefault("LOCAL_LARGE_URL", "http://ndn.local:8082"), "", "local-large", false),
+	specs := []struct {
+		prefix      string
+		upstream    string
+		apiKey      string
+		provider    string
+		requiresKey bool
+	}{
+		{"/anthropic", "https://api.anthropic.com", os.Getenv("ANTHROPIC_API_KEY"), "anthropic", true},
+		{"/openai", "https://api.openai.com", os.Getenv("OPENAI_API_KEY"), "openai", true},
+		// Local llama.cpp instances — no API key needed
+		{"/local-fast", envOrDefault("LOCAL_FAST_URL", "http://ndn.local:8081"), "", "local-fast", false},
+		{"/local-large", envOrDefault("LOCAL_LARGE_URL", "http://ndn.local:8082"), "", "local-large", false},
 	}
 
-	mux := http.NewServeMux()
+	routes := make([]route, 0, len(specs))
+	for _, s := range specs {
+		rt, err := newRoute(s.prefix, s.upstream, s.apiKey, s.provider, s.requiresKey)
+		if err != nil {
+			log.Fatalf("invalid route %s -> %s: %v", s.prefix, s.upstream, err)
+		}
+		routes = append(routes, rt)
+	}
 
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "ok")
-	})
+	// Buffered, mutex-protected log writer to stdout. Wraps os.Stdout so
+	// concurrent requests don't interleave bytes within a single JSON line.
+	out := &lockedWriter{w: bufio.NewWriter(os.Stdout)}
+	defer out.Flush()
+	logs := &jsonLogSink{w: out}
 
-	for _, rt := range routes {
-		rt := rt // capture
-		mux.HandleFunc(rt.prefix+"/", func(w http.ResponseWriter, r *http.Request) {
-			proxyRequest(w, r, rt)
-		})
+	srv := newServer(routes, logs)
+	if v := os.Getenv("LLM_PROXY_MAX_BODY"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			srv.maxBodyBytes = n
+		} else {
+			log.Printf("warning: ignoring LLM_PROXY_MAX_BODY=%q (not a positive int)", v)
+		}
+	}
+
+	httpSrv := &http.Server{
+		Addr:              listenAddr,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		// No ReadTimeout / WriteTimeout — long-running streaming completions
+		// need indefinite read/write windows. The upstream client.Timeout in
+		// proxy.go bounds total upstream call duration.
 	}
 
 	log.Printf("llm-proxy listening on %s", listenAddr)
-	if err := http.ListenAndServe(listenAddr, mux); err != nil {
+	if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("listen: %v", err)
 	}
 }
 
-func proxyRequest(w http.ResponseWriter, r *http.Request, rt route) {
-	start := time.Now()
-	entry := logEntry{
-		Timestamp: start.UTC().Format(time.RFC3339),
-		Method:    r.Method,
-		Path:      r.URL.Path,
-		Provider:  rt.provider,
-	}
-
-	// Strip route prefix to get upstream path, then clean to neutralize
-	// any "../" segments a client might send.
-	upstreamPath := strings.TrimPrefix(r.URL.Path, rt.prefix)
-	if upstreamPath == "" {
-		upstreamPath = "/"
-	}
-	upstreamPath = path.Clean(upstreamPath)
-
-	target := *rt.upstream
-	target.Path = upstreamPath
-	target.RawQuery = r.URL.RawQuery
-
-	// Read request body for logging (limited to avoid memory issues)
-	var bodyReader io.Reader = r.Body
-	var bytesIn int64
-	if r.ContentLength > 0 {
-		bytesIn = r.ContentLength
-	}
-
-	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, target.String(), bodyReader)
-	if err != nil {
-		entry.Error = err.Error()
-		entry.StatusCode = http.StatusBadGateway
-		entry.DurationMs = time.Since(start).Milliseconds()
-		writeLog(entry)
-		http.Error(w, "bad gateway", http.StatusBadGateway)
-		return
-	}
-
-	// Copy headers from client request, minus hop-by-hop and any auth the
-	// client tried to supply. We never want client-provided credentials to
-	// reach upstream — the proxy's job is to inject its own.
-	copyHeaders(outReq.Header, r.Header)
-	for _, h := range hopByHopHeaders {
-		outReq.Header.Del(h)
-	}
-	outReq.Header.Del("Authorization")
-	outReq.Header.Del("x-api-key")
-
-	// Routes that need an API key MUST have one — otherwise the request would
-	// pass through unauthenticated, returning 401 from upstream and giving the
-	// caller a confusing error. Fail fast with a clear message.
-	if rt.requiresKey && rt.apiKey == "" {
-		entry.Error = "no API key configured"
-		entry.StatusCode = http.StatusServiceUnavailable
-		entry.DurationMs = time.Since(start).Milliseconds()
-		writeLog(entry)
-		http.Error(w, "proxy: no API key configured for "+rt.provider, http.StatusServiceUnavailable)
-		return
-	}
-
-	if rt.apiKey != "" {
-		outReq.Header.Set("Authorization", "Bearer "+rt.apiKey)
-	}
-
-	// Anthropic uses x-api-key in addition to Authorization
-	if rt.provider == "anthropic" && rt.apiKey != "" {
-		outReq.Header.Set("x-api-key", rt.apiKey)
-		// Anthropic requires this header
-		if outReq.Header.Get("anthropic-version") == "" {
-			outReq.Header.Set("anthropic-version", "2023-06-01")
-		}
-	}
-
-	outReq.Host = rt.upstream.Host
-
-	client := &http.Client{Timeout: 10 * time.Minute}
-	resp, err := client.Do(outReq)
-	if err != nil {
-		entry.Error = err.Error()
-		entry.StatusCode = http.StatusBadGateway
-		entry.DurationMs = time.Since(start).Milliseconds()
-		writeLog(entry)
-		http.Error(w, "upstream error: "+err.Error(), http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Copy response headers
-	copyHeaders(w.Header(), resp.Header)
-	w.WriteHeader(resp.StatusCode)
-
-	bytesOut, _ := io.Copy(w, resp.Body)
-
-	entry.StatusCode = resp.StatusCode
-	entry.DurationMs = time.Since(start).Milliseconds()
-	entry.BytesIn = bytesIn
-	entry.BytesOut = bytesOut
-	writeLog(entry)
+// lockedWriter serializes Write calls so JSON log lines from concurrent
+// goroutines never interleave. bufio.Writer is not goroutine-safe on its own.
+type lockedWriter struct {
+	mu sync.Mutex
+	w  *bufio.Writer
 }
 
-func copyHeaders(dst, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	n, err := l.w.Write(p)
+	// Flush per write so log lines aren't buffered in stdout when there's
+	// no churn. JSONL one-per-line is the contract.
+	if ferr := l.w.Flush(); err == nil {
+		err = ferr
 	}
+	return n, err
 }
 
-func writeLog(e logEntry) {
-	b, _ := json.Marshal(e)
-	fmt.Println(string(b))
+func (l *lockedWriter) Flush() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_ = l.w.Flush()
 }
 
 func envOrDefault(key, def string) string {
