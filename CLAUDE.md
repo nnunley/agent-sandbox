@@ -13,7 +13,12 @@ those VMs access to LLM APIs without exposing host credentials.
 - `guests/` — micro-VM definitions. `base.nix` is the shared base.
 - `modules/llm-proxy.nix` — NixOS module wiring up the proxy service.
 - `modules/llm-proxy/` — Go source for the proxy (stdlib only).
-- `scripts/deploy.sh` — push the flake to the container and activate.
+- `scripts/agent-host` — **use this instead of raw `incus exec`.** Wraps
+  build / push / activate / status / log / proxy-check verbs and squashes
+  output to one or two lines. Each verb is documented in the script header.
+- `scripts/deploy.sh` — initial container provisioning (init / destroy /
+  full update with container restart). For incremental work, prefer
+  `scripts/agent-host deploy` (live switch, no container restart).
 - `scripts/smoke-test.sh`, `scripts/clean.sh` — VM lifecycle helpers.
 - `docs/plans/` — design docs.
 

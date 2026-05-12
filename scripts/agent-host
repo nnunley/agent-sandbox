@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+# agent-host: quiet wrapper around `incus exec ndn-desktop:agent-host -- ...`
+#
+# Most incus exec output is noise: tar xattr warnings, derivation lists,
+# full systemctl unit blocks, journalctl headers. This script wraps the
+# common operations and prints one or two relevant lines per call.
+#
+# Verbs:
+#   build              Build the system closure. Prints the store path.
+#   push               Tar repo source into the container. Prints "pushed".
+#   activate <path>    Set the system profile and switch. Prints "ok" or failed unit names.
+#   deploy             push + build + activate (live switch, no container restart).
+#   restart            push + build + activate via `boot` + `incus restart`.
+#   status             llm-proxy + bridge + /health one-liner.
+#   log [unit] [N]     journalctl -o cat, defaults to last 20 lines of llm-proxy.
+#   proxy-check        Hit /health and verify 503 on missing key. One line each.
+#   exec <cmd...>      Pass-through: `incus exec` with no filtering. Escape hatch.
+#
+# Env overrides:
+#   REMOTE     incus remote (default: ndn-desktop)
+#   CONTAINER  container name (default: agent-host)
+#   FLAKE_DIR  in-container source path (default: /etc/agent-sandbox)
+
+set -euo pipefail
+
+REMOTE="${REMOTE:-ndn-desktop}"
+CONTAINER="${CONTAINER:-agent-host}"
+FLAKE_DIR="${FLAKE_DIR:-/etc/agent-sandbox}"
+SCRIPT_DIR="$(cd "$(dirname "$0")"; pwd)"
+REPO_DIR="$(cd "${SCRIPT_DIR}/.."; pwd)"
+TARGET="${REMOTE}:${CONTAINER}"
+
+die() { echo "agent-host: $*" >&2; exit 1; }
+
+# Run a command inside the container, capturing stdout and stderr separately.
+# Returns the exit code. The caller decides what to print.
+_iexec() {
+  incus exec "$TARGET" -- "$@"
+}
+
+# Filter common noise out of a stream. Kills tar's macOS xattr warnings and
+# bare blank lines.
+_denoise() {
+  grep -v 'Ignoring unknown extended header keyword' | grep -v '^$' || true
+}
+
+cmd_build() {
+  local out
+  out=$(_iexec bash -c "cd ${FLAKE_DIR} && nix --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.${CONTAINER}.config.system.build.toplevel --no-link --print-out-paths" 2>/dev/null) \
+    || die "build failed (run with --verbose: incus exec $TARGET -- bash -c 'cd ${FLAKE_DIR} && nix build .#nixosConfigurations.${CONTAINER}.config.system.build.toplevel')"
+  echo "$out"
+}
+
+cmd_push() {
+  _iexec mkdir -p "${FLAKE_DIR}" >/dev/null
+  tar -cf - \
+    --exclude='.git' \
+    --exclude='result' \
+    --exclude='docs' \
+    --exclude='modules/llm-proxy/llm-proxy' \
+    -C "${REPO_DIR}" . 2>/dev/null \
+    | incus exec "$TARGET" -- tar -xf - -C "${FLAKE_DIR}" 2> >(_denoise >&2)
+  echo "pushed ${REPO_DIR} -> ${TARGET}:${FLAKE_DIR}"
+}
+
+cmd_activate() {
+  local path="${1:?usage: agent-host activate <store-path>}"
+  local mode="${2:-switch}"  # switch | boot
+  case "$mode" in switch|boot) ;; *) die "mode must be switch or boot, got $mode" ;; esac
+
+  _iexec nix-env -p /nix/var/nix/profiles/system --set "$path" >/dev/null \
+    || die "profile set failed"
+
+  # switch-to-configuration prints a lot — we want failures only.
+  local out
+  out=$(_iexec "${path}/bin/switch-to-configuration" "$mode" 2>&1) \
+    || { echo "$out" >&2; die "activation failed"; }
+
+  local failed
+  failed=$(echo "$out" | grep -E 'following units failed:' | sed 's/.*failed: //') || true
+  if [ -n "$failed" ]; then
+    echo "ok (failed units: $failed)"
+  else
+    echo "ok"
+  fi
+}
+
+cmd_deploy() {
+  cmd_push
+  local path
+  path=$(cmd_build)
+  echo "built: $path"
+  cmd_activate "$path" switch
+}
+
+cmd_restart() {
+  cmd_push
+  local path
+  path=$(cmd_build)
+  echo "built: $path"
+  cmd_activate "$path" boot
+  incus restart "$TARGET" --force
+  # Wait for it to come back
+  local attempts=0
+  while ! _iexec true 2>/dev/null; do
+    attempts=$((attempts + 1))
+    [ $attempts -gt 30 ] && die "container did not come back after restart"
+    sleep 2
+  done
+  echo "restarted"
+}
+
+cmd_status() {
+  # llm-proxy active state
+  local svc health bridge
+  svc=$(_iexec systemctl is-active llm-proxy 2>/dev/null || echo "unknown")
+  health=$(_iexec curl -sf --max-time 2 http://10.88.0.1:12071/health 2>/dev/null | tr -d '\n' || echo "DOWN")
+  bridge=$(_iexec ip -o -4 addr show br-microvm 2>/dev/null | awk '{print $4}' || echo "?")
+  echo "llm-proxy: $svc   /health: $health   bridge: $bridge"
+}
+
+cmd_log() {
+  local unit="${1:-llm-proxy}"
+  local n="${2:-20}"
+  _iexec journalctl -u "$unit" -n "$n" -o cat --no-pager 2>/dev/null
+}
+
+cmd_proxy_check() {
+  local health code
+  health=$(_iexec curl -sf --max-time 2 http://10.88.0.1:12071/health 2>/dev/null | tr -d '\n' || echo "DOWN")
+  echo "/health: $health"
+
+  code=$(_iexec curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+    -X POST -H 'Content-Type: application/json' -d '{}' \
+    http://10.88.0.1:12071/anthropic/v1/messages 2>/dev/null || echo "ERR")
+  # Expected: 503 when no key, 4xx/5xx when key is set but Anthropic rejects
+  echo "/anthropic POST (no body): $code"
+}
+
+cmd_exec() {
+  [ $# -gt 0 ] || die "usage: agent-host exec <cmd...>"
+  incus exec "$TARGET" -- "$@"
+}
+
+cmd_help() {
+  sed -n '2,/^set -euo/p' "$0" | sed -n '/^# /p' | sed 's/^# //'
+}
+
+case "${1:-help}" in
+  build)        shift; cmd_build "$@" ;;
+  push)         shift; cmd_push "$@" ;;
+  activate)     shift; cmd_activate "$@" ;;
+  deploy)       shift; cmd_deploy "$@" ;;
+  restart)      shift; cmd_restart "$@" ;;
+  status)       shift; cmd_status "$@" ;;
+  log)          shift; cmd_log "$@" ;;
+  proxy-check)  shift; cmd_proxy_check "$@" ;;
+  exec)         shift; cmd_exec "$@" ;;
+  help|-h|--help) cmd_help ;;
+  *)            cmd_help; exit 1 ;;
+esac
