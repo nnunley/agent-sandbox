@@ -30,7 +30,7 @@ incus-dispatcher [flags]
   - Remote URL: `https://github.com/user/repo.git` (shallow cloned)
 - `--ref` (optional): Git reference to check out (default: `HEAD`)
 - `--branch` (optional): Target branch to create for the work
-- `--image` (optional): Incus image name (default: `images:ubuntu/24.04`); use `nixos` for NixOS
+- `--image` (optional): Incus image name (default: `images:nixos/25.11` for clean dep auditing); use `ubuntu` for `images:ubuntu/24.04`
 - `--root` (optional): Launch container with root/privileged access (for dependency installation)
 - `--provider` (optional): LLM provider: `anthropic`, `openai`, `ollama-cloud` (default: `anthropic`)
 - `--model` (optional): Model name (e.g., `claude-3-5-haiku`, `gpt-4o-mini`)

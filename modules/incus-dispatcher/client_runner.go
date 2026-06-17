@@ -154,15 +154,26 @@ func (cr *ClientContainerRunner) launchContainer(ctx context.Context, imageName 
 	}
 
 	// Create instance request.
+	// If image starts with "images:", use the public linuxcontainers images server.
+	// Otherwise use the remote's existing images.
 	req := api.InstancesPost{
 		Name: cr.containerName,
-		Source: api.InstanceSource{
+		Type: "container",
+	}
+
+	if strings.HasPrefix(imageName, "images:") {
+		req.Source = api.InstanceSource{
 			Type:     "image",
 			Alias:    strings.TrimPrefix(imageName, "images:"),
 			Server:   "https://images.linuxcontainers.org",
 			Protocol: "simplestreams",
-		},
-		Type: "container",
+		}
+	} else {
+		// Assume image alias is available locally on the remote
+		req.Source = api.InstanceSource{
+			Type:  "image",
+			Alias: imageName,
+		}
 	}
 
 	// Create the instance.

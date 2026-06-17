@@ -131,10 +131,11 @@ type Runner interface {
 
 const (
 	// DefaultImageName is the default Incus image.
-	DefaultImageName = "images:ubuntu/24.04"
+	// NixOS is the primary default for reproducible, clean dependency auditing.
+	DefaultImageName = "images:nixos/25.11"
 
 	// DefaultNixOSImageName is the NixOS image for privileged agents.
-	DefaultNixOSImageName = "images:nixos/25.05"
+	DefaultNixOSImageName = "images:nixos/25.11"
 
 	// DefaultTimeout is the default task duration limit.
 	DefaultTimeout = 1 * time.Hour

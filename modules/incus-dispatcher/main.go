@@ -33,7 +33,7 @@ func main() {
 	ref := flag.String("ref", "HEAD", "Git ref to check out")
 	targetBranch := flag.String("branch", "", "Target branch to create (optional)")
 	cmd := flag.String("cmd", "", "Command to run inside container (required)")
-	image := flag.String("image", DefaultImageName, "Incus image name (or 'nixos' for NixOS with root access)")
+	image := flag.String("image", DefaultImageName, "Incus image name (default: NixOS 25.11 for clean auditing); use 'ubuntu' for images:ubuntu/24.04")
 	timeout := flag.Duration("timeout", DefaultTimeout, "Task timeout")
 	keepOnFailure := flag.Bool("keep-on-failure", false, "Keep container alive on task failure")
 	remote := flag.String("remote", DefaultRemote, "Incus remote name")
@@ -93,6 +93,8 @@ Flags:
 	imageName := *image
 	if imageName == "nixos" {
 		imageName = DefaultNixOSImageName
+	} else if imageName == "ubuntu" {
+		imageName = "images:ubuntu/24.04"
 	}
 
 	// Validate provider
