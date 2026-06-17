@@ -38,6 +38,7 @@ func main() {
 	keepOnFailure := flag.Bool("keep-on-failure", false, "Keep container alive on task failure")
 	remote := flag.String("remote", DefaultRemote, "Incus remote name")
 	outputDir := flag.String("output-dir", "", "Directory to write results (optional; if set, writes JSON and artifacts)")
+	runner := flag.String("runner", "client", "Runner implementation: 'client' (Go client) or 'cli' (CLI commands)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), `incus-dispatcher: launch ephemeral Incus containers to run tasks
@@ -59,10 +60,23 @@ Flags:
 		log.Fatal("--cmd is required")
 	}
 
-	// Create runner
-	runner, err := NewContainerRunner(*remote)
-	if err != nil {
-		log.Fatalf("failed to create runner: %v", err)
+	// Create runner based on --runner flag
+	var taskRunner Runner
+	var err error
+
+	switch *runner {
+	case "client":
+		taskRunner, err = NewClientContainerRunner(*remote)
+		if err != nil {
+			log.Fatalf("failed to create Go client runner: %v", err)
+		}
+	case "cli":
+		taskRunner, err = NewCLIContainerRunner(*remote)
+		if err != nil {
+			log.Fatalf("failed to create CLI runner: %v", err)
+		}
+	default:
+		log.Fatalf("invalid runner: %s (must be 'client' or 'cli')", *runner)
 	}
 
 	// Parse command
@@ -86,11 +100,11 @@ Flags:
 
 	// Run task
 	ctx := context.Background()
-	result, err := runner.Run(ctx, task)
+	result, err := taskRunner.Run(ctx, task)
 
 	// Always cleanup unless keep-on-failure and task failed
 	if !(*keepOnFailure && result.ExitCode != 0) {
-		_ = runner.Cleanup()
+		_ = taskRunner.Cleanup()
 	}
 
 	// Handle errors (non-command errors)

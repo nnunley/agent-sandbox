@@ -145,7 +145,7 @@ func TestRunTaskInContainer(t *testing.T) {
 		t.Skipf("incus remote %s not reachable; skipping integration test", remote)
 	}
 
-	runner, err := NewContainerRunner(remote)
+	runner, err := NewCLIContainerRunner(remote)
 	if err != nil {
 		t.Fatalf("NewContainerRunner: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestDeliverSourceViaClone(t *testing.T) {
 		t.Skip("git not available in test image; skipping clone test")
 	}
 
-	runner, err := NewContainerRunner(remote)
+	runner, err := NewCLIContainerRunner(remote)
 	if err != nil {
 		t.Fatalf("NewContainerRunner: %v", err)
 	}
@@ -244,7 +244,7 @@ func TestRoundTripWithOutputArtifacts(t *testing.T) {
 		t.Skipf("incus remote %s not reachable; skipping integration test", remote)
 	}
 
-	runner, err := NewContainerRunner(remote)
+	runner, err := NewCLIContainerRunner(remote)
 	if err != nil {
 		t.Fatalf("NewContainerRunner: %v", err)
 	}

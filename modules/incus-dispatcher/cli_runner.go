@@ -11,29 +11,29 @@ import (
 	"time"
 )
 
-// ContainerRunner implements Runner using Incus containers.
-type ContainerRunner struct {
+// CLIContainerRunner implements Runner using Incus CLI commands.
+type CLIContainerRunner struct {
 	remote        string
 	containerName string
 }
 
-// NewContainerRunner creates a new container-based runner.
+// NewCLIContainerRunner creates a new CLI-based container runner.
 // remote is the Incus remote name (e.g., "ndn-desktop").
 // Returns a Runner and any error verifying the remote.
-func NewContainerRunner(remote string) (*ContainerRunner, error) {
+func NewCLIContainerRunner(remote string) (*CLIContainerRunner, error) {
 	// Verify remote is reachable by checking if we can list containers.
 	cmd := exec.Command("incus", "list", remote+":")
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("incus remote %s not reachable: %w", remote, err)
 	}
 
-	return &ContainerRunner{
+	return &CLIContainerRunner{
 		remote: remote,
 	}, nil
 }
 
 // Run executes the task inside an ephemeral Incus container.
-func (cr *ContainerRunner) Run(ctx context.Context, task Task) (*Result, error) {
+func (cr *CLIContainerRunner) Run(ctx context.Context, task Task) (*Result, error) {
 	if err := task.validate(); err != nil {
 		return nil, fmt.Errorf("invalid task: %w", err)
 	}
@@ -93,7 +93,7 @@ func (cr *ContainerRunner) Run(ctx context.Context, task Task) (*Result, error) 
 }
 
 // Cleanup removes the ephemeral container.
-func (cr *ContainerRunner) Cleanup() error {
+func (cr *CLIContainerRunner) Cleanup() error {
 	if cr.containerName == "" {
 		return nil
 	}
@@ -101,7 +101,7 @@ func (cr *ContainerRunner) Cleanup() error {
 }
 
 // launchContainer creates and starts an ephemeral container.
-func (cr *ContainerRunner) launchContainer(ctx context.Context, imageName string) error {
+func (cr *CLIContainerRunner) launchContainer(ctx context.Context, imageName string) error {
 	// Use incus CLI for simplicity (the Go client requires more setup for container ops).
 	// If image doesn't contain a colon (remote), prepend the current remote.
 	if !strings.Contains(imageName, ":") {
@@ -123,7 +123,7 @@ func (cr *ContainerRunner) launchContainer(ctx context.Context, imageName string
 }
 
 // waitReady waits for the container to be operational (ping with a simple command).
-func (cr *ContainerRunner) waitReady(ctx context.Context) error {
+func (cr *CLIContainerRunner) waitReady(ctx context.Context) error {
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		deadline = time.Now().Add(30 * time.Second)
@@ -152,7 +152,7 @@ func (cr *ContainerRunner) waitReady(ctx context.Context) error {
 
 // deliverSource pushes the git repository into the container.
 // Supports both local paths (via git bundle) and remote URLs (via shallow clone).
-func (cr *ContainerRunner) deliverSource(ctx context.Context, task Task) error {
+func (cr *CLIContainerRunner) deliverSource(ctx context.Context, task Task) error {
 	repoPath := "/repo"
 
 	if isLocalPath(task.Repo) {
@@ -165,7 +165,7 @@ func (cr *ContainerRunner) deliverSource(ctx context.Context, task Task) error {
 }
 
 // deliverViaBundle creates a git bundle on the host and pushes it to the container.
-func (cr *ContainerRunner) deliverViaBundle(ctx context.Context, localPath, ref, containerPath string) error {
+func (cr *CLIContainerRunner) deliverViaBundle(ctx context.Context, localPath, ref, containerPath string) error {
 	bundlePath := filepath.Join("/tmp", cr.containerName+".bundle")
 	defer removeFile(bundlePath)
 
@@ -192,7 +192,7 @@ func (cr *ContainerRunner) deliverViaBundle(ctx context.Context, localPath, ref,
 }
 
 // deliverViaClone clones a remote repository directly in the container.
-func (cr *ContainerRunner) deliverViaClone(ctx context.Context, repoURL, ref, targetBranch, containerPath string) error {
+func (cr *CLIContainerRunner) deliverViaClone(ctx context.Context, repoURL, ref, targetBranch, containerPath string) error {
 	cloneCmd := exec.CommandContext(ctx, "incus", "exec", cr.containerName, "--", "bash", "-c",
 		fmt.Sprintf("mkdir -p %s && git clone --depth 1 --branch %s %s %s",
 			containerPath, ref, repoURL, filepath.Join(containerPath, "src")))
@@ -213,7 +213,7 @@ func (cr *ContainerRunner) deliverViaClone(ctx context.Context, repoURL, ref, ta
 }
 
 // execCommand runs a command inside the container and captures output.
-func (cr *ContainerRunner) execCommand(ctx context.Context, env map[string]string, cmd []string) (int, string, string, error) {
+func (cr *CLIContainerRunner) execCommand(ctx context.Context, env map[string]string, cmd []string) (int, string, string, error) {
 	// Build incus exec command.
 	args := []string{"exec", cr.containerName, "--"}
 
@@ -251,7 +251,7 @@ func (cr *ContainerRunner) execCommand(ctx context.Context, env map[string]strin
 }
 
 // harvestResults collects git format-patch and /output artifacts from the container.
-func (cr *ContainerRunner) harvestResults(ctx context.Context, result *Result) error {
+func (cr *CLIContainerRunner) harvestResults(ctx context.Context, result *Result) error {
 	// Try to harvest a git patch if there were commits.
 	patchData, err := cr.harvestPatch(ctx)
 	if err == nil && len(patchData) > 0 {
@@ -268,7 +268,7 @@ func (cr *ContainerRunner) harvestResults(ctx context.Context, result *Result) e
 }
 
 // harvestPatch generates git format-patch from /repo/src if it exists.
-func (cr *ContainerRunner) harvestPatch(ctx context.Context) ([]byte, error) {
+func (cr *CLIContainerRunner) harvestPatch(ctx context.Context) ([]byte, error) {
 	patchPath := filepath.Join("/tmp", cr.containerName+".patch")
 	defer removeFile(patchPath)
 
@@ -295,7 +295,7 @@ func (cr *ContainerRunner) harvestPatch(ctx context.Context) ([]byte, error) {
 }
 
 // harvestOutputArtifacts pulls files from /output if it exists.
-func (cr *ContainerRunner) harvestOutputArtifacts(ctx context.Context) (map[string][]byte, error) {
+func (cr *CLIContainerRunner) harvestOutputArtifacts(ctx context.Context) (map[string][]byte, error) {
 	artifacts := make(map[string][]byte)
 
 	// Check if /output exists.
@@ -353,7 +353,7 @@ func (cr *ContainerRunner) harvestOutputArtifacts(ctx context.Context) (map[stri
 }
 
 // cleanup removes the container.
-func (cr *ContainerRunner) cleanup() error {
+func (cr *CLIContainerRunner) cleanup() error {
 	if cr.containerName == "" {
 		return nil
 	}
