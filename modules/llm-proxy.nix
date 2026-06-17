@@ -46,6 +46,15 @@ in {
       '';
     };
 
+    ollamaCloudUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "https://ollama.ai";
+      description = ''
+        Upstream URL for the /ollama-cloud/* route. API key comes from
+        systemd credentials (ollama_cloud_api_key).
+      '';
+    };
+
     maxBodyBytes = lib.mkOption {
       type = lib.types.ints.positive;
       default = 32 * 1024 * 1024;
@@ -81,6 +90,7 @@ in {
         ImportCredential = [
           "anthropic_api_key"
           "openai_api_key"
+          "ollama_cloud_api_key"
         ];
       };
 
@@ -88,6 +98,7 @@ in {
         LLM_PROXY_ADDR        = cfg.listenAddr;
         LOCAL_FAST_URL        = cfg.localFastUrl;
         LOCAL_LARGE_URL       = cfg.localLargeUrl;
+        OLLAMA_CLOUD_URL      = cfg.ollamaCloudUrl;
         LLM_PROXY_MAX_BODY    = toString cfg.maxBodyBytes;
       };
 
@@ -95,11 +106,13 @@ in {
       script = ''
         export ANTHROPIC_API_KEY=""
         export OPENAI_API_KEY=""
+        export OLLAMA_CLOUD_API_KEY=""
 
         creds="''${CREDENTIALS_DIRECTORY:-}"
         if [ -n "$creds" ]; then
-          [ -f "$creds/anthropic_api_key" ] && ANTHROPIC_API_KEY=$(cat "$creds/anthropic_api_key")
-          [ -f "$creds/openai_api_key" ]    && OPENAI_API_KEY=$(cat "$creds/openai_api_key")
+          [ -f "$creds/anthropic_api_key" ]     && ANTHROPIC_API_KEY=$(cat "$creds/anthropic_api_key")
+          [ -f "$creds/openai_api_key" ]        && OPENAI_API_KEY=$(cat "$creds/openai_api_key")
+          [ -f "$creds/ollama_cloud_api_key" ]  && OLLAMA_CLOUD_API_KEY=$(cat "$creds/ollama_cloud_api_key")
         fi
 
         exec ${llm-proxy}/bin/llm-proxy

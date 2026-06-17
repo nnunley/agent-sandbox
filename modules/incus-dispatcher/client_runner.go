@@ -125,6 +125,16 @@ func (cr *ClientContainerRunner) Run(ctx context.Context, task Task) (*Result, e
 		return result, fmt.Errorf("harvest results: %w", err)
 	}
 
+	// Phase 5: External grading (if configured)
+	if task.ExternalGradingCheckout != "" {
+		gradingResult, err := runExternalGrading(taskCtx, result.PatchData, task.ExternalGradingCheckout, task.Cmd)
+		if err != nil {
+			// Log the error but don't fail the entire task
+			return result, nil // return what we have
+		}
+		result.ExternalGradingResult = gradingResult
+	}
+
 	return result, nil
 }
 

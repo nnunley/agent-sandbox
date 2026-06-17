@@ -33,12 +33,16 @@ func main() {
 	ref := flag.String("ref", "HEAD", "Git ref to check out")
 	targetBranch := flag.String("branch", "", "Target branch to create (optional)")
 	cmd := flag.String("cmd", "", "Command to run inside container (required)")
-	image := flag.String("image", DefaultImageName, "Incus image name")
+	image := flag.String("image", DefaultImageName, "Incus image name (or 'nixos' for NixOS with root access)")
 	timeout := flag.Duration("timeout", DefaultTimeout, "Task timeout")
 	keepOnFailure := flag.Bool("keep-on-failure", false, "Keep container alive on task failure")
 	remote := flag.String("remote", DefaultRemote, "Incus remote name")
 	outputDir := flag.String("output-dir", "", "Directory to write results (optional; if set, writes JSON and artifacts)")
 	runner := flag.String("runner", "client", "Runner implementation: 'client' (Go client) or 'cli' (CLI commands)")
+	provider := flag.String("provider", "anthropic", "LLM provider: anthropic, openai, ollama-cloud")
+	model := flag.String("model", "", "Model name (e.g., claude-3-5-haiku, gpt-4o-mini)")
+	runAsRoot := flag.Bool("root", false, "Launch container with root access (allows installing dependencies)")
+	externalGrading := flag.String("external-grading", "", "Path to clean checkout for external grading (oracle verification)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), `incus-dispatcher: launch ephemeral Incus containers to run tasks
@@ -85,17 +89,33 @@ Flags:
 		log.Fatal("--cmd is empty after parsing")
 	}
 
+	// Handle special image names
+	imageName := *image
+	if imageName == "nixos" {
+		imageName = DefaultNixOSImageName
+	}
+
+	// Validate provider
+	prov := Provider(*provider)
+	if err := prov.ValidateProvider(); err != nil {
+		log.Fatalf("invalid provider: %v", err)
+	}
+
 	// Build task
 	task := Task{
-		Name:          *name,
-		Repo:          *repo,
-		Ref:           *ref,
-		TargetBranch:  *targetBranch,
-		Cmd:           cmdParts,
-		ImageName:     *image,
-		Timeout:       *timeout,
-		KeepOnFailure: *keepOnFailure,
-		Env:           parseEnv(),
+		Name:                    *name,
+		Repo:                    *repo,
+		Ref:                     *ref,
+		TargetBranch:            *targetBranch,
+		Cmd:                     cmdParts,
+		ImageName:               imageName,
+		Timeout:                 *timeout,
+		KeepOnFailure:           *keepOnFailure,
+		Env:                     parseEnv(),
+		Provider:                prov,
+		Model:                   *model,
+		RunAsRoot:               *runAsRoot,
+		ExternalGradingCheckout: *externalGrading,
 	}
 
 	// Run task
@@ -128,13 +148,24 @@ Flags:
 // outputJSON writes the result as JSON to stdout.
 func outputJSON(result *Result) {
 	data := map[string]interface{}{
-		"exitCode":      result.ExitCode,
-		"containerName": result.ContainerName,
-		"duration":      result.Duration.String(),
-		"stdout":        result.Stdout,
-		"stderr":        result.Stderr,
+		"exitCode":       result.ExitCode,
+		"containerName":  result.ContainerName,
+		"duration":       result.Duration.String(),
+		"stdout":         result.Stdout,
+		"stderr":         result.Stderr,
 		"patchAvailable": len(result.PatchData) > 0,
-		"artifactCount": len(result.Artifacts),
+		"artifactCount":  len(result.Artifacts),
+	}
+
+	if result.ExternalGradingResult != nil {
+		data["grading"] = map[string]interface{}{
+			"exitCode":     result.ExternalGradingResult.ExitCode,
+			"duration":     result.ExternalGradingResult.Duration.String(),
+			"stdout":       result.ExternalGradingResult.Stdout,
+			"stderr":       result.ExternalGradingResult.Stderr,
+			"patchApplied": result.ExternalGradingResult.PatchApplied,
+			"applyError":   result.ExternalGradingResult.ApplyError,
+		}
 	}
 
 	enc := json.NewEncoder(os.Stdout)

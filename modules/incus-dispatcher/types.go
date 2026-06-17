@@ -2,7 +2,17 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
+)
+
+// Provider specifies the LLM provider for the task.
+type Provider string
+
+const (
+	ProviderAnthropic   Provider = "anthropic"
+	ProviderOpenAI      Provider = "openai"
+	ProviderOllamaCloud Provider = "ollama-cloud"
 )
 
 // Task describes a workload to run inside a container.
@@ -26,6 +36,7 @@ type Task struct {
 
 	// ImageName is the Incus image name to launch from (e.g., "ubuntu/24.04").
 	// If empty, defaults to DefaultImageName.
+	// Special value "nixos" uses the NixOS image (DefaultNixOSImageName).
 	ImageName string
 
 	// Timeout is the maximum duration for the task.
@@ -37,6 +48,23 @@ type Task struct {
 
 	// Env is a map of environment variables to set inside the container.
 	Env map[string]string
+
+	// Provider specifies the LLM provider (anthropic, openai, ollama-cloud).
+	// If empty, defaults to ProviderAnthropic.
+	Provider Provider
+
+	// Model specifies the model name within the provider (e.g., "claude-3-5-haiku", "gpt-4o-mini").
+	// Required if Provider is set and not ProviderAnthropic with default model.
+	Model string
+
+	// RunAsRoot if true launches the container with root/privileged access.
+	// Allows agents to install dependencies. Default is false.
+	RunAsRoot bool
+
+	// ExternalGradingCheckout is the path to a clean checkout for external grading.
+	// If set, the dispatcher will run the oracle there instead of in the worker.
+	// Used for verifying diffs that the worker produced.
+	ExternalGradingCheckout string
 }
 
 // Result captures the output and status of a completed task.
@@ -62,6 +90,31 @@ type Result struct {
 
 	// Artifacts is a map of files/directories harvested from /output.
 	Artifacts map[string][]byte
+
+	// ExternalGradingResult contains the results of external grading (if enabled).
+	// Nil if external grading was not run.
+	ExternalGradingResult *GradingResult
+}
+
+// GradingResult captures the output of running the oracle on a clean checkout.
+type GradingResult struct {
+	// ExitCode is the exit code from the oracle.
+	ExitCode int
+
+	// Stdout is the standard output from the oracle.
+	Stdout string
+
+	// Stderr is the standard error from the oracle.
+	Stderr string
+
+	// Duration is how long the oracle took to run.
+	Duration time.Duration
+
+	// PatchApplied is true if the diff from the worker was successfully applied.
+	PatchApplied bool
+
+	// ApplyError is non-nil if the patch failed to apply.
+	ApplyError string
 }
 
 // Runner abstracts the execution backend.
@@ -80,6 +133,9 @@ const (
 	// DefaultImageName is the default Incus image.
 	DefaultImageName = "images:ubuntu/24.04"
 
+	// DefaultNixOSImageName is the NixOS image for privileged agents.
+	DefaultNixOSImageName = "images:nixos/25.05"
+
 	// DefaultTimeout is the default task duration limit.
 	DefaultTimeout = 1 * time.Hour
 
@@ -89,3 +145,17 @@ const (
 	// ContainerNamePrefix is prepended to all ephemeral container names.
 	ContainerNamePrefix = "dispatch-"
 )
+
+// ValidateProvider checks if a provider is valid and sets defaults.
+func (p *Provider) ValidateProvider() error {
+	if *p == "" {
+		*p = ProviderAnthropic
+		return nil
+	}
+	switch *p {
+	case ProviderAnthropic, ProviderOpenAI, ProviderOllamaCloud:
+		return nil
+	default:
+		return fmt.Errorf("invalid provider: %s", *p)
+	}
+}

@@ -4,11 +4,15 @@
 //
 //	/anthropic/*   → https://api.anthropic.com/*  (injects Authorization: Bearer $ANTHROPIC_API_KEY + x-api-key)
 //	/openai/*      → https://api.openai.com/*      (injects Authorization: Bearer $OPENAI_API_KEY)
+//	/ollama-cloud/*→ $OLLAMA_CLOUD_URL (injects Authorization: Bearer $OLLAMA_CLOUD_API_KEY)
 //	/local-fast/*  → $LOCAL_FAST_URL  (default: http://ndn.local:8081)
 //	/local-large/* → $LOCAL_LARGE_URL (default: http://ndn.local:8082)
 //	/health        → 200 OK
 //
-// Agents configure: ANTHROPIC_BASE_URL=http://10.88.0.1:12071/anthropic
+// Agents configure:
+//   ANTHROPIC_BASE_URL=http://10.88.0.1:12071/anthropic
+//   OPENAI_BASE_URL=http://10.88.0.1:12071/openai
+//   OLLAMA_CLOUD_BASE_URL=http://10.88.0.1:12071/ollama-cloud
 //
 // Log format: JSONL to stdout, one record per request.
 
@@ -36,6 +40,7 @@ func main() {
 	}{
 		{"/anthropic", "https://api.anthropic.com", os.Getenv("ANTHROPIC_API_KEY"), "anthropic", true},
 		{"/openai", "https://api.openai.com", os.Getenv("OPENAI_API_KEY"), "openai", true},
+		{"/ollama-cloud", envOrDefault("OLLAMA_CLOUD_URL", "https://ollama.ai"), os.Getenv("OLLAMA_CLOUD_API_KEY"), "ollama-cloud", true},
 		// Local llama.cpp instances — no API key needed
 		{"/local-fast", envOrDefault("LOCAL_FAST_URL", "http://ndn.local:8081"), "", "local-fast", false},
 		{"/local-large", envOrDefault("LOCAL_LARGE_URL", "http://ndn.local:8082"), "", "local-large", false},
