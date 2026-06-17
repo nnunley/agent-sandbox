@@ -1,4 +1,74 @@
-# CLAUDE.md — agent-sandbox
+# incus-dispatcher: Ephemeral NixOS Containers for Task Execution
+
+**Primary Tool**: `modules/incus-dispatcher/` — CLI + Go tool for launching ephemeral NixOS containers (`images:nixos/25.11`) to run tasks in clean isolation with shared read-only `/nix/store`.
+
+## Key Design
+
+- **Workers**: Root/privileged NixOS containers; image is `images:nixos/25.11`
+- **Shared Store**: One filesystem volume `nix-shared` (Incus) mounted at `/nix/store` read-only across all workers
+- **Population**: DevShell closure (from `flake.nix`) built once on `agent-host`, realised into the volume via `nix copy`
+- **Toolchain**: `git`, `go`, `gnumake`, `pkg-config`, `bash` — all from flake devShell, prebuilt in store
+- **Runners**: Both CLI (`incus` commands) and Go client (`lxc/incus/v6`) backends
+- **External Grading**: Optional oracle verification — worker's patch applied to clean checkout, oracle runs on patched version
+
+## Flags & Options
+
+| Flag | Meaning |
+|------|---------|
+| `--name` | Task identifier (required) |
+| `--cmd` | Command to run in container (required) |
+| `--repo` | Local path or git URL (optional) |
+| `--ref` | Git ref to check out (default: HEAD) |
+| `--root` | Launch with `security.privileged=true` (default: false) |
+| `--external-grading <path>` | Oracle: run on clean checkout with worker's patch applied |
+| `--runner` | `client` (default, Go client) or `cli` (incus commands) |
+| `--image` | Incus image alias (default: `images:nixos/25.11`) |
+| `--remote` | Incus remote (default: `ndn-desktop` → https://192.168.86.49:8443) |
+
+## Declarative Dependencies (Hard Rule)
+
+- ✅ All worker tools come from **`flake.nix` → `devShells.default`**
+- ✅ Toolchain closure is built once, realised to the shared `/nix/store` volume
+- ❌ NO `apt`, `apk add`, `nix profile install` inside containers
+- ❌ NO throwaway Ubuntu instances or temporary build containers
+- ❌ Each worker has its own `/nix/var` (not shared)
+
+## Setup: Shared Volume (One-Time)
+
+```bash
+# Create the volume
+incus storage volume create default nix-shared -t filesystem
+
+# Populate it (on agent-host or manually):
+# - Build devShell closure
+# - nix copy to the volume
+# (Exact command depends on mounting strategy; see docs/plans/)
+```
+
+## Build & Test
+
+```bash
+cd modules/incus-dispatcher
+go build -o dispatcher .
+go test ./...
+go vet ./...
+```
+
+## Example: Run a test task
+
+```bash
+./dispatcher \
+  --name my-test \
+  --repo https://example.com/repo \
+  --ref main \
+  --cmd "go test ./..." \
+  --root
+```
+
+Exit code is 0 (task success) or match the command's exit code.
+
+---
+
 
 NixOS LXC container that hosts Firecracker micro-VMs for agents. The
 container runs on `ndn-desktop:agent-host` (Incus). Each agent gets a

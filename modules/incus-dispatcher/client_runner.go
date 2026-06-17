@@ -95,7 +95,7 @@ func (cr *ClientContainerRunner) Run(ctx context.Context, task Task) (*Result, e
 	}
 
 	// Phase 1: Launch container
-	if err := cr.launchContainer(taskCtx, imageName); err != nil {
+	if err := cr.launchContainer(taskCtx, imageName, task); err != nil {
 		return result, fmt.Errorf("launch container: %w", err)
 	}
 	defer cr.cleanup()
@@ -147,7 +147,7 @@ func (cr *ClientContainerRunner) Cleanup() error {
 }
 
 // launchContainer creates and starts an ephemeral container using the Go client.
-func (cr *ClientContainerRunner) launchContainer(ctx context.Context, imageName string) error {
+func (cr *ClientContainerRunner) launchContainer(ctx context.Context, imageName string, task Task) error {
 	// Resolve image name with remote if needed.
 	if !strings.Contains(imageName, ":") {
 		imageName = "images:" + imageName
@@ -173,6 +173,27 @@ func (cr *ClientContainerRunner) launchContainer(ctx context.Context, imageName 
 		req.Source = api.InstanceSource{
 			Type:  "image",
 			Alias: imageName,
+		}
+	}
+
+	// Initialize config and devices.
+	req.Config = make(map[string]string)
+	req.Devices = make(map[string]map[string]string)
+
+	// Enable privileged mode if requested (allows root operations, package installs, etc.).
+	if task.RunAsRoot {
+		req.Config["security.privileged"] = "true"
+	}
+
+	// Attach shared nix store volume if requested (default for NixOS images).
+	// This is a filesystem volume, shared across multiple workers, mounted read-only.
+	if task.SharedNixStore {
+		req.Devices["nix-shared"] = map[string]string{
+			"type":     "disk",
+			"pool":     "default",
+			"source":   "nix-shared",
+			"path":     "/nix/store",
+			"readonly": "true",
 		}
 	}
 
@@ -360,11 +381,25 @@ func (cr *ClientContainerRunner) deliverViaClone(ctx context.Context, repoURL, r
 }
 
 // execCommand runs a command inside container and captures output.
+// For NixOS containers, sets PATH to include /run/current-system/sw/bin if not already set.
 func (cr *ClientContainerRunner) execCommand(ctx context.Context, env map[string]string, cmd []string) (int, string, string, error) {
 	// Build environment list for exec request.
-	var environment map[string]string
+	environment := make(map[string]string)
 	if len(env) > 0 {
-		environment = env
+		for k, v := range env {
+			environment[k] = v
+		}
+	}
+
+	// Ensure PATH is set for NixOS binaries (/run/current-system/sw/bin).
+	// If no PATH is provided, set a sensible default; otherwise prepend NixOS path.
+	if _, hasPath := environment["PATH"]; !hasPath {
+		environment["PATH"] = "/run/current-system/sw/bin:/usr/bin:/bin"
+	} else {
+		// Prepend NixOS path if not already included.
+		if !strings.Contains(environment["PATH"], "/run/current-system/sw/bin") {
+			environment["PATH"] = "/run/current-system/sw/bin:" + environment["PATH"]
+		}
 	}
 
 	// Capture stdout and stderr using pipes.

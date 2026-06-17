@@ -59,7 +59,7 @@ func (cr *CLIContainerRunner) Run(ctx context.Context, task Task) (*Result, erro
 	}
 
 	// Phase 1: Launch container
-	if err := cr.launchContainer(taskCtx, imageName); err != nil {
+	if err := cr.launchContainer(taskCtx, imageName, task); err != nil {
 		return result, fmt.Errorf("launch container: %w", err)
 	}
 	defer cr.cleanup()
@@ -101,17 +101,36 @@ func (cr *CLIContainerRunner) Cleanup() error {
 }
 
 // launchContainer creates and starts an ephemeral container.
-func (cr *CLIContainerRunner) launchContainer(ctx context.Context, imageName string) error {
+func (cr *CLIContainerRunner) launchContainer(ctx context.Context, imageName string, task Task) error {
 	// Use incus CLI for simplicity (the Go client requires more setup for container ops).
 	// If image doesn't contain a colon (remote), prepend the current remote.
 	if !strings.Contains(imageName, ":") {
 		imageName = cr.remote + ":" + imageName
 	}
 
+	// Build launch command with optional flags.
+	args := []string{"launch", imageName, cr.containerName, "--ephemeral"}
+
+	// Add root/privileged flag if requested.
+	if task.RunAsRoot {
+		args = append(args, "--config", "security.privileged=true")
+	}
+
 	// Launch ephemeral container.
-	cmd := exec.CommandContext(ctx, "incus", "launch", imageName, cr.containerName, "--ephemeral")
+	cmd := exec.CommandContext(ctx, "incus", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("incus launch failed: %s (output: %s)", err, out)
+	}
+
+	// Attach shared nix store volume if requested (must be done after launch).
+	if task.SharedNixStore {
+		// Format: incus config device add container device-name disk pool=pool source=source path=path readonly=true
+		deviceArgs := []string{"config", "device", "add", cr.remote + ":" + cr.containerName, "nix-shared",
+			"disk", "pool=default", "source=nix-shared", "path=/nix/store", "readonly=true"}
+		deviceCmd := exec.CommandContext(ctx, "incus", deviceArgs...)
+		if out, err := deviceCmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("attach nix volume failed: %s (output: %s)", err, out)
+		}
 	}
 
 	// Wait for container to be ready.
@@ -213,17 +232,38 @@ func (cr *CLIContainerRunner) deliverViaClone(ctx context.Context, repoURL, ref,
 }
 
 // execCommand runs a command inside the container and captures output.
+// For NixOS containers, ensures PATH includes /run/current-system/sw/bin.
 func (cr *CLIContainerRunner) execCommand(ctx context.Context, env map[string]string, cmd []string) (int, string, string, error) {
-	// Build incus exec command.
-	args := []string{"exec", cr.containerName, "--"}
-
-	// Set environment variables if provided.
+	// Build environment for incus exec.
+	// Ensure PATH is set for NixOS binaries.
+	allEnv := make(map[string]string)
 	if len(env) > 0 {
 		for k, v := range env {
-			args = append(args, "--env", fmt.Sprintf("%s=%s", k, v))
+			allEnv[k] = v
 		}
 	}
 
+	// Set PATH if not provided, or prepend NixOS path.
+	if _, hasPath := allEnv["PATH"]; !hasPath {
+		allEnv["PATH"] = "/run/current-system/sw/bin:/usr/bin:/bin"
+	} else {
+		// Prepend NixOS path if not already included.
+		if !strings.Contains(allEnv["PATH"], "/run/current-system/sw/bin") {
+			allEnv["PATH"] = "/run/current-system/sw/bin:" + allEnv["PATH"]
+		}
+	}
+
+	// Build incus exec command.
+	// Format: incus exec container [--env VAR=value ...] -- command args
+	args := []string{"exec", cr.containerName}
+
+	// Set all environment variables BEFORE the -- separator.
+	for k, v := range allEnv {
+		args = append(args, "--env", fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Now add the command separator and the command itself.
+	args = append(args, "--")
 	args = append(args, cmd...)
 
 	execCmd := exec.CommandContext(ctx, "incus", args...)
@@ -372,6 +412,10 @@ func (t *Task) validate() error {
 	}
 	if len(t.Cmd) == 0 && t.Repo == "" {
 		return fmt.Errorf("task must have either Cmd or Repo")
+	}
+	// Default SharedNixStore to true for NixOS images.
+	if strings.Contains(t.ImageName, "nixos") || t.ImageName == DefaultImageName {
+		t.SharedNixStore = true
 	}
 	return nil
 }

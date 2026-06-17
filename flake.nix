@@ -12,6 +12,7 @@
   outputs = { self, nixpkgs, microvm }: let
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
+    linuxPkgs = pkgs; # NixOS container workers read from a shared nix store on Linux
   in {
     nixosConfigurations.agent-host = nixpkgs.lib.nixosSystem {
       inherit system;
@@ -20,6 +21,21 @@
         "${nixpkgs}/nixos/modules/virtualisation/lxc-container.nix"
         microvm.nixosModules.host
         ./host/configuration.nix
+      ];
+    };
+
+    # devShell for dispatcher development and worker toolchain.
+    # This closure is built once and populated into the shared nix store volume,
+    # allowing NixOS workers to access tools without repeating builds.
+    devShells.${system}.default = linuxPkgs.mkShell {
+      name = "dispatcher-dev";
+      description = "Dispatcher development shell with git, go, gnumake";
+      buildInputs = with linuxPkgs; [
+        git
+        go
+        gnumake
+        pkg-config
+        bash
       ];
     };
   };

@@ -61,6 +61,11 @@ type Task struct {
 	// Allows agents to install dependencies. Default is false.
 	RunAsRoot bool
 
+	// SharedNixStore if true (default for NixOS images) attaches the host /nix
+	// as a read-only device. This allows cheap re-use of dependencies already
+	// in the host's store.
+	SharedNixStore bool
+
 	// ExternalGradingCheckout is the path to a clean checkout for external grading.
 	// If set, the dispatcher will run the oracle there instead of in the worker.
 	// Used for verifying diffs that the worker produced.
