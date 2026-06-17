@@ -185,14 +185,18 @@ func (cr *ClientContainerRunner) launchContainer(ctx context.Context, imageName 
 		req.Config["security.privileged"] = "true"
 	}
 
-	// Attach shared nix store volume if requested (default for NixOS images).
-	// This is a filesystem volume, shared across multiple workers, mounted read-only.
+	// Attach shared binary cache volume (read-only) if requested.
+	// This allows workers to pull prebuilt packages from the shared cache.
 	if task.SharedNixStore {
-		req.Devices["nix-shared"] = map[string]string{
+		cachePath := task.BinaryCachePath
+		if cachePath == "" {
+			cachePath = "/srv/nix-shared"
+		}
+		req.Devices["nix-cache"] = map[string]string{
 			"type":     "disk",
 			"pool":     "default",
 			"source":   "nix-shared",
-			"path":     "/nix/store",
+			"path":     cachePath,
 			"readonly": "true",
 		}
 	}
@@ -228,6 +232,13 @@ func (cr *ClientContainerRunner) launchContainer(ctx context.Context, imageName 
 	// Wait for container to be ready.
 	if err := cr.waitReady(ctx); err != nil {
 		return fmt.Errorf("container not ready: %w", err)
+	}
+
+	// Configure binary cache and start nix-daemon if using shared nix store
+	if task.SharedNixStore {
+		if err := cr.configureNixCache(ctx, task); err != nil {
+			return fmt.Errorf("configure nix cache: %w", err)
+		}
 	}
 
 	return nil
@@ -267,6 +278,55 @@ func (cr *ClientContainerRunner) waitReady(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+// configureNixCache starts nix-daemon and configures the binary cache in the worker.
+// This enables workers to pull prebuilt packages from the shared cache without rebuilding.
+func (cr *ClientContainerRunner) configureNixCache(ctx context.Context, task Task) error {
+	cachePath := task.BinaryCachePath
+	if cachePath == "" {
+		cachePath = "/srv/nix-shared"
+	}
+
+	// Start nix-daemon in the worker
+	daemonReq := api.InstanceExecPost{
+		Command: []string{"systemctl", "start", "nix-daemon.socket", "nix-daemon.service"},
+		WaitForWS: true,
+		Interactive: false,
+	}
+	op, err := cr.client.ExecInstance(cr.containerName, daemonReq, nil)
+	if err != nil {
+		// Log but don't fail; daemon may already be running
+		fmt.Printf("warning: failed to start nix-daemon: %v\n", err)
+	} else if op != nil {
+		_ = op.Wait()
+	}
+
+	// Configure nix to use the shared cache as a substituter
+	confCmd := fmt.Sprintf(`mkdir -p /etc/nix/nix.conf.d && cat > /etc/nix/nix.conf.d/cache.conf << 'EOFCONF'
+extra-substituters = file://%s
+require-sigs = false
+EOFCONF
+`, cachePath)
+
+	confReq := api.InstanceExecPost{
+		Command: []string{"sh", "-c", confCmd},
+		WaitForWS: true,
+		Interactive: false,
+	}
+	op, err = cr.client.ExecInstance(cr.containerName, confReq, nil)
+	if err != nil {
+		return fmt.Errorf("configure nix substituters: %w", err)
+	}
+
+	if op != nil {
+		err = op.Wait()
+		if err != nil {
+			return fmt.Errorf("configure nix substituters wait: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // deliverSource pushes git repository into container.

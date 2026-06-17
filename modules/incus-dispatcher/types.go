@@ -34,9 +34,8 @@ type Task struct {
 	// Cmd is the command to run inside the container.
 	Cmd []string
 
-	// ImageName is the Incus image name to launch from (e.g., "ubuntu/24.04").
-	// If empty, defaults to DefaultImageName.
-	// Special value "nixos" uses the NixOS image (DefaultNixOSImageName).
+	// ImageName is the Incus image name to launch from (NixOS-only, e.g., "images:nixos/25.11").
+	// If empty, defaults to DefaultImageName (images:nixos/25.11).
 	ImageName string
 
 	// Timeout is the maximum duration for the task.
@@ -61,10 +60,14 @@ type Task struct {
 	// Allows agents to install dependencies. Default is false.
 	RunAsRoot bool
 
-	// SharedNixStore if true (default for NixOS images) attaches the host /nix
-	// as a read-only device. This allows cheap re-use of dependencies already
-	// in the host's store.
+	// SharedNixStore if true (default for NixOS images) attaches the shared nix volume
+	// for dependency sharing via binary cache. Default: true for NixOS.
 	SharedNixStore bool
+
+	// BinaryCachePath is the path on the shared nix volume where prebuilt packages are cached.
+	// If set, workers will configure nix to use this as a read-only cache.
+	// Default: "/srv/nix-shared" (relative to worker /srv mount point).
+	BinaryCachePath string
 
 	// ExternalGradingCheckout is the path to a clean checkout for external grading.
 	// If set, the dispatcher will run the oracle there instead of in the worker.
@@ -135,12 +138,9 @@ type Runner interface {
 }
 
 const (
-	// DefaultImageName is the default Incus image.
-	// NixOS is the primary default for reproducible, clean dependency auditing.
+	// DefaultImageName is the default Incus image (NixOS-only).
+	// NixOS is the only supported OS for reproducible, clean dependency auditing.
 	DefaultImageName = "images:nixos/25.11"
-
-	// DefaultNixOSImageName is the NixOS image for privileged agents.
-	DefaultNixOSImageName = "images:nixos/25.11"
 
 	// DefaultTimeout is the default task duration limit.
 	DefaultTimeout = 1 * time.Hour

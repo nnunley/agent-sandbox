@@ -33,7 +33,7 @@ func main() {
 	ref := flag.String("ref", "HEAD", "Git ref to check out")
 	targetBranch := flag.String("branch", "", "Target branch to create (optional)")
 	cmd := flag.String("cmd", "", "Command to run inside container (required)")
-	image := flag.String("image", DefaultImageName, "Incus image name (default: NixOS 25.11 for clean auditing); use 'ubuntu' for images:ubuntu/24.04")
+	image := flag.String("image", DefaultImageName, "Incus image name (default: NixOS 25.11; NixOS-only)")
 	timeout := flag.Duration("timeout", DefaultTimeout, "Task timeout")
 	keepOnFailure := flag.Bool("keep-on-failure", false, "Keep container alive on task failure")
 	remote := flag.String("remote", DefaultRemote, "Incus remote name")
@@ -42,6 +42,7 @@ func main() {
 	provider := flag.String("provider", "anthropic", "LLM provider: anthropic, openai, ollama-cloud")
 	model := flag.String("model", "", "Model name (e.g., claude-3-5-haiku, gpt-4o-mini)")
 	runAsRoot := flag.Bool("root", false, "Launch container with root access (allows installing dependencies)")
+	binaryCachePath := flag.String("binary-cache-path", "/srv/nix-shared", "Path on shared nix volume where prebuilt packages are cached")
 	externalGrading := flag.String("external-grading", "", "Path to clean checkout for external grading (oracle verification)")
 
 	flag.Usage = func() {
@@ -89,13 +90,8 @@ Flags:
 		log.Fatal("--cmd is empty after parsing")
 	}
 
-	// Handle special image names
+	// Use provided image name (NixOS-only)
 	imageName := *image
-	if imageName == "nixos" {
-		imageName = DefaultNixOSImageName
-	} else if imageName == "ubuntu" {
-		imageName = "images:ubuntu/24.04"
-	}
 
 	// Validate provider
 	prov := Provider(*provider)
@@ -117,6 +113,7 @@ Flags:
 		Provider:                prov,
 		Model:                   *model,
 		RunAsRoot:               *runAsRoot,
+		BinaryCachePath:         *binaryCachePath,
 		ExternalGradingCheckout: *externalGrading,
 	}
 

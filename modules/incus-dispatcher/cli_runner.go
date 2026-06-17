@@ -122,20 +122,33 @@ func (cr *CLIContainerRunner) launchContainer(ctx context.Context, imageName str
 		return fmt.Errorf("incus launch failed: %s (output: %s)", err, out)
 	}
 
-	// Attach shared nix store volume if requested (must be done after launch).
+	// Attach shared binary cache volume (read-only) if requested.
+	// This allows workers to pull prebuilt packages from the shared cache.
 	if task.SharedNixStore {
-		// Format: incus config device add container device-name disk pool=pool source=source path=path readonly=true
-		deviceArgs := []string{"config", "device", "add", cr.remote + ":" + cr.containerName, "nix-shared",
-			"disk", "pool=default", "source=nix-shared", "path=/nix/store", "readonly=true"}
+		cachePath := task.BinaryCachePath
+		if cachePath == "" {
+			cachePath = "/srv/nix-shared"
+		}
+
+		// Attach nix-shared volume read-only at the configured cache path
+		deviceArgs := []string{"config", "device", "add", cr.remote + ":" + cr.containerName, "nix-cache",
+			"disk", "pool=default", "source=nix-shared", "path=" + cachePath, "readonly=true"}
 		deviceCmd := exec.CommandContext(ctx, "incus", deviceArgs...)
 		if out, err := deviceCmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("attach nix volume failed: %s (output: %s)", err, out)
+			return fmt.Errorf("attach nix cache volume failed: %s (output: %s)", err, out)
 		}
 	}
 
 	// Wait for container to be ready.
 	if err := cr.waitReady(ctx); err != nil {
 		return fmt.Errorf("container not ready: %w", err)
+	}
+
+	// Configure binary cache and start nix-daemon if using shared nix store
+	if task.SharedNixStore {
+		if err := cr.configureNixCache(ctx, task); err != nil {
+			return fmt.Errorf("configure nix cache: %w", err)
+		}
 	}
 
 	return nil
@@ -167,6 +180,38 @@ func (cr *CLIContainerRunner) waitReady(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+// configureNixCache starts nix-daemon and configures the binary cache in the worker.
+// This enables workers to pull prebuilt packages from the shared cache without rebuilding.
+func (cr *CLIContainerRunner) configureNixCache(ctx context.Context, task Task) error {
+	cachePath := task.BinaryCachePath
+	if cachePath == "" {
+		cachePath = "/srv/nix-shared"
+	}
+
+	// Start nix-daemon in the worker
+	daemonCmd := exec.CommandContext(ctx, "incus", "exec", cr.containerName, "--",
+		"systemctl", "start", "nix-daemon.socket", "nix-daemon.service")
+	if out, err := daemonCmd.CombinedOutput(); err != nil {
+		// Log but don't fail; daemon may already be running
+		fmt.Printf("warning: failed to start nix-daemon: %s\n", out)
+	}
+
+	// Configure nix to use the shared cache as a substituter
+	// Write nix config to enable the cache and disable signature checks
+	confCmd := exec.CommandContext(ctx, "incus", "exec", cr.containerName, "--",
+		"sh", "-c", fmt.Sprintf(`mkdir -p /etc/nix/nix.conf.d && cat > /etc/nix/nix.conf.d/cache.conf << 'EOFCONF'
+extra-substituters = file://%s
+require-sigs = false
+EOFCONF
+`, cachePath))
+
+	if out, err := confCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("configure nix substituters: %s (output: %s)", err, out)
+	}
+
+	return nil
 }
 
 // deliverSource pushes the git repository into the container.

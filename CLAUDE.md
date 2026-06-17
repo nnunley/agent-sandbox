@@ -1,20 +1,26 @@
 # incus-dispatcher: Ephemeral NixOS Containers for Task Execution
 
-**Primary Tool**: `modules/incus-dispatcher/` — CLI + Go tool for launching ephemeral NixOS containers (`images:nixos/25.11`) to run tasks in clean isolation with shared read-only `/nix/store`.
+**Primary Tool**: `modules/incus-dispatcher/` — CLI + Go tool for launching ephemeral NixOS containers (`images:nixos/25.11`, NixOS-only) to run tasks in clean isolation with access to a shared binary cache.
 
-## CONVERGED DESIGN
+## CONVERGED DESIGN: Binary-Cache via Shared Volume
 
-**Single Shared nix-daemon (the robust model):**
-- One persistent base `nix-server` container runs the **single `nix-daemon`** and is the ONLY writer of `/nix` (store + var)
-- ONE **shared Incus filesystem custom volume** = entire `/nix` (store + var), mounted read-write on the server, read-only on workers
-- **Ephemeral root NixOS worker containers** mount that same `/nix` volume and act as **clients** (set `NIX_REMOTE=daemon`)
-- Workers obtain tools via `nix shell`/`nix develop` (the shared daemon builds/fetches on demand into the shared store, visible to all workers)
-- DevShell pinning (`flake.nix`) declares `git`, `go`, `gnumake`, `pkg-config`, `bash`; prebuilt once, cached for the group
+**Shared binary cache model (NixOS-only):**
+- One persistent base `nix-server` container publishes prebuilt packages to `nix-shared` volume via `nix copy --to file:///srv/nix-shared`
+- **Shared Incus filesystem custom volume (`nix-shared`)** mounted read-only at `/srv/nix-shared` on all workers
+- **Ephemeral NixOS worker containers** pull prebuilt packages from the shared cache without rebuilding
+- Workers configure nix via `/etc/nix/nix.conf.d/cache.conf`:
+  ```
+  extra-substituters = file:///srv/nix-shared
+  require-sigs = false
+  ```
+- DevShell pinning (`flake.nix`) declares `git`, `go`, `gnumake`, `pkg-config`, `bash`; built once on `nix-server`, cached for all workers
 
 **Key Design Principles:**
-- Socket sharing: daemon socket lives on shared volume (`/nix/var/nix/daemon-socket/socket`); all containers on the same incus host kernel can connect
-- Exactly ONE daemon writes the store (the base server); workers never write directly (avoids corruption)
-- Declarative dependencies only (flake devShell); never apt/`nix profile`/imperative installs
+- Binary-cache isolation: workers pull packages from cache, no build machinery required
+- No daemon socket overhead: cache is a simple read-only filesystem, no network/RPC
+- Exactly ONE publisher (`nix-server`) populates cache; workers never write
+- Declarative dependencies only (flake devShell); cache built from flake closure
+- NixOS-only: reproducible, clean dependency auditing without OS variants
 
 ## Flags & Options
 
@@ -28,7 +34,8 @@
 | `--root` | Launch with `security.privileged=true` (allows installing dependencies, default: false) |
 | `--external-grading <path>` | Oracle: run on clean checkout with worker's patch applied |
 | `--runner` | `client` (default, Go client) or `cli` (incus commands) |
-| `--image` | Incus image alias (default: `images:nixos/25.11`); use `nixos` or `ubuntu` for special handling |
+| `--image` | Incus image alias (default: `images:nixos/25.11`; NixOS-only) |
+| `--binary-cache-path` | Path to shared nix cache on volume (default: `/srv/nix-shared`) |
 | `--remote` | Incus remote (default: `ndn-desktop` → https://192.168.86.49:8443) |
 | `--timeout` | Task timeout (default: 1h; e.g., `30m`, `1h30m`) |
 | `--keep-on-failure` | Keep container alive if command fails (for debugging) |
@@ -36,25 +43,32 @@
 | `--provider` | LLM provider: `anthropic` (default), `openai`, `ollama-cloud` |
 | `--model` | Model name (e.g., `claude-3-5-haiku`, `gpt-4o-mini`) |
 
-## Setup: Shared nix-daemon Volume (One-Time)
+## Setup: Shared Binary-Cache Volume (One-Time)
 
 ```bash
-# 1. Create the shared /nix filesystem volume
+# 1. Create the shared binary cache volume
 incus storage volume create default nix-shared -t filesystem
 
-# 2. Create the persistent nix-server container (runs the single daemon)
+# 2. Create the persistent nix-server container (publishes packages to cache)
 incus launch images:nixos/25.11 nix-server --config security.privileged=true
-incus config device add nix-server nix-shared disk pool=default source=nix-shared path=/nix
+incus config device add nix-server nix-shared disk pool=default source=nix-shared path=/srv/nix-shared
 
-# 3. Start nix-daemon inside nix-server (example; NixOS may have built-in service)
-incus exec nix-server -- systemctl start nix-daemon
+# 3. Populate the cache by building the devShell closure on nix-server
+incus exec nix-server -- nix flake update <path-to-flake>
+incus exec nix-server -- nix copy --to file:///srv/nix-shared \
+  $(nix eval <path-to-flake>#devShells.x86_64-linux.default --raw)
 
-# 4. Verify daemon socket is accessible
-incus exec nix-server -- test -S /nix/var/nix/daemon-socket/socket && echo "Socket ready"
+# 4. Verify cache is populated
+incus exec nix-server -- ls -la /srv/nix-shared/ | grep narinfo
 
 # 5. Create a pristine snapshot for reproducibility (optional but recommended)
 incus snapshot create nix-server pristine
 ```
+
+Worker containers will automatically:
+- Mount nix-shared volume read-only at `/srv/nix-shared`
+- Configure nix substituters to use the shared cache
+- Pull prebuilt packages on demand (no rebuilds)
 
 ## Build & Test
 

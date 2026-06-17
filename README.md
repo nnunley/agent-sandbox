@@ -1,6 +1,6 @@
 # Agent Sandbox: incus-dispatcher
 
-Ephemeral NixOS container launcher for task execution with shared read-only `/nix/store`.
+Ephemeral NixOS container launcher (NixOS-only) for task execution with shared binary-cache support.
 
 ## Quick Start
 
@@ -38,35 +38,36 @@ go build -o dispatcher .
 
 ## Architecture
 
-### Shared `/nix/store` Volume
+### Shared Binary-Cache Volume
 
-One Incus filesystem volume named `nix-shared` is shared read-only across all workers:
+One Incus filesystem volume named `nix-shared` provides prebuilt packages to all workers:
 
 ```
 +-------------------+
-|  agent-host       |
-|  (NixOS mgmt)     |
-|  nix develop      |
-|  nix copy ---+    |
-+------|-------+    |
-       |
-       v
+|  nix-server       |
+|  (NixOS)          |
+|  nix copy --to    |
+|  file:///srv/... -+
++-------------------+ |
+                      |
+                      v
 +-------------------+
 |  nix-shared       |
 |  (volume)         |
-|  /nix/store       |
+|  Binary cache     |
+|  (.narinfo + nar) |
 +----------|--------+
            |
     +------+------+-------+
     |      |      |       |
     v      v      v       v
 [W1]   [W2]   [W3]   [W4] ...
-(all mount at /nix/store, readonly=true)
+(all mount at /srv/nix-shared, readonly=true)
 ```
 
 - **Creation**: `incus storage volume create default nix-shared -t filesystem`
-- **Population**: Build devShell closure on `agent-host`, realise to volume via `nix copy`
-- **Worker Access**: Mounted at `/nix/store` with `readonly=true`; workers resolve tools via `nix shell`/`nix develop` (no builds)
+- **Population**: Build devShell closure on `nix-server`, publish to cache via `nix copy --to file:///srv/nix-shared`
+- **Worker Access**: Mounted at `/srv/nix-shared` with `readonly=true`; workers pull packages via nix substituters (no builds)
 
 ### Worker Toolchain
 
@@ -121,8 +122,9 @@ result, _ := runner.Run(ctx, task)
 | `--repo` | string | - | Git repository path (local) or URL; if empty, skips delivery |
 | `--ref` | string | `HEAD` | Git ref to check out |
 | `--branch` | string | - | Target branch to create (optional) |
-| `--image` | string | `images:nixos/25.11` | Incus image alias; `nixos` or `ubuntu` are special |
+| `--image` | string | `images:nixos/25.11` | Incus image alias (NixOS-only) |
 | `--root` | bool | `false` | Launch with `security.privileged=true` (allows root ops, deps install) |
+| `--binary-cache-path` | string | `/srv/nix-shared` | Path to shared nix binary cache on volume |
 | `--remote` | string | `ndn-desktop` | Incus remote name |
 | `--runner` | string | `client` | Runner backend: `client` or `cli` |
 | `--timeout` | duration | `1h` | Max task duration (e.g., `30m`, `1h30m`) |
@@ -249,11 +251,13 @@ go vet ./...
 
 ## Conventions
 
-1. **Declarative toolchain**: All tools come from `flake.nix` devShell, never imperative (`apt`, `nix profile`)
-2. **Shared read-only store**: One `/nix/store` volume, mounted read-only on all workers
-3. **Root/privileged workers**: NixOS containers run as root by default; `--root` is a no-op for security.privileged
-4. **Ephemeral cleanup**: Containers are ephemeral; deleted on exit unless `--keep-on-failure` and task fails
-5. **Exit code passthrough**: Dispatcher exits with the task's command exit code (or -1 on framework error)
+1. **NixOS-only**: All workers run `images:nixos/25.11`; no Ubuntu or other OS variants
+2. **Declarative toolchain**: All tools come from `flake.nix` devShell, never imperative (`apt`, `nix profile`)
+3. **Shared binary-cache**: One `/srv/nix-shared` volume (read-only) provides prebuilt packages to all workers
+4. **Cache population**: `nix-server` publishes closures to cache via `nix copy --to file:///srv/nix-shared`
+5. **Root/privileged workers**: NixOS containers run as root by default; `--root` enables `security.privileged` flag
+6. **Ephemeral cleanup**: Containers are ephemeral; deleted on exit unless `--keep-on-failure` and task fails
+7. **Exit code passthrough**: Dispatcher exits with the task's command exit code (or -1 on framework error)
 
 ## Troubleshooting
 
