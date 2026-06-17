@@ -2,14 +2,19 @@
 
 **Primary Tool**: `modules/incus-dispatcher/` — CLI + Go tool for launching ephemeral NixOS containers (`images:nixos/25.11`) to run tasks in clean isolation with shared read-only `/nix/store`.
 
-## Key Design
+## CONVERGED DESIGN
 
-- **Workers**: Root/privileged NixOS containers; image is `images:nixos/25.11`
-- **Shared Store**: One filesystem volume `nix-shared` (Incus) mounted at `/nix/store` read-only across all workers
-- **Population**: DevShell closure (from `flake.nix`) built once on `agent-host`, realised into the volume via `nix copy`
-- **Toolchain**: `git`, `go`, `gnumake`, `pkg-config`, `bash` — all from flake devShell, prebuilt in store
-- **Runners**: Both CLI (`incus` commands) and Go client (`lxc/incus/v6`) backends
-- **External Grading**: Optional oracle verification — worker's patch applied to clean checkout, oracle runs on patched version
+**Single Shared nix-daemon (the robust model):**
+- One persistent base `nix-server` container runs the **single `nix-daemon`** and is the ONLY writer of `/nix` (store + var)
+- ONE **shared Incus filesystem custom volume** = entire `/nix` (store + var), mounted read-write on the server, read-only on workers
+- **Ephemeral root NixOS worker containers** mount that same `/nix` volume and act as **clients** (set `NIX_REMOTE=daemon`)
+- Workers obtain tools via `nix shell`/`nix develop` (the shared daemon builds/fetches on demand into the shared store, visible to all workers)
+- DevShell pinning (`flake.nix`) declares `git`, `go`, `gnumake`, `pkg-config`, `bash`; prebuilt once, cached for the group
+
+**Key Design Principles:**
+- Socket sharing: daemon socket lives on shared volume (`/nix/var/nix/daemon-socket/socket`); all containers on the same incus host kernel can connect
+- Exactly ONE daemon writes the store (the base server); workers never write directly (avoids corruption)
+- Declarative dependencies only (flake devShell); never apt/`nix profile`/imperative installs
 
 ## Flags & Options
 
@@ -19,30 +24,36 @@
 | `--cmd` | Command to run in container (required) |
 | `--repo` | Local path or git URL (optional) |
 | `--ref` | Git ref to check out (default: HEAD) |
-| `--root` | Launch with `security.privileged=true` (default: false) |
+| `--branch` | Target branch to create (optional) |
+| `--root` | Launch with `security.privileged=true` (allows installing dependencies, default: false) |
 | `--external-grading <path>` | Oracle: run on clean checkout with worker's patch applied |
 | `--runner` | `client` (default, Go client) or `cli` (incus commands) |
-| `--image` | Incus image alias (default: `images:nixos/25.11`) |
+| `--image` | Incus image alias (default: `images:nixos/25.11`); use `nixos` or `ubuntu` for special handling |
 | `--remote` | Incus remote (default: `ndn-desktop` → https://192.168.86.49:8443) |
+| `--timeout` | Task timeout (default: 1h; e.g., `30m`, `1h30m`) |
+| `--keep-on-failure` | Keep container alive if command fails (for debugging) |
+| `--output-dir` | Directory to write results JSON + patch + artifacts |
+| `--provider` | LLM provider: `anthropic` (default), `openai`, `ollama-cloud` |
+| `--model` | Model name (e.g., `claude-3-5-haiku`, `gpt-4o-mini`) |
 
-## Declarative Dependencies (Hard Rule)
-
-- ✅ All worker tools come from **`flake.nix` → `devShells.default`**
-- ✅ Toolchain closure is built once, realised to the shared `/nix/store` volume
-- ❌ NO `apt`, `apk add`, `nix profile install` inside containers
-- ❌ NO throwaway Ubuntu instances or temporary build containers
-- ❌ Each worker has its own `/nix/var` (not shared)
-
-## Setup: Shared Volume (One-Time)
+## Setup: Shared nix-daemon Volume (One-Time)
 
 ```bash
-# Create the volume
+# 1. Create the shared /nix filesystem volume
 incus storage volume create default nix-shared -t filesystem
 
-# Populate it (on agent-host or manually):
-# - Build devShell closure
-# - nix copy to the volume
-# (Exact command depends on mounting strategy; see docs/plans/)
+# 2. Create the persistent nix-server container (runs the single daemon)
+incus launch images:nixos/25.11 nix-server --config security.privileged=true
+incus config device add nix-server nix-shared disk pool=default source=nix-shared path=/nix
+
+# 3. Start nix-daemon inside nix-server (example; NixOS may have built-in service)
+incus exec nix-server -- systemctl start nix-daemon
+
+# 4. Verify daemon socket is accessible
+incus exec nix-server -- test -S /nix/var/nix/daemon-socket/socket && echo "Socket ready"
+
+# 5. Create a pristine snapshot for reproducibility (optional but recommended)
+incus snapshot create nix-server pristine
 ```
 
 ## Build & Test
@@ -54,7 +65,7 @@ go test ./...
 go vet ./...
 ```
 
-## Example: Run a test task
+## Example: Run a test task (uses shared nix-daemon)
 
 ```bash
 ./dispatcher \
@@ -65,7 +76,13 @@ go vet ./...
   --root
 ```
 
-Exit code is 0 (task success) or match the command's exit code.
+The worker container will:
+1. Mount the shared `/nix` volume (read-write for store access, read-only restriction at volume level)
+2. Set `NIX_REMOTE=daemon` (clients connect to the shared daemon socket)
+3. Run `go test` (which pulls `go` from the shared store via the daemon)
+4. Exit; container cleaned up automatically
+
+Exit code is the command's exit code (0 = success).
 
 ---
 

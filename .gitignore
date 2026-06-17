@@ -1,3 +1,4 @@
 result
 .direnv
 modules/llm-proxy/llm-proxy
+modules/incus-dispatcher/dispatcher
