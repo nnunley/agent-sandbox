@@ -1,0 +1,215 @@
+// incus-dispatcher: CLI tool for launching ephemeral Incus containers to run tasks.
+//
+// Usage:
+//   incus-dispatcher --name <task-name> --cmd "go test ./..." [--repo <path|url>] [--ref main] [--image <image>] [--timeout 1h] [--keep-on-failure]
+//
+// Example:
+//   incus-dispatcher --name my-test --repo ~/myrepo --ref main --cmd "make test" --timeout 30m
+//
+// The dispatcher:
+// 1. Launches an ephemeral Incus container from the specified image.
+// 2. Delivers source via git bundle (local path) or shallow clone (URL).
+// 3. Runs the command inside the container.
+// 4. Harvests git format-patch and /output artifacts.
+// 5. Removes the container (unless --keep-on-failure and command fails).
+//
+// Output format: JSON on stdout containing exit code, stdout, stderr, patch, and artifacts.
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+)
+
+func main() {
+	// CLI flags
+	name := flag.String("name", "", "Task name (required)")
+	repo := flag.String("repo", "", "Git repository path (local) or URL to deliver (optional)")
+	ref := flag.String("ref", "HEAD", "Git ref to check out")
+	targetBranch := flag.String("branch", "", "Target branch to create (optional)")
+	cmd := flag.String("cmd", "", "Command to run inside container (required)")
+	image := flag.String("image", DefaultImageName, "Incus image name")
+	timeout := flag.Duration("timeout", DefaultTimeout, "Task timeout")
+	keepOnFailure := flag.Bool("keep-on-failure", false, "Keep container alive on task failure")
+	remote := flag.String("remote", DefaultRemote, "Incus remote name")
+	outputDir := flag.String("output-dir", "", "Directory to write results (optional; if set, writes JSON and artifacts)")
+
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), `incus-dispatcher: launch ephemeral Incus containers to run tasks
+
+Usage: incus-dispatcher [flags]
+
+Flags:
+`)
+		flag.PrintDefaults()
+	}
+
+	flag.Parse()
+
+	// Validate required flags
+	if *name == "" {
+		log.Fatal("--name is required")
+	}
+	if *cmd == "" {
+		log.Fatal("--cmd is required")
+	}
+
+	// Create runner
+	runner, err := NewContainerRunner(*remote)
+	if err != nil {
+		log.Fatalf("failed to create runner: %v", err)
+	}
+
+	// Parse command
+	cmdParts := strings.Fields(*cmd)
+	if len(cmdParts) == 0 {
+		log.Fatal("--cmd is empty after parsing")
+	}
+
+	// Build task
+	task := Task{
+		Name:          *name,
+		Repo:          *repo,
+		Ref:           *ref,
+		TargetBranch:  *targetBranch,
+		Cmd:           cmdParts,
+		ImageName:     *image,
+		Timeout:       *timeout,
+		KeepOnFailure: *keepOnFailure,
+		Env:           parseEnv(),
+	}
+
+	// Run task
+	ctx := context.Background()
+	result, err := runner.Run(ctx, task)
+
+	// Always cleanup unless keep-on-failure and task failed
+	if !(*keepOnFailure && result.ExitCode != 0) {
+		_ = runner.Cleanup()
+	}
+
+	// Handle errors (non-command errors)
+	if err != nil && !isCommandErr(err) {
+		log.Fatalf("task failed: %v", err)
+	}
+
+	// Output results
+	if *outputDir != "" {
+		if err := writeResults(*outputDir, result); err != nil {
+			log.Fatalf("failed to write results: %v", err)
+		}
+	} else {
+		outputJSON(result)
+	}
+
+	// Exit with task's exit code
+	os.Exit(result.ExitCode)
+}
+
+// outputJSON writes the result as JSON to stdout.
+func outputJSON(result *Result) {
+	data := map[string]interface{}{
+		"exitCode":      result.ExitCode,
+		"containerName": result.ContainerName,
+		"duration":      result.Duration.String(),
+		"stdout":        result.Stdout,
+		"stderr":        result.Stderr,
+		"patchAvailable": len(result.PatchData) > 0,
+		"artifactCount": len(result.Artifacts),
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(data); err != nil {
+		log.Fatalf("failed to encode result: %v", err)
+	}
+}
+
+// writeResults writes the full result (including patch and artifacts) to outputDir.
+// Creates outputDir/result.json, outputDir/patch if available, outputDir/artifacts/*.
+func writeResults(outputDir string, result *Result) error {
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return err
+	}
+
+	// Write result JSON
+	resultFile := fmt.Sprintf("%s/result.json", outputDir)
+	data := map[string]interface{}{
+		"exitCode":      result.ExitCode,
+		"containerName": result.ContainerName,
+		"duration":      result.Duration.String(),
+		"stdout":        result.Stdout,
+		"stderr":        result.Stderr,
+		"artifactCount": len(result.Artifacts),
+	}
+	f, err := os.Create(resultFile)
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(data); err != nil {
+		f.Close()
+		return err
+	}
+	f.Close()
+	log.Printf("wrote %s", resultFile)
+
+	// Write patch if available
+	if len(result.PatchData) > 0 {
+		patchFile := fmt.Sprintf("%s/patch.diff", outputDir)
+		if err := os.WriteFile(patchFile, result.PatchData, 0644); err != nil {
+			return err
+		}
+		log.Printf("wrote %s", patchFile)
+	}
+
+	// Write artifacts
+	if len(result.Artifacts) > 0 {
+		artifactDir := fmt.Sprintf("%s/artifacts", outputDir)
+		if err := os.MkdirAll(artifactDir, 0755); err != nil {
+			return err
+		}
+		for name, data := range result.Artifacts {
+			file := fmt.Sprintf("%s/%s", artifactDir, name)
+			// Create subdirs as needed
+			if err := os.MkdirAll(fmt.Sprintf("%s/%s", artifactDir, name), 0755); err == nil {
+				// Dir created; skip file write
+				continue
+			}
+			if err := os.WriteFile(file, data, 0644); err != nil {
+				log.Printf("warning: failed to write artifact %s: %v", name, err)
+			}
+		}
+		log.Printf("wrote artifacts to %s", artifactDir)
+	}
+
+	return nil
+}
+
+// parseEnv reads environment variables that are intended to be passed into the container.
+// Convention: any var starting with CONTAINER_ is passed through (minus the prefix).
+// Example: CONTAINER_DEBUG=1 becomes DEBUG=1 inside the container.
+func parseEnv() map[string]string {
+	env := make(map[string]string)
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "CONTAINER_") {
+			parts := strings.SplitN(kv, "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimPrefix(parts[0], "CONTAINER_")
+				env[key] = parts[1]
+			}
+		}
+	}
+	return env
+}
+
+func isCommandErr(err error) bool {
+	// Check if error is a command execution error (not a framework error).
+	return strings.Contains(err.Error(), "exec command")
+}
