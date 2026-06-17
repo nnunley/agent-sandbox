@@ -5,10 +5,13 @@ A Go CLI tool for launching ephemeral Incus containers to run isolated tasks, wi
 ## Features
 
 - **Ephemeral containers**: Automatically cleaned up after task completion
+- **NixOS images**: Default to reproducible NixOS (clean, auditable closure) with optional root access
 - **Git delivery**: Via local bundle (for local repos) or shallow clone (for remote URLs)
 - **Output harvesting**: Automatically collects files from `/output` inside the container
 - **Patch generation**: Can generate `git format-patch` output if the repo has commits
 - **Environment injection**: Pass environment variables via `CONTAINER_*` convention
+- **Provider routing**: Dispatch to Anthropic (Haiku), OpenAI, or Ollama Cloud via llm-proxy
+- **External grading**: Verify diffs on a pristine checkout the worker never touched
 - **Configurable timeouts**: Per-task execution limits
 - **Debug mode**: Keep failing containers alive with `--keep-on-failure`
 
@@ -27,7 +30,11 @@ incus-dispatcher [flags]
   - Remote URL: `https://github.com/user/repo.git` (shallow cloned)
 - `--ref` (optional): Git reference to check out (default: `HEAD`)
 - `--branch` (optional): Target branch to create for the work
-- `--image` (optional): Incus image name (default: `images:ubuntu/24.04`)
+- `--image` (optional): Incus image name (default: `images:ubuntu/24.04`); use `nixos` for NixOS
+- `--root` (optional): Launch container with root/privileged access (for dependency installation)
+- `--provider` (optional): LLM provider: `anthropic`, `openai`, `ollama-cloud` (default: `anthropic`)
+- `--model` (optional): Model name (e.g., `claude-3-5-haiku`, `gpt-4o-mini`)
+- `--external-grading` (optional): Path to clean checkout for oracle verification (anti-reward-hack)
 - `--remote` (optional): Incus remote name (default: `ndn-desktop`)
 - `--timeout` (optional): Task execution timeout (default: `1h`)
 - `--keep-on-failure` (optional): Keep container alive if command fails (for debugging)
@@ -65,6 +72,48 @@ Run a command with environment variables:
 CONTAINER_DEBUG=1 CONTAINER_LOG_LEVEL=trace incus-dispatcher \
   --name debug-run \
   --cmd "my-script"
+```
+
+Run with NixOS and root access:
+```bash
+incus-dispatcher \
+  --name build-with-nix \
+  --repo ~/myproject \
+  --image nixos \
+  --root \
+  --cmd "nix flake check"
+```
+
+Dispatch to OpenAI via the proxy:
+```bash
+incus-dispatcher \
+  --name gpt-test \
+  --repo ~/myproject \
+  --provider openai \
+  --model gpt-4o-mini \
+  --cmd "python test.py"
+```
+
+Verify a diff on a clean checkout (external grading):
+```bash
+incus-dispatcher \
+  --name agent-edit \
+  --repo ~/mutable-repo \
+  --cmd "make edit && git format-patch -o /output" \
+  --external-grading /clean-checkouts/immutable-repo \
+  --output-dir ./results
+```
+
+The results will include:
+```json
+{
+  "exitCode": 0,
+  "grading": {
+    "exitCode": 0,
+    "patchApplied": true,
+    "stdout": "PASS: all tests"
+  }
+}
 ```
 
 ### Output Format
@@ -191,11 +240,82 @@ Task timeout is enforced via `context.WithTimeout()`. If a task exceeds the time
 4. Container is cleaned up
 5. Exit code is set to -1 to indicate timeout
 
+## New Features (2026-06-17)
+
+### A. NixOS Images & Root Access
+
+Use NixOS for reproducible, auditable dependency closure:
+
+```bash
+incus-dispatcher --name task --image nixos --root --cmd "..."
+```
+
+- `--image nixos`: Uses `images:nixos/25.05` (default NixOS image)
+- `--root`: Enables root/privileged access (allows `nix develop`, package installation)
+- Guest includes git, build tools, and language runtimes pre-installed
+
+### B. Provider Routing (Anthropic, OpenAI, Ollama Cloud)
+
+Route tasks to different LLM providers via the internal proxy:
+
+```bash
+# Anthropic (default)
+incus-dispatcher --name task --provider anthropic --model claude-3-5-haiku --cmd "..."
+
+# OpenAI
+incus-dispatcher --name task --provider openai --model gpt-4o-mini --cmd "..."
+
+# Ollama Cloud
+incus-dispatcher --name task --provider ollama-cloud --model neural-chat --cmd "..."
+```
+
+The proxy (`llm-proxy`) injects credentials from systemd credentials into Authorization headers.
+Workers never see raw API keys; they only access the proxy at `http://10.88.0.1:12071/<provider>/*`.
+
+### C. External Grading (Anti-Reward-Hack Guardrails)
+
+Verify diffs on a pristine checkout the worker never touched:
+
+```bash
+# Create a clean, read-only checkout
+git clone <upstream> /clean-checkouts/myrepo
+
+# Dispatch with external grading
+incus-dispatcher --name agent --repo ~/mutable --external-grading /clean-checkouts/myrepo \
+  --cmd "make edit && git format-patch -o /output" \
+  --output-dir ./results
+```
+
+Flow:
+1. Worker produces a diff (git format-patch)
+2. Dispatcher clones the clean checkout to a temp directory
+3. Dispatcher applies the worker's diff to the temp clone
+4. Dispatcher runs the oracle (same command) on the patched clone
+5. Results include oracle exit code, stdout, stderr, and whether patch applied
+
+The worker cannot tamper with the oracle because the oracle runs on a checkout the worker never accessed.
+
+Result JSON includes:
+```json
+{
+  "exitCode": <worker exit code>,
+  "grading": {
+    "exitCode": <oracle exit code>,
+    "duration": "...",
+    "stdout": "<oracle output>",
+    "stderr": "",
+    "patchApplied": true,
+    "applyError": ""
+  }
+}
+```
+
 ## Future Work
 
 1. **VM Runner**: Implement `Runner` for Firecracker micro-VMs to run on the agent-host
 2. **Result Caching**: Cache successful runs to skip re-execution
 3. **Parallel Execution**: Fan out multiple tasks across available containers
 4. **Network Isolation**: Restrict container egress (via iptables rules)
-5. **Credential Handling**: Inject secrets safely (API keys, OAuth tokens, etc.)
-6. **Structured Logging**: JSONL logging of task execution for auditing
+5. **Scoped Checkout Delivery**: Only deliver in-scope files to the worker (hardening)
+6. **Oracle Command Separation**: Allow `--oracle-cmd` distinct from worker `--cmd`
+7. **Structured Logging**: JSONL logging of task execution for auditing
