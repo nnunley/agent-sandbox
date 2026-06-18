@@ -1,8 +1,8 @@
 # Progress
 
-**Phase:** PAUSED at bootstrap checkpoint (extraction complete; scoping not started)
-**Artifacts (committed 4970ede):** 13 epics / 78 stories / 95 scenarios (7 journey-sentinel) / corpus index / coverage ledger
-**Walking-skeleton candidate:** JOURNEY-0001 — full one-shot lifecycle, directive→completion
-**Blocking next phase:** (1) human review of requirements; (2) queue-substrate decision (substrate-dependent stories flagged BLOCKED)
-**Deferred:** PAR omission review (judgment call; runnable on demand)
-**To resume:** decide substrate, then "continue iterative development" → runs scoping-the-simplest-core → roadmap.md
+**Phase:** bootstrap COMPLETE (extraction + scoping); PAUSED before implementation loop
+**Roadmap:** ITER-0000 walking skeleton + ITER-0001..0008, PAR-scope-reviewed (REVISE→fixed→converged)
+**ITER-0000:** thin one-shot lifecycle on container backend (reuses dispatcher Runner) + stub Queue + 2 spikes + E2E harness; substrate/Temporal-independent
+**Deferred:** ITER-0006 substrate (post-Patrick); ITER-0007 Temporal/prioritization; full Mac-off e2e → ITER-0008
+**PAR scope review:** 2 adversarial reviewers → 11 findings (forward-deps, story-splits, stub-queue boxing-in) → all applied at roadmap AC-scoping level
+**Next:** run-an-iteration on ITER-0000 (the implementation loop — implementer + per-task PAR). Awaiting go.
