@@ -51,6 +51,38 @@ Consequences (not negotiable):
 The Mac is a stateless client: it authors top-level directives and reviews
 parked threads. It holds no fleet state.
 
+### Execution topology — nested, declarative, tiered isolation
+
+The execution plane nests (every layer is declarative NixOS / microvm.nix config):
+
+```
+ndn-desktop (host)
+└─ agent-host (incus, /dev/kvm)
+   └─ Firecracker micro-VM        DURABLE: coordinator daemon + queue client + warm /nix store
+      ├─ disposable unit (task A)  one-shot, immutable root, killed on done
+      ├─ disposable unit (task B)
+      └─ …
+```
+
+- **Durable layer = the live micro-VM**, not a durable *agent* (resolves D3 cleanly): it hosts
+  the Mac-off deterministic coordinator and a warm `/nix` closure, and stays up across tasks.
+- **Disposable layer = per-task units inside the live VM.** Teardown is killing a unit (no
+  `incus delete` in the hot path → the D5 hang never occurs). Warm store → sub-second spin-up.
+
+**Isolation tiers (selected per directive by the template, via D1):**
+
+| Tier | Unit | Isolation | Spin-up | Use |
+|------|------|-----------|---------|-----|
+| Fast | `nspawn --ephemeral` / NixOS container in the live VM | namespace (shared VM kernel) | sub-second (warm `/nix`) | trusted lanes, cheap iteration |
+| Hard | per-task Firecracker microVM (optionally wrapped in a NixOS container) | hardware (own kernel) | ~hundreds of ms | sensitive/untrusted lanes (e.g. trading-platform domain) |
+
+A micro-VM is also a hardware **trust boundary**: run **one VM per trust domain**, with cheap
+disposable units inside each. Multi-tenancy falls out for free.
+
+**Decisive benchmark (refocuses spike #7):** measure *disposable-unit* spin-up with a real
+boot-readiness probe — `nspawn`-container vs per-task-microVM — inside the live VM. VM
+boot-to-ready is a one-time amortized cost and is NOT the number that picks the substrate.
+
 ---
 
 ## Decisions (with the pushback issue that forced each)
@@ -84,6 +116,22 @@ workload. So:
   measures (a) startup latency *with the closure realized* and (b) clean
   kill-to-teardown vs the container delete-hang.
 - The queue/intent/template design is backend-agnostic.
+
+**The worker is ONE NixOS configuration; backends are delivery knobs.** Because
+NixOS is built declaratively, container and micro-VM are not two images — they
+are the same `fleet-worker` NixOS config delivered two ways (an incus container,
+or a Firecracker guest with `microvm.hypervisor = "firecracker"`). The "golden"
+is therefore the *realized closure* of that config (rebuildable, pinned), not an
+imperatively-snapshotted container — this retires plan #27's
+"snapshot-a-golden + `incus copy`" friction. **The worker NixOS config is the
+keystone artifact**: both the ctx_handoff spike and the micro-VM latency
+benchmark depend on it (it carries claude-code, lean-ctx, the toolchain, the
+skills bundle, and a boot-readiness marker).
+
+Spike data point (2026-06-18, `test-vm` placeholder guest): `systemctl stop`
+teardown is clean (no `incus delete`, no hang — confirms the micro-VM teardown
+win). Firecracker process launch ~56 ms; boot-to-ready unmeasured (placeholder
+guest never took a DHCP lease) — needs the real worker guest + readiness probe.
 
 ### D3 — Durable agents deferred; lean-ctx carries state passthrough (Issue 3)
 Durable agents fit neither the one-shot `Runner` interface nor the
@@ -195,16 +243,25 @@ lane; the next fast-start one-shot picks it up with the prior handoff applied.
 
 ---
 
-## Skills (vendored, per the port decision)
+## Skills (declarative vendoring via agent-skills-nix)
 
-Vendor the relevant subset of `selamy-labs/agent-skills` into the worker golden
-(`fleet-worker/skills/`), baked into the image (offline, pinned):
+Bring the relevant subset of `selamy-labs/agent-skills` into the worker config
+**declaratively**, not by copying files. Use `Kyure-A/agent-skills-nix`
+(MIT, actively maintained) as a flake input plus the upstream skills repo as a
+**hash-pinned** input; select the subset with `selectSkills`/`mkBundle`; place
+the bundle where `claude -p` discovers it:
+`environment.etc."claude/skills".source = bundle;` (NixOS system integration via
+its library functions — its Home-Manager module is the stateful alternative).
+Use `copy-tree` (not symlink) for an immutable, offline image.
 
-`using-laneq`, `low-level-executor-task-spec`, `process-aware-done`,
+Subset: `using-laneq`, `low-level-executor-task-spec`, `process-aware-done`,
 `verify-from-system-of-record`, `verify-real-artifact`, `gate-before-push`,
 `graceful-shutdown-stateful-agents`, `restart-resilience`, `yield-on-wait`,
 `push-over-polling`, `credential-proxy`, `context-anchored-patching`,
 `agent-otel-trajectory`.
+
+Open: confirm the upstream skills' subdir layout (`subdir`/`idPrefix`) and
+`filter.maxDepth` for the flat-vs-nested SKILL.md change logged upstream.
 
 ---
 
