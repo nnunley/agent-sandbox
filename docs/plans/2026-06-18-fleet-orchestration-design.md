@@ -379,7 +379,16 @@ Candidates:
    separate from the worker host, so it survives worker-capacity rebuilds.
    Cleaner failure isolation; one more thing to run.
 
-Decision pending. Two factors now bear on it:
+**Provisional decision (2026-06-18): candidate 1 — extend laneq.** Adopt laneq as
+the cluster-resident substrate + add the `not-before` field. To be confirmed with
+the author (Patrick) on 2026-06-19; open topics for that conversation: take
+`not-before` upstream vs fork; a pluggable/flexible db layer (sqlite + postgres,
+the latter "free" since Temporal needs it); running laneq as a networked
+multi-client service; and a possible **Rust rewrite** (single static binary for
+the NixOS worker image, better concurrency for the networked mode, `sqlx` multi-db
+— memory is NOT the main driver since it's a single service).
+
+Two factors bear on it:
 - **`not-before` is required regardless** (Prioritization) — laneq must gain an
   eligibility gate, so "adopt laneq unchanged" is off the table; it's "extend
   laneq" (you know the author → possible upstream) vs a backend that has delayed
