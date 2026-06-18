@@ -442,10 +442,14 @@ func (cr *CLIContainerRunner) cleanup() error {
 	if cr.containerName == "" {
 		return nil
 	}
-	// Ephemeral containers auto-cleanup on stop.
-	// But we need to explicitly stop/delete if needed.
-	cmd := exec.Command("incus", "delete", cr.containerName, "-f")
-	_ = cmd.Run() // Ignore error if container is already gone or ephemeral.
+	// STOP FIRST (bounded, --force kills after the timeout), THEN delete.
+	// Force-deleting a RUNNING container (`incus delete --force`) is the
+	// documented hang trigger on this host (plan #27.4) — verified 2026-06-18.
+	// An orderly stop→delete avoids it; the coordination loop never blocks here.
+	stop := exec.Command("incus", "stop", cr.containerName, "--timeout", "30", "--force")
+	_ = stop.Run() // ignore: may already be stopped or gone
+	del := exec.Command("incus", "delete", cr.containerName)
+	_ = del.Run() // ignore: may already be gone
 	return nil
 }
 

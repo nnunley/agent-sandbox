@@ -451,16 +451,12 @@ func (cr *ClientContainerRunner) execCommand(ctx context.Context, env map[string
 		}
 	}
 
-	// Ensure PATH is set for NixOS binaries (/run/current-system/sw/bin).
-	// If no PATH is provided, set a sensible default; otherwise prepend NixOS path.
-	if _, hasPath := environment["PATH"]; !hasPath {
-		environment["PATH"] = "/run/current-system/sw/bin:/usr/bin:/bin"
-	} else {
-		// Prepend NixOS path if not already included.
-		if !strings.Contains(environment["PATH"], "/run/current-system/sw/bin") {
-			environment["PATH"] = "/run/current-system/sw/bin:" + environment["PATH"]
-		}
-	}
+	// Go-exec PATH fix (STORY-0067): a non-login ExecInstance does NOT source the
+	// worker's profile the way an interactive `su - worker -c` login does, so
+	// agent tools (claude-code, lean-ctx) installed in the worker's nix profile /
+	// ~/.local/bin are not found → exit 127. Prepend those dirs (absolute, so they
+	// resolve regardless of the exec user) ahead of any caller-supplied PATH.
+	environment["PATH"] = workerToolPath(environment["PATH"])
 
 	// Capture stdout and stderr using pipes.
 	var stdout, stderr bytes.Buffer
@@ -622,14 +618,20 @@ func (cr *ClientContainerRunner) cleanup() error {
 		return nil
 	}
 
-	// Delete the instance (ephemeral or not).
+	// STOP FIRST (bounded), THEN delete. Deleting a running instance is unsafe:
+	// the CLI's `delete --force` on a running container can hang, and the client's
+	// plain DeleteInstance errors on a running instance (previously swallowed →
+	// leaked container). An orderly stop→delete fixes both.
+	stopReq := api.InstanceStatePut{Action: "stop", Timeout: 30, Force: true}
+	if stopOp, serr := cr.client.UpdateInstanceState(cr.containerName, stopReq, ""); serr == nil {
+		_ = stopOp.Wait()
+	}
+
 	op, err := cr.client.DeleteInstance(cr.containerName)
 	if err != nil {
 		// Instance may already be gone.
 		return nil
 	}
-
-	// Wait for deletion to complete.
 	_ = op.Wait()
 	return nil
 }

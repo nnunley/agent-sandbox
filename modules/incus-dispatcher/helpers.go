@@ -7,8 +7,42 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
+
+// workerToolPath returns a PATH that prepends the worker's nix-profile and local
+// bin dirs (where agent tools — claude-code, lean-ctx — are installed) ahead of
+// the system path and any caller-supplied PATH. This mirrors what an interactive
+// `su - worker -c` login resolves and fixes the exit-127 seen when a non-login
+// ExecInstance couldn't find those tools (STORY-0067). Dirs are absolute, so they
+// resolve regardless of which user the exec runs as. Deduplicated, order-preserving.
+func workerToolPath(existing string) string {
+	dirs := []string{
+		"/home/worker/.local/bin",
+		"/etc/profiles/per-user/worker/bin", // NixOS per-user profile
+		"/home/worker/.nix-profile/bin",
+		"/nix/var/nix/profiles/default/bin",
+		"/run/current-system/sw/bin",
+		"/usr/bin",
+		"/bin",
+	}
+	seen := map[string]bool{}
+	var out []string
+	add := func(d string) {
+		if d != "" && !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
+	}
+	for _, d := range dirs {
+		add(d)
+	}
+	for _, d := range strings.Split(existing, ":") {
+		add(d)
+	}
+	return strings.Join(out, ":")
+}
 
 // newCmdContext creates a new exec.Cmd with the given context.
 func newCmdContext(ctx context.Context, name string, arg ...string) *exec.Cmd {
