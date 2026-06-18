@@ -2,3 +2,8 @@ result
 .direnv
 modules/llm-proxy/llm-proxy
 modules/incus-dispatcher/dispatcher
+
+# iterative-development stores durable iteration state here; override the
+# global ~/.config/git/ignore exclusion of docs/superpowers/ for this repo.
+!docs/superpowers/
+!docs/superpowers/**
