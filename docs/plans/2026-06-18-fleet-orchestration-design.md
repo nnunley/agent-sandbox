@@ -26,12 +26,21 @@ Consequences (not negotiable):
 
 ---
 
-## Architecture — three planes
+## Architecture — four planes
+
+**Time plane**
+- **Temporal** (cluster-resident, durable). Owns *when*: periodic Schedules that
+  author directives, durable timers that hold deferred/future work, retry
+  backoff, and the urgency projection (see Prioritization). Server + workers run
+  on `ndn-desktop`; its state survives host restarts and resumes mid-flight, so
+  it satisfies the Mac-off constraint natively. **Single writer** of laneq's
+  scheduling fields (effective priority + not-before).
 
 **Coordination plane**
 - **Directive queue** (substrate OPEN — see below). Source of truth for *what
   work exists* and *who holds it*: priority, lanes, threading, leasing.
-  Durable, cluster-resident.
+  Durable, cluster-resident. Holds only *currently-actionable* directives;
+  deferred/future work lives in Temporal until eligible.
 
 **Control plane (our new code — extends `modules/incus-dispatcher`)**
 - **`dispatcher serve --queue`** — long-running daemon on `ndn-desktop`. Drains
@@ -176,17 +185,26 @@ soft agent-to-agent chatter (broadcast/direct, read-once, no lease, no atomic
 claim, no requeue). The directive queue keeps the durable, leased, crash-safe
 work ledger. Don't replace it with the bus; don't bridge two buses.
 
-### D4 — Deterministic, cluster-resident coordination loop (Issue 4)
+### D4 — Deterministic, cluster-resident coordination loop + escalation ladder (Issue 4)
 "Coordinate with the Mac off" requires the decision loop on the cluster, not the
 laptop — but not an unsupervised LLM. The daemon applies **fixed rules** on each
-grade:
-- pass → mark the thread `done`;
-- fail → requeue with the grade attached, up to **N** attempts;
-- persistent fail → **park** for human review.
+grade, climbing a **graduated escalation ladder** rather than flat retry:
+- **pass** → mark the thread `done`.
+- **fail (transient)** → retry same (Temporal backoff).
+- **fail (repeats)** → escalate the **worker** (cheap implementer → strong
+  model) — a *pre-approved* capability rung.
+- **fail (still)** → escalate **resources/template** (bigger, or hard-tier) —
+  still pre-approved rungs only.
+- **authority/judgment limit** → escalate **to a human**: push to a dedicated
+  `escalations` lane (distinct durable state, threaded to the origin),
+  **non-blocking** (the fleet keeps draining other lanes), Mac-off-safe (the
+  human drains it on return). Privileged rungs (root / sensitive template) are
+  reachable *only* this way — never autonomously (D1).
 
 No decomposition, no model in the loop (bernstein's zero-LLM-scheduler idea).
-The human, via the Mac when on, authors top-level directives and clears parked
-threads.
+The human, via the Mac when on, authors top-level directives and clears the
+escalations lane. Temporal re-surfaces stale human-pending escalations (urgency
+rises → re-notify). Every ladder transition is a D6 decision-log line.
 
 ### D5 — Orderly teardown + reaper; root cause was a missing stop (Issue 5)
 Current code never stops before deleting: the CLI runner force-deletes a running
@@ -210,6 +228,51 @@ separate trading-platform project with compliance-grade audit needs.
 
 ---
 
+## Prioritization & scheduling (Eisenhower × Temporal)
+
+The ambiguity to avoid: "priority" doing several jobs at once. Disentangle into
+**two orthogonal axes** (Eisenhower) plus a single-writer projection.
+
+**Two axes:**
+- **Importance** — how much the work matters. Author-set, mostly static.
+- **Urgency** — how time-sensitive. *Derived* from `deadline` + elapsed time, so
+  it changes on its own.
+
+**The quadrants map to fleet actions:**
+
+| | Urgent | Not urgent |
+|---|---|---|
+| **Important** | Q1: run now, strong worker, top of `next` | Q2: schedule — Temporal holds eligibility, releases as deadline nears |
+| **Not important** | Q3: run soon, cheap-implementer template; loses ordering to Q1 | Q4: idle-only — deferred indefinitely; runs only when nothing else is ready |
+
+**Single-writer projection (this is what removes the contention):**
+- Rescorable **inputs** on a directive: `importance` (tier) + `deadline`/urgency
+  intent. Set by humans, proposed by agents, or scheduled.
+- **Temporal is the sole writer** of laneq's scheduling fields, projecting
+  `(importance, urgency=f(deadline, now)) → (effective priority, not-before)` and
+  re-evaluating over time. laneq just hands the provisioner the **highest-importance
+  item that is eligible now**; it never has to understand urgency.
+
+**Rescore = the one unified operation** (escalation, manual injection, priority
+bumps are all this — change the inputs, Temporal re-projects the bucket):
+- **Human** — unrestricted rescore, any item, any bucket. Manual injection = a
+  rescore from nothing into a chosen quadrant. "Critical now" = a signal to
+  Temporal → instant reproject to Q1.
+- **Agent** — may *propose* a bounded rescore (D1 propose/dispose); big jumps or
+  privileged implications need approval. A drifting agent cannot self-promote to
+  Q1/P0 and dominate the fleet.
+- **Temporal** — deterministic, deadline-driven (urgency aging).
+
+**Starvation is a policy, not a bug:** items with a deadline age up automatically
+(anti-starvation for free); genuine Q4 (no deadline, low importance) stays
+idle-only *by design*.
+
+**laneq needs one new field — `not-before`** (eligibility gate), so `next` means
+"highest importance among the eligible." This is the `not-before` extension noted
+under the substrate decision; it pairs with Temporal as the single writer.
+
+---
+
 ## Directive contract (intent-shaped, per D1)
 
 A directive body (JSON the daemon interprets; the queue stays generic). Shaped
@@ -221,7 +284,8 @@ implicit.
   "intent": "fix cluster-A conj-expected-Collection failures to 0",
   "template": "fleet-golden-go",        // PROPOSED; daemon validates vs allowlist + origin
   "origin": "orchestrator",             // orchestrator | worker:<id> (set by the daemon, not the author)
-  "priority": "P1",
+  "importance": "high",                 // INPUT: how much it matters (author-set). NOT effective priority.
+  "deadline": "2026-06-20T17:00Z",      // INPUT, optional: drives urgency. Absent ⇒ never urgent (Q4-eligible).
   "lane": "let-go",
   "repo": "git-bundle:///srv/feed/let-go.bundle",
   "ref": "main",
@@ -237,6 +301,9 @@ implicit.
 ```
 
 No `access_cmd`, no `root`. The template defines how the work runs.
+**`importance` + `deadline` are inputs**, not the schedule — Temporal projects
+them to laneq's effective priority + `not-before` (see Prioritization). Agents
+may only *propose* changes to these; humans set them freely.
 
 ---
 
@@ -252,8 +319,9 @@ No `access_cmd`, no `root`. The template defines how the work runs.
 7. If `grade` present, run the **authoritative external grade** on a clean
    checkout the worker never touched (`verify-from-system-of-record`,
    `context-anchored-patching` — copy source files, don't `patch`).
-8. Coordination loop (D4): pass→done; fail→requeue (≤ `max_attempts`) with grade
-   + a fresh `handoff` bundle; persistent fail→park.
+8. Coordination loop (D4): pass→done; fail→climb the escalation ladder (retry
+   same → stronger worker → bigger/hard-tier → human via `escalations` lane),
+   each retry re-pushed by Temporal with backoff + a fresh `handoff` bundle.
 9. Stop → (reaper) delete (D5). Write decision-log line (D6).
 
 Live steering = the orchestrator pushes a higher-priority directive into the
@@ -311,7 +379,14 @@ Candidates:
    separate from the worker host, so it survives worker-capacity rebuilds.
    Cleaner failure isolation; one more thing to run.
 
-Decision pending.
+Decision pending. Two factors now bear on it:
+- **`not-before` is required regardless** (Prioritization) — laneq must gain an
+  eligibility gate, so "adopt laneq unchanged" is off the table; it's "extend
+  laneq" (you know the author → possible upstream) vs a backend that has delayed
+  visibility natively.
+- **Temporal needs a persistence DB** (typically Postgres) on the cluster anyway.
+  That makes a Postgres-backed network-native queue "free infrastructure" if we
+  go that way — a point for candidate 2.
 
 ---
 
@@ -327,9 +402,20 @@ Decision pending.
 - **State passthrough** — `ctx_handoff` round-trips decisions across two
   separate `claude -p` invocations on the worker (this is unproven today — the
   dogfood ran lean-ctx compression only, bridge OFF; treat as a gating spike).
+- **Prioritization** — Temporal projects `(importance, deadline)` → effective
+  priority + `not-before` deterministically; a deadline approaching promotes Q2→Q1;
+  a no-deadline low-importance item stays Q4 (idle-only). laneq `next` returns the
+  highest-importance *eligible* item only. **Single-writer**: no actor but Temporal
+  writes effective priority/not-before.
+- **Rescore authority** — a human rescore moves any item to any bucket; an
+  agent-proposed rescore beyond its bound (or with privileged implication) is
+  rejected / routed to approval.
+- **Escalation** — the ladder climbs pre-approved rungs autonomously; a
+  privileged/judgment rung lands in the `escalations` lane without blocking other
+  lanes; a stale escalation is re-surfaced by rising urgency.
 - **Mac-off** — the headline acceptance test: with the Mac disconnected, the
-  cluster claims, runs, grades, requeues/parks, and a successor resumes via
-  handoff.
+  cluster claims, runs, grades, escalates, and a successor resumes via handoff;
+  human-only escalations queue durably for the Mac's return.
 
 ---
 
@@ -341,3 +427,5 @@ Decision pending.
 - Worker golden: `fleet-worker/{flake.nix,runner.sh,brief.level1-focused.txt}`
 - Reference designs: laneq (`selamy-labs/laneq`), bernstein
   (`sipyourdrink-ltd/bernstein`), lean-ctx (`yvgude/lean-ctx`)
+- Time plane: Temporal (`temporal.io`) — Schedules, durable timers, signals
+- Skill distribution: `Kyure-A/agent-skills-nix`
