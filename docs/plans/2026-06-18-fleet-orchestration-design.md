@@ -128,10 +128,28 @@ keystone artifact**: both the ctx_handoff spike and the micro-VM latency
 benchmark depend on it (it carries claude-code, lean-ctx, the toolchain, the
 skills bundle, and a boot-readiness marker).
 
-Spike data point (2026-06-18, `test-vm` placeholder guest): `systemctl stop`
-teardown is clean (no `incus delete`, no hang — confirms the micro-VM teardown
-win). Firecracker process launch ~56 ms; boot-to-ready unmeasured (placeholder
-guest never took a DHCP lease) — needs the real worker guest + readiness probe.
+Spike data (2026-06-18, `test-vm` + console readiness sentinel):
+- `systemctl stop` teardown is clean (no `incus delete`, no hang — confirms the
+  micro-VM teardown win).
+- **Micro-VM boot-to-ready ≈ 4.8 s** (full NixOS guest → `multi-user.target`;
+  Firecracker's own boot is ~125 ms, so the 4.8 s is NixOS userspace/systemd).
+  Fine as a one-time **durable-VM** cost; heavy as a **per-task hard-tier** cost.
+  Trimmable with a minimal guest (fewer units) — TODO if hard-tier latency matters.
+- Implication: the number argues *for* the tiered model — **fast-tier nspawn is
+  the default**, per-task microVM reserved for sensitive lanes.
+- **Fast-tier nspawn CANNOT run in the agent-host LXC** (verified): an ephemeral
+  NixOS container fails with `Failed to mount proc ... Operation not permitted`,
+  unchanged by `security.nesting=true` (unprivileged userns limit). This is a
+  *load-bearing* finding: the Firecracker VM layer is **required, not optional**
+  — it provides the real kernel privileges nspawn needs; the LXC host cannot.
+  The fast-tier spin-up number must therefore be measured **inside the durable
+  VM** (next step: stand up the durable VM with in-VM nesting, run nspawn there).
+- Directional conclusion (sufficient to proceed): per-task microVM ≈ 4.8 s is
+  heavy; warm in-VM nspawn is expected sub-second. Tiered model holds; exact
+  fast-tier number is nice-to-have, not architecture-blocking.
+- Note: `enable-ksm.service` fails in the unprivileged incus container
+  (`/sys/kernel/mm/ksm/run` read-only) — benign, pre-existing; disable to quiet
+  activation.
 
 ### D3 — Durable agents deferred; lean-ctx carries state passthrough (Issue 3)
 Durable agents fit neither the one-shot `Runner` interface nor the
@@ -264,6 +282,18 @@ Open: confirm the upstream skills' subdir layout (`subdir`/`idPrefix`) and
 `filter.maxDepth` for the flat-vs-nested SKILL.md change logged upstream.
 
 ---
+
+## Service discovery — no coredns for v1
+
+Disposable units reach fixed services (`llm-proxy`, queue/coordinator) via
+**static endpoints injected by their template** (the `low-level-executor-task-spec`
+discipline), with dnsmasq on `br-microvm` for DHCP + basic name resolution.
+Workers are **launched, not discovered** — coordination is queue-mediated (pull)
++ lean-ctx; "who's alive" is the queue's leases + lean-ctx's agent registry, at
+the app layer, not DNS. Less discovery surface is also a smaller attack surface.
+Revisit coredns / Consul / NATS only at the **multi-host tier** (same point as
+plan #26.3's NATS fan-out), or if SRV/health-aware resolution across nested VM
+bridges is needed.
 
 ## OPEN DECISION — queue substrate
 

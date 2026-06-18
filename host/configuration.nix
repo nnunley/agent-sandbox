@@ -47,4 +47,11 @@
       imports = [ ../guests/base.nix ];
     };
   };
+
+  # NOTE: the fast-tier nspawn unit does NOT belong here. systemd-nspawn cannot
+  # mount /proc inside the unprivileged agent-host LXC container (verified
+  # 2026-06-18: "Failed to mount proc ... Operation not permitted", even with
+  # security.nesting=true). The fast tier runs INSIDE the durable Firecracker
+  # micro-VM (real kernel), per the design's nested topology — see
+  # docs/plans/2026-06-18-fleet-orchestration-design.md.
 }

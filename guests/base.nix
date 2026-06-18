@@ -2,6 +2,8 @@
 { config, pkgs, lib, ... }:
 
 {
+  imports = [ ./fleet-ready.nix ];
+
   microvm = {
     hypervisor = "firecracker";
     mem = 4096;
