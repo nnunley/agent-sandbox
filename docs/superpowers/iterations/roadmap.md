@@ -14,13 +14,35 @@ Ordering principles (from the design + the provisional substrate decision):
 - ~Half the corpus is NixOS/microvm infra → proven via smoke/readiness scenarios,
   not classic unit tests. The harness must support both.
 
-## Walking skeleton (ITER-0000)
+## Walking skeleton (ITER-0000) — **the DOGFOOD milestone**
+
+**Top priority: reach a real dogfood ASAP.** ITER-0000 is not a toy skeleton — it
+is the minimal slice that lets us dispatch a *real* agent task to the cluster and
+get an oracle-graded result (the same loop that produced the 13→0 fix). Exit
+criterion (b) below is "the dogfood runs for real," not just "JOURNEY-0001 passes
+on a fake backend."
+
+**Dogfood critical path (everything here must work to dogfood):**
+core lifecycle stories + **STORY-0067 (Go-exec PATH fix — pulled from ITER-0003;
+hard `127` blocker)** + a **minimal container worker image** (thin slice of
+STORY-0075: claude-code + lean-ctx + toolchain via cached substitution; full
+golden / Ubuntu-retire / micro-VM stays ITER-0005).
+
+**Explicitly OFF the dogfood critical path (do not block the dogfood on these):**
+both spikes (STORY-0034, STORY-0025 — run in parallel); robust result contract
+(STORY-0072, ITER-0003 — the external grade is authoritative, a missing
+`result.json` doesn't break the dogfood); Temporal, substrate, escalation ladder,
+tiers, audit.
 
 **Intent:** Drive a single directive end-to-end on the container backend — claim
 → validate template → launch from golden → deliver repo → run runner → harvest
 diff+result → authoritative external grade → minimal outcome (pass→done /
 fail→requeue) → stop+reap — with a stub queue, and stand up the E2E journey
-harness. Plus prove the two unvalidated assumptions.
+harness. Plus prove the two unvalidated assumptions (in parallel).
+
+**Two exit criteria:** (a) JOURNEY-0001 passes in the harness (may use a fake
+backend for CI); (b) **a real dogfood run** — a genuine agent task dispatched to a
+real cluster container, producing an oracle-graded diff.
 
 **Design rationale:** This is the thinnest slice that proves the product exists:
 one directive becomes one graded result with the container cleaned up and no
@@ -66,8 +88,10 @@ in the worker/daemon design notes as Task 0's first output.
 - STORY-0058 (EPIC-008) — coordination outcome **(ITER-0000 AC scope below)**
 - STORY-0062 (EPIC-009) — stop-first-then-delete (no `incus delete -f` in the loop)
 - STORY-0063 (EPIC-009) — stop worker + reap instance **(ITER-0000 AC scope below)**
-- STORY-0034 (EPIC-004) — **SPIKE**: ctx_handoff round-trip validation
-- STORY-0025 (EPIC-002) — **SPIKE**: disposable-unit spin-up vs VM boot benchmark
+- STORY-0067 (EPIC-012) — **Go-exec PATH fix** (pulled from ITER-0003; dogfood-critical, fixes `127`)
+- STORY-0075 (EPIC-013) — **minimal container worker image** (thin slice: claude-code+lean-ctx+toolchain via cached substitution; full golden/Ubuntu-retire/micro-VM → ITER-0005)
+- STORY-0034 (EPIC-004) — **SPIKE** (parallel, OFF critical path): ctx_handoff round-trip
+- STORY-0025 (EPIC-002) — **SPIKE** (parallel, OFF critical path): disposable-unit spin-up benchmark
 
 (STORY-0060 folded into Task 0 harness — see above.)
 
@@ -118,9 +142,10 @@ policies, policy-driven dispatch. Hardens the skeleton's minimal template check.
 
 ### ITER-0003 — Worker reliability & robust result contract
 
-**Stories:** STORY-0067, STORY-0072, STORY-0068, STORY-0069, STORY-0070, STORY-0015, STORY-0071
-**Rationale:** The productization-plan reliability cluster: Go-exec PATH fix,
-truncation-robust result contract, grading round-trip proof, lean-ctx bridge ON,
+**Stories:** STORY-0072, STORY-0068, STORY-0069, STORY-0070, STORY-0015, STORY-0071
+**Rationale:** The productization-plan reliability cluster (Go-exec PATH fix
+STORY-0067 pulled forward to the ITER-0000 dogfood): truncation-robust result
+contract, grading round-trip proof, lean-ctx bridge ON,
 canonical runner modes, artifact capture, ctx_*-aware heartbeat. Plus a *minimal*
 Mac-off smoke in the harness (daemon keeps claiming/running/grading while the Mac
 is disconnected — no Temporal, no full ladder yet). The FULL Mac-off acceptance
@@ -143,7 +168,9 @@ signals. Gated on the ITER-0000 spike outcome.
 ### ITER-0005 — Micro-VM backend, NixOS golden & isolation tiers (post-benchmark)
 
 **Stories:** STORY-0075, STORY-0077, STORY-0078, STORY-0076, STORY-0005, STORY-0007, STORY-0008, STORY-0021, STORY-0022, STORY-0023, STORY-0024, STORY-0017, STORY-0020, STORY-0004
-**Rationale:** The declarative-worker track: NixOS golden (retire Ubuntu), skills
+**Rationale:** The declarative-worker track (STORY-0075 here = the FULL golden /
+retire-Ubuntu / micro-VM build; the minimal container worker image already landed
+in ITER-0000 for the dogfood): NixOS golden, skills
 via agent-skills-nix, provider routing, immutable golden copies, the durable VM
 hosting disposable tiered units, fast/hard isolation tiers selected per template,
 trust-domain VMs, and the second (micro-VM) backend behind the interface. Gated on
