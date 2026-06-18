@@ -1,0 +1,40 @@
+You are a headless worker continuing a partially-done change in ~/let-go (do NOT reset/discard it; build ON it). Do NOT commit. End with the fixed === RESULT === block.
+
+# State so far (already applied in the working tree — keep it)
+A Level-1 build-side change is already applied to pkg/rt/core/ir/{build.lg,lower.lg,validate.lg}: the "cheap-load" approach. Captures whose op is cheap to re-emit (:const/:load-arg/:load-var/:load-closed, via `ir/op-cheap-load?`) are referenced DIRECTLY as function-scoped locals instead of being threaded as :block-arg; non-cheap captures still get block-args. This is the right design — keep it.
+
+# The blocker to fix (this is your main job)
+`make generate` succeeds but building the lowered tree fails:
+  pkg/rt/core_go_lowered/ir_lower/ir_lower.go:583: cannot use arg2 (variable of type int) as vm.Value value in argument to vm.IsTruthy
+Cause: a cheap-load capture now re-emitted directly produces a raw Go `int` (its InstId-typed value) where the lowered Go expects a `vm.Value`. The lowerer must BOX that re-emitted cheap-load value to vm.Value at the use site (e.g. where lower_go.lg emits the ref / the operand of vm.IsTruthy and similar). Find the re-emit/operand path in pkg/rt/core/ir/lower_go.lg and ensure a cheap-load direct ref is boxed to vm.Value exactly like a block-arg was. Do NOT hand-edit generated files — fix the .lg source then `make generate`.
+
+# Tooling (token-lean — prefer these over grep)
+- Use `rg` (ripgrep) for text search, NOT `grep` — faster + far less output.
+- Use `ast-grep`/`sg` for structural search of .lg/.go when matching code shapes.
+- If `rtk` is on PATH, prefix shell commands with it (`rtk <cmd>`) — it compacts output 60-90%.
+- Avoid dumping whole large files (e.g. the 400KB+ generated ir_build.go); grep/rg to the lines you need.
+
+# Workflow
+1. `make generate` then `go build -tags gogen_ir ./pkg/rt/core_go_lowered/...` — get it to COMPILE first (clear ir_lower.go:583 and any sibling type errors).
+2. Then run the oracle.
+
+# Oracle (decides done/not-done — be honest)
+- PRIMARY: `go test -tags gogen_ir ./pkg/ir/` — `conj expected Collection` failures must reach 0 (baseline 13).
+- `make check-generated` — green.
+- `go test ./...` — no new failures.
+Claim DONE only if the primary hits 0 AND nothing regresses. Honest NOT_DONE with a precise diagnosis is valid — never fake.
+
+# Finish: write a STRUCTURED result file (the orchestrator parses THIS, not prose)
+Write `/home/worker/result.json` as valid JSON with EXACTLY these keys:
+{
+  "status": "DONE" | "NOT_DONE",
+  "compiles": true | false,
+  "clusterA_before": <int>,
+  "clusterA_after": <int>,
+  "check_generated": "green" | "failed",
+  "untagged_regressions": [],
+  "diff_path": "/home/worker/worker.diff",
+  "notes": "<what you fixed, or the precise remaining blocker; 1-3 lines>"
+}
+Then print one line: RESULT_JSON_WRITTEN
+Set "status":"DONE" ONLY if clusterA_after==0 AND compiles==true AND check_generated=="green" AND no regressions. Otherwise "NOT_DONE" with an honest blocker in notes. Do not fake.

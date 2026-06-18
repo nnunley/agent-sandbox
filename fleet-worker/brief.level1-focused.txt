@@ -1,0 +1,33 @@
+You are a headless worker. A NEAR-COMPLETE Level-1 change is ALREADY APPLIED in ~/let-go (do NOT redo or reset it). Finish it. Work the phases IN ORDER. Do NOT commit. End by writing /home/worker/result.json (schema at bottom).
+
+# Reads & tooling (token discipline — IMPORTANT)
+- Use `lean-ctx` for file reads (`lean-ctx read <file> -m signatures|density|lines:N-M`) and `lean-ctx -c "<cmd>"` for shell — NOT raw `cat`/`grep` of large files. The generated tree (pkg/rt/core_go_lowered/ir_build/ir_build.go etc.) is huge — never dump it whole.
+- Do NOT broadly grep the repo. Stay inside the phase you're on.
+
+# Vocabulary: this is block-based index RPN, NOT SSA. No "phi"/"dominance"/"SSA".
+
+# What's already applied (keep it)
+- build.lg: build-if/build-loop/build-recur reference CHEAP-LOAD captures (:const/:load-arg/:load-var/:load-closed, via ir/op-cheap-load?) directly by InstId instead of threading them as :block-arg; non-cheap captures still get block-args.
+- validate.lg + lower.lg: cross-block-ref checks relaxed to allow function-scoped InstId refs.
+- lower_go.lg: the vm.IsTruthy operand is boxed via `box-as-value` (the prior raw `value-expr` gave a bare int → vm.Value type error). Applied at ~lines 1076 and 2184.
+
+# PHASE 1 — make it COMPILE (gate: green)
+`go build -tags gogen_ir ./pkg/rt/core_go_lowered/...` must succeed.
+The IsTruthy boxing is done; the SAME root cause (a cheap-load direct ref lowers to a bare Go `int`, but a `vm.Value` is required) likely recurs at OTHER operand sites — e.g. args passed to `conj`/other clojure.core fns, branch-target transfers, returns. For each such compile error: in `pkg/rt/core/ir/lower_go.lg`, replace the bare `value-expr` of that ref with `box-as-value` (same fix already used for IsTruthy). After any .lg edit run `make generate`, then rebuild. Do NOT hand-edit generated files.
+
+# PHASE 2 — drive the ORACLE to green (gate)
+`go test -tags gogen_ir ./pkg/ir/` — `conj expected Collection` failures must reach 0 (baseline 13).
+If a specific cluster-A test (e.g. TestBlockParamsCarrySourceName, TestLowerGoCoalescesLineageByName) now fails ONLY because it asserts the OLD block-arg behavior that cheap-load intentionally removed, UPDATE that test to the new behavior (those tests encode the old contract; they are NOT immovable) — but ONLY if the runtime result is actually correct. Do not weaken a test to hide a real failure.
+
+# PHASE 3 — no regressions (gate)
+`make check-generated` green; `go test ./...` (untagged) no new failures.
+
+# Anti-wander rule
+If a phase's gate is not green after 3 focused attempts, STOP and write result.json with the precise blocker. Do NOT start broadly exploring the codebase — report instead.
+
+# Finish: write /home/worker/result.json (valid JSON)
+{ "status":"DONE|NOT_DONE", "compiles":true|false, "clusterA_before":<int>, "clusterA_after":<int>,
+  "check_generated":"green|failed", "untagged_regressions":[], "diff_path":"/home/worker/worker.diff",
+  "notes":"<what you finished, or the precise remaining blocker>" }
+Then print: RESULT_JSON_WRITTEN
+status:DONE only if clusterA_after==0 AND compiles AND green AND no regress.

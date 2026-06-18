@@ -1,0 +1,31 @@
+You are a headless worker in a disposable container. Repo: ~/let-go (a clean checkout of the gogen-rebase line). Make ONE change, verify it against the oracle, do NOT commit. End with a fixed === RESULT === block.
+
+# Vocabulary (hard rule)
+This IR is **block-based index RPN**, NOT SSA. Use "block-arg merge" / "block-arg threading" / "reference by InstId". Do NOT use "SSA", "phi", "dominance pass", or "trivial-phi-elimination". The fix is **construction-side**, not a post-hoc analysis.
+
+# The change (Level 1, build-side)
+In `pkg/rt/core/ir/build.lg`, the functions `build-if` / `build-loop` / `build-recur` currently thread captured / outer-scope values across block edges as `:block-arg` + branch-target `:args`. STOP doing that for a capture that is the SAME single InstId on every incoming edge (it dominates its uses) — emit a DIRECT `InstId` ref instead of a block-arg. KEEP block-args ONLY for genuine merges: the if's own result, a value reassigned differently per branch, and loop-carried induction variables.
+- Spurious sites to fix (verify against current code): build-if join capture params (~lines 809-816), build-loop capture params (~858-863), build-recur capture threading (~935-938).
+- Then relax `pkg/rt/core/ir/validate.lg` (check-no-cross-block-refs!, ~lines 79-103) and `pkg/rt/core/ir/lower.lg` (check-cross-block!) to PERMIT a direct cross-block ref to a function-scoped InstId value. Frame it as "function-scoped locals" — introduce NO dominance analysis.
+
+# Workflow (positive only)
+1. Baseline: `go test -tags gogen_ir ./pkg/ir/ 2>&1 | grep -c 'conj expected Collection'` (expect ~13). Record it.
+2. Make the edits above.
+3. After editing any `pkg/rt/core/**/*.lg`, run `make generate` (regenerates bundle + lowered tree + sums). Do NOT hand-edit generated files (core_compiled.lgb, core_go_lowered/, *_generated.*, generated.sums).
+4. Re-run the oracle.
+
+# Oracle (decides done / not-done — be honest)
+- PRIMARY: `go test -tags gogen_ir ./pkg/ir/` — the `conj expected Collection` failures must reach **0**.
+- `make check-generated` — must be green.
+- `go test ./...` (untagged) — no new failures.
+Claim success ONLY if the primary count hits 0 AND nothing else regresses. A good diagnosis with the count NOT at 0 is a valid honest outcome — report it as such, do not fake.
+
+# Finish with exactly this block
+=== RESULT ===
+status: <DONE | NOT_DONE>
+clusterA_before: <n>
+clusterA_after: <n>
+check_generated: <green | failed>
+untagged_regressions: <none | list>
+notes: <1-3 lines: what you changed or why it's not done>
+=== END RESULT ===
