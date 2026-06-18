@@ -9,6 +9,15 @@
   # which puts `claude`, `go`, `git`, `make`, `jq` on PATH from a pinned closure.
   description = "let-go fleet worker: headless claude CLI + Go 1.26 toolchain";
 
+  # Binary cache for the AI-agent CLIs (claude-code, lean-ctx) so an unprivileged
+  # worker SUBSTITUTES them prebuilt instead of building (which fails in the nix
+  # sandbox inside an unprivileged container — plan #27.2). Run the worker's
+  # `nix develop` with --accept-flake-config to pick these up.
+  nixConfig = {
+    extra-substituters = [ "https://cache.numtide.com" ];
+    extra-trusted-public-keys = [ "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=" ];
+  };
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     # Daily-updated, binary-cached (cache.numtide.com) AI-agent CLIs
