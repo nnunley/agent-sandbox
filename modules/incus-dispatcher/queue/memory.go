@@ -145,6 +145,27 @@ func (q *MemoryQueue) Requeue(lease Lease, notBefore time.Time) error {
 	return nil
 }
 
+// Peek returns the directive Claim would return next, without claiming or mutating it.
+func (q *MemoryQueue) Peek() (Directive, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	now := q.now()
+
+	best := -1
+	for i, d := range q.pending {
+		if !d.NotBefore.IsZero() && d.NotBefore.After(now) {
+			continue
+		}
+		if best == -1 || less(d, q.pending[best]) {
+			best = i
+		}
+	}
+	if best == -1 {
+		return Directive{}, ErrEmpty
+	}
+	return *q.pending[best], nil
+}
+
 // Reap reclaims expired leases by requeueing them.
 func (q *MemoryQueue) Reap() (int, error) {
 	q.mu.Lock()

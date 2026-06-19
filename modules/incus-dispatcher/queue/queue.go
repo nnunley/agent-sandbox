@@ -111,6 +111,12 @@ type Queue interface {
 	// Reap reclaims expired leases (requeues them). Returns the count reclaimed.
 	Reap() (int, error)
 
+	// Peek returns the directive Claim would return next — the highest-priority
+	// eligible (NotBefore <= now) pending directive — without claiming it.
+	// No lease is created and the queue is not mutated. Returns ErrEmpty if
+	// no eligible pending directive exists.
+	Peek() (Directive, error)
+
 	// Len reports pending + claimed directive counts (for tests/observability).
 	Len() (pending, claimed int)
 }
