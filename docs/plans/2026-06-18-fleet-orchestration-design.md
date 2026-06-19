@@ -380,6 +380,28 @@ Revisit coredns / Consul / NATS only at the **multi-host tier** (same point as
 plan #26.3's NATS fan-out), or if SRV/health-aware resolution across nested VM
 bridges is needed.
 
+## VM management — NixOS-declarative + incus, stockyard as influence (decided 2026-06-19)
+
+Continue the parallel hand-built design; use `stockyard` (prime-radiant) only as a
+pattern source, do NOT adopt it. Why ours diverges from stockyard's stack:
+- **NixOS-declarative guests** → reproducible OS across the fleet (stockyard uses
+  Docker-built images = uncontrolled factors).
+- **Host is btrfs, not zfs** → stockyard's ZFS clone/snapshot speed is ZFS-bound, but
+  **incus on a btrfs pool gives the same CoW**: `incus copy` from a golden = a btrfs
+  reflink clone (fast/space-efficient), `incus snapshot` = btrfs subvolume snapshots
+  for the D6 audit trail. Same benefits, our storage, declarative.
+- **incus → cluster when ready** = native multi-host scale; no stockyard Firecracker+gRPC daemon.
+
+**Borrow as patterns:** Tailscale-SSH for worker access (declarative `services.tailscale`
++ an **agenix**-managed auth key → retires the ephemeral-host-key problem the loom way);
+CoW clone + audit snapshots via incus/btrfs; cloud-init-style declarative injection; the
+lifecycle-API shape for the dispatcher daemon. **Don't take:** Firecracker-only, ZFS,
+Docker images, the separate gRPC daemon.
+
+**Separate, still open:** `serf` (MIT, native Ollama+glm) remains the clean worker-LLM
+agent to retire the claude-code + claude-code-router translation chain — distinct from
+VM management. (Build either via `fetchFromGitHub` + `buildGoModule`.)
+
 ## OPEN DECISION — queue substrate
 
 Must satisfy the governing constraint (Mac off → fleet still coordinates).
