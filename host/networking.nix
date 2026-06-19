@@ -63,6 +63,15 @@ in {
       networkConfig.ConfigureWithoutCarrier = true;
       linkConfig.RequiredForOnline = "no";
     };
+
+    # Enslave micro-VM tap devices (named "vm-*" by their microvm.interfaces id)
+    # to the bridge. Without this the tap is dangling → the guest gets no DHCP
+    # lease and no network (root cause of test-vm never leasing, 2026-06-18).
+    networks."11-microvm-taps" = {
+      matchConfig.Name = "vm-*";
+      networkConfig.Bridge = bridge.name;
+      linkConfig.RequiredForOnline = "no";
+    };
   };
 
   # DHCP + DNS for micro-VMs

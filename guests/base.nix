@@ -27,11 +27,21 @@
 
   documentation.enable = false;
 
-  # Networking via DHCP from host's dnsmasq
+  # Networking via DHCP from the host's dnsmasq. Use systemd-networkd with an
+  # explicit DHCP network matched by MAC — the `interfaces.eth0.useDHCP` shortcut
+  # did not reliably bring up a DHCP client on the firecracker virtio interface
+  # (guest never leased even with the tap bridged, 2026-06-18).
   networking = {
     hostName = "agent-vm";
     useDHCP = false;
-    interfaces.eth0.useDHCP = true;
+  };
+  systemd.network = {
+    enable = true;
+    networks."10-vm-eth" = {
+      matchConfig.MACAddress = "02:00:00:00:00:01";
+      networkConfig.DHCP = "ipv4";
+      linkConfig.RequiredForOnline = "no";
+    };
   };
 
   # Agent user
