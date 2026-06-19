@@ -80,9 +80,13 @@
 
 **Stories delivered:** STORY-0057 (claim/lease + claim-loop), STORY-0044 (not-before, stub),
 STORY-0050 (template/origin D1 validation), STORY-0058 (minimal outcome: pass→done/fail→requeue/park),
-STORY-0062/STORY-0063 (stop-then-delete teardown + reap), STORY-0067 (Go-exec PATH fix),
-STORY-0075 (minimal non-root NixOS worker, declarative), STORY-0065/STORY-0066 (directive→Task mapping +
-JOURNEY-0001 grading step), STORY-0060 (E2E journey harness, folded into Task 0).
+STORY-0062 (teardown reaper) + STORY-0063 (stop+reap, partial — decision-log AC-28 → ITER-0001),
+STORY-0060 (graceful teardown without regression, partial — stop-then-delete AC-1/AC-3 done +
+cluster-validated; async-reaper AC-2 + automated delete-hang regression test → ITER-0001),
+STORY-0067 (Go-exec PATH fix), STORY-0075 (minimal non-root NixOS worker, declarative),
+STORY-0065/STORY-0066 (directive→Task mapping + JOURNEY-0001 grading step).
+(The automated JOURNEY-0001 E2E harness is scenario evidence, NOT a separate backlog story —
+earlier drafts mis-labeled it "STORY-0060"; STORY-0060 is the teardown story.)
 
 **Tasks executed:** Task 0 stub Queue contract; Tasks 1–5 daemon path (commit 5817399);
 minimal worker image flavor 1 (cluster-validated); non-root NixOS worker (declarative);

@@ -3,8 +3,7 @@
 **Summary:** Teardown & reaper
 **Stories:** STORY-0062, STORY-0063
 **Primary sources:** `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/2 done
-
+**Status:** 1/2 done
 ## STORY-0062
 
 **Epic:** EPIC-009 — Teardown & reaper
@@ -23,7 +22,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:209-221`
 
-**Status:** pending
+**Status:** done:ITER-0000
 
 ## STORY-0063
 
@@ -42,4 +41,4 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:325`
 
-**Status:** pending
+**Status:** partial:ITER-0000 (AC-26/27 stop+reap done); AC-28 decision-log write→ITER-0001

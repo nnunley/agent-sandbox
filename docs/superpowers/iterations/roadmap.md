@@ -93,7 +93,10 @@ in the worker/daemon design notes as Task 0's first output.
 - STORY-0034 (EPIC-004) — **SPIKE** (parallel, OFF critical path): ctx_handoff round-trip
 - STORY-0025 (EPIC-002) — **SPIKE** (parallel, OFF critical path): disposable-unit spin-up benchmark
 
-(STORY-0060 folded into Task 0 harness — see above.)
+(Correction: STORY-0060 is "graceful container teardown without regression" — the
+stop-then-delete mechanism (AC-1/AC-3) was delivered + cluster-validated in ITER-0000;
+its async-reaper AC-2 + an automated delete-hang regression test carry to ITER-0001.
+The Task 0 E2E harness is JOURNEY-0001 evidence, not a separate backlog story.)
 
 **ITER-0000 AC scoping, gates & deferrals (from PAR scope review):**
 - **STORY-0058** — IN: AC-22 (pass→done) + a *simple* fail→requeue (synchronous, no
@@ -123,14 +126,40 @@ real-Runner→fleet-worker wiring → ITER-0003; spikes STORY-0034/STORY-0025 �
 
 ### ITER-0001 — Coordination plane + audit hardening
 
-**Stories:** STORY-0055, STORY-0058 (ladder remainder), STORY-0059, STORY-0061, STORY-0027, STORY-0056, STORY-0054, STORY-0063 (decision-log remainder)
-**Rationale:** Promote the skeleton's minimal outcome handling to the full D4
-deterministic loop + graduated escalation ladder (incl. non-blocking human
-escalation lane), thread-status tracking, and the D6 append-only decision log
-behind a swappable writer interface. All substrate-independent.
+**Stories (AC-scoped after PAR scope review — substrate/Temporal-independent only):**
+- STORY-0055 (AC-1..AC-6: pass→done, fail-transient→retry-same, fail-repeats→stronger-worker,
+  fail-still→hard-tier, authority-limit→human lane, privileged-only-via-human). **DEFER AC-7
+  (Temporal re-surfaces stale escalations) → ITER-0007.**
+- STORY-0058 (AC-23: synchronous escalation-ladder climb). AC-22 done:ITER-0000. **DEFER AC-24
+  (Temporal-backed retry/backoff) → ITER-0007; AC-25 (fresh handoff on retry) → ITER-0004.**
+- STORY-0059 (AC-1..AC-4: deterministic claim/lease/requeue/park against the stub queue).
+- STORY-0061 (AC-1: autonomous climb of pre-approved rungs; AC-2: non-blocking human lane).
+  **DEFER AC-3 (urgency-driven resurfacing) → ITER-0007** (carries SCENARIO-0087).
+- STORY-0027 (AC-1: thread status field {queued,active,paused,blocked,done,abandoned};
+  AC-2: transitions recorded). **DEFER AC-3 (operator pause/block/resume from TUI) → ITER-0008.**
+- STORY-0056 (AC-1..AC-4: D6 append-only JSONL decision log behind a swappable writer interface).
+- STORY-0063 (AC-28: decision-log write on stop+reap). AC-26/27 done:ITER-0000.
+
+**Rationale:** Promote the skeleton's minimal outcome handling to the full D4 deterministic loop +
+graduated escalation ladder (incl. non-blocking human escalations lane as a durable FIFO — NOT
+Temporal-aged yet), thread-status tracking, and the D6 append-only decision log behind a swappable
+writer interface. Everything here is substrate- AND Temporal-independent; the escalations lane is a
+plain durable queue and retries are synchronous. The time-plane behaviors (urgency aging, Temporal
+backoff, resurfacing) split out to ITER-0007; TUI control and agent/delegation/mutation audit to ITER-0008.
 **Status:** pending
-**Impacted scenarios:** coordination-loop + escalation scenarios; thread-status; audit-log
-**Look-ahead check:** depends on ITER-0000's outcome hook; blocks nothing downstream.
+**PAR scope review (2026-06-19):** 2 adversarial reviewers → both REVISE. High-confidence findings,
+all applied at roadmap AC-scoping level: (1) 3 Temporal-coupled ACs split to ITER-0007 (0055 AC-7,
+0058 AC-24, 0061 AC-3); (2) STORY-0027 AC-3 (TUI) → ITER-0008; (3) **STORY-0054 (audit all runs/
+delegations/mutations) dropped from ITER-0001** — its coordination-level audit is already STORY-0056;
+its distinct delegation/mutation/replay value is ITER-0008 (STORY-0032) — deferred there to avoid
+duplicating D6; (4) 0058 AC-25 confirmed → ITER-0004. Artifact-debt noted (non-blocking): source-line
+citations for STORY-0055/0056/0059/0061 point at adjacent spec sections (ACs match design intent; D4
+is spec ~205-224, not the cited 188-208) — fix in a docs pass.
+**Impacted scenarios:** SCENARIO-0032 (pass→done), SCENARIO-0034/0035 (escalate worker/template),
+SCENARIO-0036 (human lane), SCENARIO-0042 (decision-log JSONL), SCENARIO-0070 (claim/lease/requeue/park),
+SCENARIO-0085 (autonomous climb). (SCENARIO-0087 urgency-resurface moves with AC-3 → ITER-0007.)
+**Look-ahead check:** depends on ITER-0000's outcome hook; decision-log + claim/lease stay behind
+interfaces so the ITER-0006 substrate swap and the ITER-0007 Temporal time-plane graft on without rework.
 
 ### ITER-0002 — Provisioning & template security hardening
 
@@ -158,11 +187,12 @@ test (STORY-0074) is rescheduled to ITER-0008 (after substrate + Temporal exist)
 
 ### ITER-0004 — State passthrough & continuity (post-spike)
 
-**Stories:** STORY-0029, STORY-0030, STORY-0033, STORY-0018, STORY-0031
+**Stories:** STORY-0029, STORY-0030, STORY-0033, STORY-0018, STORY-0031, **STORY-0058 AC-25 (fresh handoff bundle on retry — split in from ITER-0001 per PAR)**
 **Rationale:** Build the lean-ctx-based handoff continuity once STORY-0034 proves
 the round-trip: context preservation across thread boundaries, anti-reinvention,
 branch/workspace claim checks, soft-state-not-authoritative discipline, stumble
-signals. Gated on the ITER-0000 spike outcome.
+signals. Gated on the ITER-0000 spike outcome. Also lands STORY-0058 AC-25 (a fresh
+handoff bundle accompanies each retry — needs the handoff machinery built here).
 **Status:** pending
 **Impacted scenarios:** handoff-round-trip; continuity; claim-before-reuse
 **Look-ahead check:** gated by STORY-0034 (ITER-0000); independent of substrate.
@@ -198,16 +228,25 @@ do not start until the substrate is confirmed.**
 **Rationale:** Stand up Temporal as the time plane and single writer; importance×
 urgency projection to effective-priority + not-before; bounded vs unrestricted
 rescore authority; deadline-driven aging; provider/budget/multi-repo scheduling
-policy. Needs laneq's `not-before` (ITER-0006).
+policy. Needs laneq's `not-before` (ITER-0006). **Also lands the Temporal-coupled escalation
+ACs split in from ITER-0001 (per PAR): STORY-0055 AC-7 (re-surface stale human-pending escalations),
+STORY-0058 AC-24 (retry re-pushed by Temporal with backoff), STORY-0061 AC-3 (urgency-driven
+resurfacing in priority order; carries SCENARIO-0087).** These graft onto ITER-0001's escalations
+lane + decision log without reworking them — the lane was built as a plain durable FIFO precisely so
+Temporal aging layers on top.
 **Status:** pending
-**Impacted scenarios:** single-writer-projection; rescore-authority; deadline-aging; budget
+**Impacted scenarios:** single-writer-projection; rescore-authority; deadline-aging; budget;
+escalation-resurface (SCENARIO-0087)
 **Look-ahead check:** depends on ITER-0006 not-before; blocks ITER-0008 steering.
 
 ### ITER-0008 — Tier-2 coordinator, recursive delegation & operator UX
 
-**Stories:** STORY-0073, STORY-0028, STORY-0012, STORY-0013, STORY-0014, STORY-0026, STORY-0006, STORY-0003, STORY-0009, STORY-0032, STORY-0074
+**Stories:** STORY-0073, STORY-0028, STORY-0012, STORY-0013, STORY-0014, STORY-0026, STORY-0006, STORY-0003, STORY-0009, STORY-0032, STORY-0074, **STORY-0027 AC-3 (operator pause/block/resume from TUI — split in from ITER-0001), STORY-0054 (audit all runs/delegations/mutations + replayability — moved from ITER-0001, folds into STORY-0032's genome/delegation audit)**
 **Rationale:** Bidirectional steering (file-feed now), operator TUI for
-thread/worker management, durable message-queue-first recursive delegation,
+thread/worker management (incl. STORY-0027 AC-3 thread pause/block/resume — it needs the TUI built
+here), the full agent/delegation/mutation audit + replay (STORY-0054, alongside STORY-0032 genome
+mutation — distinct from ITER-0001's coordination-level D6 decision log), durable
+message-queue-first recursive delegation,
 one-shot vs long-running modes, the Mac-off-stateless-client framing made
 concrete, deterministic-loop + service-discovery stories, safe/auditable genome
 mutation, and the **full Mac-off acceptance test (STORY-0074)** — now that

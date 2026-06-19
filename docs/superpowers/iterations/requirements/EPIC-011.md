@@ -3,8 +3,7 @@
 **Summary:** External grading & result contract
 **Stories:** STORY-0065, STORY-0066
 **Primary sources:** `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/2 done
-
+**Status:** 2/2 done
 ## STORY-0065
 
 **Epic:** EPIC-011 — External grading & result contract
@@ -22,7 +21,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:318`
 
-**Status:** pending
+**Status:** done:ITER-0000
 
 ## STORY-0066
 
@@ -42,4 +41,4 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:319-321`
 
-**Status:** pending
+**Status:** done:ITER-0000

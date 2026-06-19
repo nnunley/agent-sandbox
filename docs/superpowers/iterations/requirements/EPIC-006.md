@@ -3,8 +3,7 @@
 **Summary:** Provisioning & template security
 **Stories:** STORY-0048, STORY-0049, STORY-0050, STORY-0051, STORY-0052, STORY-0053
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/6 done
-
+**Status:** 1/6 done
 ## STORY-0048
 
 **Epic:** EPIC-006 — Provisioning & template security
@@ -62,7 +61,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:313`
 
-**Status:** pending
+**Status:** done:ITER-0000
 
 ## STORY-0051
 

@@ -3,8 +3,7 @@
 **Summary:** Worker image & skills
 **Stories:** STORY-0075, STORY-0076, STORY-0077, STORY-0078
 **Primary sources:** `docs/plans/2026-06-17-dispatcher-productization.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/4 done
-
+**Status:** 1/4 done
 ## STORY-0075
 
 **Epic:** EPIC-013 — Worker image & skills
@@ -22,7 +21,7 @@
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:149-159`
 
-**Status:** pending
+**Status:** done:ITER-0000
 
 ## STORY-0076
 

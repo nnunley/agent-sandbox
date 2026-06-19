@@ -4,7 +4,6 @@
 **Stories:** STORY-0035, STORY-0036, STORY-0037, STORY-0038, STORY-0039, STORY-0040, STORY-0041, STORY-0042, STORY-0043, STORY-0044, STORY-0045, STORY-0046, STORY-0047
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
 **Status:** 0/13 done
-
 ## STORY-0035
 
 **Epic:** EPIC-005 — Prioritization & scheduling (Temporal)
@@ -195,7 +194,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:270-272`
 
-**Status:** pending
+**Status:** partial:ITER-0000 (not-before stub done); real substrate→ITER-0006
 
 ## STORY-0045
 

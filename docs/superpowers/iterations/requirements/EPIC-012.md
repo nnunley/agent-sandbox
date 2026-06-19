@@ -3,8 +3,7 @@
 **Summary:** Worker reliability & comms
 **Stories:** STORY-0067, STORY-0068, STORY-0069, STORY-0070, STORY-0071, STORY-0072, STORY-0073, STORY-0074
 **Primary sources:** `docs/plans/2026-06-17-dispatcher-productization.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/8 done
-
+**Status:** 1/8 done
 ## STORY-0067
 
 **Epic:** EPIC-012 — Worker reliability & comms
@@ -20,7 +19,7 @@
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:41-50`
 
-**Status:** pending
+**Status:** done:ITER-0000
 
 ## STORY-0068
 

@@ -3,8 +3,7 @@
 **Summary:** Coordination loop & escalation
 **Stories:** STORY-0055, STORY-0056, STORY-0057, STORY-0058, STORY-0059, STORY-0060, STORY-0061
 **Primary sources:** `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/7 done
-
+**Status:** 1/7 done
 ## STORY-0055
 
 **Epic:** EPIC-008 — Coordination loop & escalation
@@ -64,7 +63,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:312`
 
-**Status:** pending
+**Status:** done:ITER-0000
 
 ## STORY-0058
 
@@ -84,7 +83,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:322-324`
 
-**Status:** pending
+**Status:** partial:ITER-0000 (AC-22 pass→done done); AC-23 ladder→ITER-0001, AC-24 Temporal→ITER-0007, AC-25 handoff→ITER-0004
 
 ## STORY-0059
 
@@ -123,7 +122,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:398-399`
 
-**Status:** pending
+**Status:** partial:ITER-0000 (AC-1/AC-3 stop-then-delete done, validated on cluster); AC-2 async-reaper + automated delete-hang regression test→ITER-0001
 
 ## STORY-0061
 
