@@ -53,8 +53,18 @@
     trusted-users = [ "root" "worker" ];
     extra-substituters = [ "https://cache.numtide.com" ];
     extra-trusted-public-keys = [ "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=" ];
+    # Unprivileged LXC has no kernel-namespace build sandbox; disable it
+    # DECLARATIVELY so neither nixos-rebuild nor the worker's `nix develop` needs
+    # --no-sandbox. Rely on substitution; the only builds are tiny (mkShell env,
+    # activation scripts). (First bootstrap rebuild still needs NIX_CONFIG="sandbox
+    # = false" since this isn't active yet; afterwards it's permanent.)
+    sandbox = false;
   };
   nixpkgs.config.allowUnfree = true;
+
+  # Declarative env defaults for ALL sessions (so a non-login `incus exec bash -c`
+  # also has NIX_PATH — otherwise nixos-rebuild fails with "nixpkgs/nixos not found").
+  environment.sessionVariables.NIX_PATH = "nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos:nixos-config=/etc/nixos/configuration.nix";
 
   environment.systemPackages = with pkgs; [ git bashInteractive ];
 
