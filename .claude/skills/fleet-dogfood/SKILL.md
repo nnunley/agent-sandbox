@@ -36,8 +36,14 @@ hidden go-test oracle, have the script WRITE the test file then `go test` (so th
 never sees it — anti-reward-hack). See `test/meta-dogfood.sh`.
 
 ## Gotchas (each cost a debugging cycle — proven the hard way)
-- Worker is NON-root (claude refuses root); the run is uid 1000. chown the repo to the
-  worker AFTER cloning (clone runs as root; else claude's `Write` fails on a root-owned tree).
+- Worker is NON-root (claude refuses root); the run is uid 1000. Deliver everything AS
+  the worker — `incus file push --uid 1000 --gid 0` for the bundle/flake/brief, clone the
+  work-tree as the worker — NOT root-then-chown. Two reasons: claude's `Write` needs a
+  worker-owned work-tree, AND `nix develop` (run as the worker) writes `flake.lock` into
+  the delivered flake dir, so that dir must be worker-owned or the run dies before claude.
+- Repo delivery is a real `git clone` (writable, with `.git` for diffing). Flake inputs /
+  `builtins.fetchGit` only ever yield READ-ONLY `/nix/store` paths (and strip `.git`), so
+  they deliver *dependencies* — never the editable work-tree.
 - `nix develop` needs BOTH `--accept-flake-config` AND `--no-sandbox` (unprivileged LXC).
 - Toolchain resolves from `file:///srv/nix-shared` (local cache) — populate it first. See
   the `nixos-incus-worker` skill for the worker traps.

@@ -61,14 +61,19 @@ for i in $(seq 1 20); do st=$($INCUS exec "$WORKER" -- systemctl is-system-runni
 
 # --- deliver repo@ref + brief + token + fleet-worker flake ---
 log "deliver repo@$DF_REF + brief + token"
+# Deliver everything AS THE WORKER (uid 1000, gid 0) — not root-then-chown. This matters
+# beyond the work-tree: `nix develop` (run as the worker) writes flake.lock INTO the
+# delivered fleet-worker dir, so that dir must be worker-owned or the run fails before
+# claude starts. (Flake inputs/fetchGit only ever yield READ-ONLY store paths — see the
+# flake-checkout note in SKILL.md — so the editable work-tree is always a real clone.)
 ( cd "$DF_REPO" && git bundle create "/tmp/df-$DF_NAME.bundle" "$DF_REF" >/dev/null 2>&1 )
-$INCUS file push "/tmp/df-$DF_NAME.bundle" "$WORKER/home/worker/repo.bundle"
-$INCUS file push -r "$ROOT_DIR/fleet-worker" "$WORKER/home/worker/" >/dev/null
-$INCUS file push "$DF_BRIEF" "$WORKER/home/worker/brief.txt"
-printf '%s' "$FLEET_TOKEN" | $INCUS exec "$WORKER" -- tee /home/worker/.fleet-token >/dev/null
-# Clone as root, THEN chown everything to the worker (the run is non-root and must
-# be able to write the repo — claude's Write fails on a root-owned tree).
-$INCUS exec "$WORKER" -- bash -lc 'rm -rf /home/worker/let-go && git clone -q /home/worker/repo.bundle /home/worker/let-go && chown -R worker:users /home/worker' >/dev/null
+$INCUS file push --uid 1000 --gid 0 "/tmp/df-$DF_NAME.bundle" "$WORKER/home/worker/repo.bundle"
+$INCUS file push -r --uid 1000 --gid 0 "$ROOT_DIR/fleet-worker" "$WORKER/home/worker/" >/dev/null
+$INCUS file push --uid 1000 --gid 0 "$DF_BRIEF" "$WORKER/home/worker/brief.txt"
+printf '%s' "$FLEET_TOKEN" | $INCUS exec "$WORKER" --user 1000 --env HOME=/home/worker -- tee /home/worker/.fleet-token >/dev/null
+# Clone the work-tree as the worker (writable, worker-owned; claude's Write needs it).
+$INCUS exec "$WORKER" --user 1000 --env HOME=/home/worker -- \
+  bash -lc 'rm -rf ~/let-go && git clone -q ~/repo.bundle ~/let-go' >/dev/null
 
 # --- run the worker (runner.sh inside the flake env; toolchain from local cache) ---
 log "run worker (nix develop … runner.sh, timeout=${DF_TIMEOUT}s)"
