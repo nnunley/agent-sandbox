@@ -12,3 +12,9 @@ modules/incus-dispatcher/dispatcher
 .iter-scratch/
 **/.clearance-rendered-preview-*/
 .DS_Store
+
+# Track project-scoped skills even though global gitignore ignores .claude/
+!.claude/
+.claude/*
+!.claude/skills/
+!.claude/skills/**
