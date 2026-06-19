@@ -49,6 +49,9 @@
   };
 
   # Fleet worker micro-VM (hard isolation tier): non-root worker + SSH + nix cache.
+  # Fully declarative — the guest is defined in-place and built/activated with the
+  # host via nixos-rebuild (a guest change rebuilds the host closure; that's the
+  # accepted cost of keeping the whole stack declarative).
   microvm.vms.worker-vm = {
     config = {
       imports = [ ../guests/worker-vm.nix ];

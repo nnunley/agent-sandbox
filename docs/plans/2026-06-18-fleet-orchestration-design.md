@@ -167,6 +167,12 @@ Spike data (2026-06-18, `test-vm` + console readiness sentinel):
     (shared host store is read-only); no `nixpkgs.config` in the guest (external nixpkgs).
   - Micro-VM is the *cleaner* nix story (sandbox works) but costs VM boot + SSH access;
     container is faster to iterate. The `launch(template)` backend interface picks per tier.
+  - **Management: FULLY DECLARATIVE** (`microvm.vms.<n> = { config = …; }`), host and
+    guests alike — built/activated via `nixos-rebuild`, no imperative `microvm -u`.
+    A guest change rebuilds the host closure; that cost is accepted to keep the whole
+    stack declarative. **Native-Firecracker direction** for the fast disposable tier:
+    bake a golden rootfs + snapshots (~125 ms cold-start) instead of runtime
+    `nix develop`. See skill `nixos-microvm`.
 - Note: `enable-ksm.service` fails in the unprivileged incus container
   (`/sys/kernel/mm/ksm/run` read-only) — benign, pre-existing; disable to quiet
   activation.
