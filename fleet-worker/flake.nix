@@ -42,6 +42,9 @@
                                 #   reads (~13 tok) + map/signatures/density file modes + shell-output
                                 #   compression. Subsumes rtk. Worker runs `lean-ctx init --agent claude`
                                 #   so headless `claude -p` reads via ctx_* and Bash output is compressed.
+          agents.claude-code-router  # `ccr` — Anthropic↔OpenAI translator so claude-code can
+                                #   drive a local OpenAI-compatible model (Ollama qwen3.6 via the
+                                #   llm-proxy /ollama route). Cheap-local-implementer tier (#22).
           # agents.codex agents.gemini-cli agents.qwen-code  # alt-provider CLIs for cheap workers (#22)
           goPkg                 # Go 1.26 for the let-go build
           pkgs.gnumake          # `make generate` / `make check-generated`

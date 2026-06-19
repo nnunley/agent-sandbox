@@ -19,6 +19,11 @@ in {
   networking = {
     hostName = "agent-host";
 
+    # `.local` is mDNS — the NixOS container has no mDNS resolver, so the
+    # llm-proxy's default OLLAMA_URL (http://ndn.local:11434) fails to resolve.
+    # Declaratively map the name to the desktop's LAN IP so the /ollama route works.
+    hosts."192.168.86.49" = [ "ndn.local" ];
+
     # Use systemd-networkd (matches stock Incus NixOS image)
     dhcpcd.enable = false;
     useDHCP = false;
