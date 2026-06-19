@@ -7,3 +7,8 @@ modules/incus-dispatcher/dispatcher
 # global ~/.config/git/ignore exclusion of docs/superpowers/ for this repo.
 !docs/superpowers/
 !docs/superpowers/**
+
+# iterative-development scratch + clearance preview artifacts
+.iter-scratch/
+**/.clearance-rendered-preview-*/
+.DS_Store
