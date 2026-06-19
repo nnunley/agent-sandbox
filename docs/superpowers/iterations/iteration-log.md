@@ -24,9 +24,20 @@
   so agent tools resolve (fixes exit 127). 2 tests.
 - Total: 29 tests green, `go build`/`go vet` clean.
 
-### Remaining ITER-0000 tasks (CLUSTER — needs incus + API)
-- Minimal container worker image (STORY-0075 slice): fleet-worker as an incus container
-  with claude-code+lean-ctx+toolchain via cached substitution.
-- E2E journey harness (Task 0 harness half) wiring the daemon to the real Runner + grader fixture.
+### Minimal worker image — flavor 1 (STORY-0075 slice) — VALIDATED on cluster 2026-06-18
+- Stock `images:nixos/25.11` (unprivileged) + `nix develop ./fleet-worker --accept-flake-config
+  --no-sandbox` → claude 2.1.181, lean-ctx 3.8.8, go 1.26.4, git, jq all resolve (exit 0).
+  claude-code/lean-ctx SUBSTITUTE from cache.numtide.com — no build, no baked image, no
+  nix-server republish. The two flags are required (cache trust + unprivileged-sandbox).
+- `fleet-worker/flake.nix` gained the `nixConfig` substituter (commit a1ab0e0);
+  `runner.sh` header documents the two flags.
+- Teardown fix (STORY-0062/0063) VALIDATED on a real container: stop-then-delete took 2s,
+  no `incus delete -f` hang.
+
+### Remaining ITER-0000 tasks
+- Wire DefaultMapToTask / the runner invocation to `nix develop … --accept-flake-config
+  --no-sandbox --command bash runner.sh` (template→runner mapping; thin for ITER-0000).
+- E2E journey harness (Task 0 harness half) + grader fixture.
 - Parallel spikes (off critical path): ctx_handoff (STORY-0034), latency (STORY-0025, partly done).
-- **Exit (b): real dogfood run on a cluster container → oracle-graded diff.**
+- **Exit (b): real dogfood run — a claude -p task on a worker → oracle-graded diff (needs a
+  target task/brief + API token in the container).**

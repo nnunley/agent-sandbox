@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# Fleet worker runner (playbook-shaped). Invoke INSIDE the flake env so claude/go/make resolve:
-#   nix develop /home/worker/fleet-worker --command bash /home/worker/runner.sh [WALL_CLOCK]
+# Fleet worker runner (playbook-shaped). Invoke INSIDE the flake env so claude/go/make resolve.
+# VERIFIED 2026-06-18 in an unprivileged stock NixOS container — both flags are REQUIRED:
+#   --accept-flake-config : trust cache.numtide.com so claude-code/lean-ctx SUBSTITUTE (no build)
+#   --no-sandbox          : build the tiny residual mkShell env without kernel-namespace sandbox
+#                           (an unprivileged container can't provide it — plan #27.2)
+#   nix develop /home/worker/fleet-worker --accept-flake-config --no-sandbox \
+#     --command bash /home/worker/runner.sh [WALL_CLOCK]
 # Streams one JSON event per line -> events.jsonl; harvests worker.diff. Worker runs NON-ROOT.
 set -uo pipefail
 WALL_CLOCK="${1:-2400}"; MAX_TURNS=200
