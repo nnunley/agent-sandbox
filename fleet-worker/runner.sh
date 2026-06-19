@@ -32,5 +32,8 @@ rc=$?
 echo "worker done rc=$rc $(date -u +%FT%TZ)" >> "$HOME/worker.log"
 
 # Harvest: source diff for review (worker is told NOT to commit).
-git -C "$REPO" diff > "$HOME/worker.diff" 2>/dev/null
+# add -A -N (intent-to-add) so NEW files appear in the diff; --no-ext-diff in case a
+# difftastic/external-diff config ever leaks in (the grade needs a real unified patch).
+git -C "$REPO" add -A -N >/dev/null 2>&1 || true
+git -C "$REPO" diff --no-ext-diff > "$HOME/worker.diff" 2>/dev/null
 echo "diff bytes: $(wc -c < "$HOME/worker.diff")" >> "$HOME/worker.log"

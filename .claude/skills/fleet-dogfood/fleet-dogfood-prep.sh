@@ -31,7 +31,11 @@ if [ "$elapsed" -le "$THRESHOLD" ]; then
   echo "fresh" > "$HERE/.mode"
   log "mode=fresh (local cache fast enough; no golden snapshot needed)"
 else
+  # Snapshot a STOPPED container: a snapshot of a RUNNING NixOS container clones into
+  # an instance that does not boot systemd as PID 1 (nix-daemon never starts). Verified.
+  $INCUS stop "$BASE" --timeout 30 --force >/dev/null 2>&1 || true
+  $INCUS snapshot delete "$BASE" pristine >/dev/null 2>&1 || true
   $INCUS snapshot create "$BASE" pristine >/dev/null
   echo "golden:$BASE/pristine" > "$HERE/.mode"
-  log "mode=golden ($BASE/pristine) — fresh launch exceeded threshold"
+  log "mode=golden ($BASE/pristine, stopped-snapshot) — fresh launch exceeded threshold"
 fi

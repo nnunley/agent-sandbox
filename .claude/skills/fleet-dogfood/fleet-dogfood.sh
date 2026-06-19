@@ -33,5 +33,56 @@ esac; done
 [ -n "$DF_ORACLE" ] || die "--oracle is required"
 [ -n "$DF_OUTDIR" ] || DF_OUTDIR="./dogfood-out/$DF_NAME"
 mkdir -p "$DF_OUTDIR"
-# (spin-up / deliver / run / harvest / grade / teardown added in later tasks)
-log "args ok: name=$DF_NAME repo=$DF_REPO ref=$DF_REF oracle=$DF_ORACLE outdir=$DF_OUTDIR"
+ROOT_DIR="$(cd "$HERE/../../.." && pwd)"
+WORKER="df-$DF_NAME"
+MODE="$(cat "$HERE/.mode" 2>/dev/null || echo fresh)"
+[ -n "${FLEET_TOKEN:-}" ] || die "FLEET_TOKEN env not set (worker needs CLAUDE_CODE_OAUTH_TOKEN)"
+log "dispatch $WORKER (mode=$MODE) repo=$DF_REPO ref=$DF_REF -> $DF_OUTDIR"
+
+$INCUS delete "$WORKER" --force >/dev/null 2>&1 || true
+register_teardown "$WORKER"
+
+# --- spin up: golden clone (btrfs reflink) or fresh launch + rebuild ---
+if [ -n "$DF_GOLDEN" ] || [ "${MODE#golden:}" != "$MODE" ]; then
+  SNAP="${DF_GOLDEN:-${MODE#golden:}}"
+  log "spin up from golden $SNAP (reflink clone)"
+  $INCUS copy "$SNAP" "$WORKER" >/dev/null
+  $INCUS config device add "$WORKER" nix-shared disk pool=default source=nix-shared path=/srv/nix-shared readonly=true >/dev/null 2>&1 || true
+  $INCUS start "$WORKER" >/dev/null
+else
+  log "spin up fresh (launch + worker-container.nix rebuild)"
+  $INCUS launch images:nixos/25.11 "$WORKER" >/dev/null
+  for i in $(seq 1 20); do st=$($INCUS exec "$WORKER" -- systemctl is-system-running 2>/dev/null || true); case "$st" in running|degraded) break;; esac; done
+  $INCUS file push "$ROOT_DIR/fleet-worker/worker-container.nix" "$WORKER/etc/nixos/configuration.nix"
+  $INCUS config device add "$WORKER" nix-shared disk pool=default source=nix-shared path=/srv/nix-shared readonly=true >/dev/null 2>&1 || true
+  $INCUS exec "$WORKER" -- bash -lc 'export NIX_CONFIG="sandbox = false"; nix-channel --update && nixos-rebuild switch' >/dev/null
+fi
+for i in $(seq 1 20); do st=$($INCUS exec "$WORKER" -- systemctl is-system-running 2>/dev/null || true); case "$st" in running|degraded) break;; esac; done
+
+# --- deliver repo@ref + brief + token + fleet-worker flake ---
+log "deliver repo@$DF_REF + brief + token"
+( cd "$DF_REPO" && git bundle create "/tmp/df-$DF_NAME.bundle" "$DF_REF" >/dev/null 2>&1 )
+$INCUS file push "/tmp/df-$DF_NAME.bundle" "$WORKER/home/worker/repo.bundle"
+$INCUS file push -r "$ROOT_DIR/fleet-worker" "$WORKER/home/worker/" >/dev/null
+$INCUS file push "$DF_BRIEF" "$WORKER/home/worker/brief.txt"
+printf '%s' "$FLEET_TOKEN" | $INCUS exec "$WORKER" -- tee /home/worker/.fleet-token >/dev/null
+# Clone as root, THEN chown everything to the worker (the run is non-root and must
+# be able to write the repo — claude's Write fails on a root-owned tree).
+$INCUS exec "$WORKER" -- bash -lc 'rm -rf /home/worker/let-go && git clone -q /home/worker/repo.bundle /home/worker/let-go && chown -R worker:users /home/worker' >/dev/null
+
+# --- run the worker (runner.sh inside the flake env; toolchain from local cache) ---
+log "run worker (nix develop … runner.sh, timeout=${DF_TIMEOUT}s)"
+$INCUS exec "$WORKER" --user 1000 --env HOME=/home/worker -- bash -lc \
+  "nix develop /home/worker/fleet-worker --accept-flake-config --no-sandbox --command bash /home/worker/fleet-worker/runner.sh $DF_TIMEOUT" || true
+
+# --- harvest ---
+log "harvest worker.diff + events.jsonl -> $DF_OUTDIR"
+$INCUS file pull "$WORKER/home/worker/worker.diff" "$DF_OUTDIR/worker.diff" 2>/dev/null || : > "$DF_OUTDIR/worker.diff"
+$INCUS file pull "$WORKER/home/worker/events.jsonl" "$DF_OUTDIR/events.jsonl" 2>/dev/null || : > "$DF_OUTDIR/events.jsonl"
+
+# --- authoritative grade (clean checkout + apply + hidden oracle) ---
+log "grade on clean checkout"
+if source "$HERE/grade.sh"; then GRADE_RC=0; else GRADE_RC=1; fi
+log "grade: $(cat "$DF_OUTDIR/grade.json" 2>/dev/null || echo '{}')"
+do_teardown; trap - EXIT
+exit "$GRADE_RC"
