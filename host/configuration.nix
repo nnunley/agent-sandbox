@@ -48,6 +48,13 @@
     };
   };
 
+  # Fleet worker micro-VM (hard isolation tier): non-root worker + SSH + nix cache.
+  microvm.vms.worker-vm = {
+    config = {
+      imports = [ ../guests/worker-vm.nix ];
+    };
+  };
+
   # NOTE: the fast-tier nspawn unit does NOT belong here. systemd-nspawn cannot
   # mount /proc inside the unprivileged agent-host LXC container (verified
   # 2026-06-18: "Failed to mount proc ... Operation not permitted", even with
