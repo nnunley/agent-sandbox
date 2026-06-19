@@ -156,6 +156,17 @@ Spike data (2026-06-18, `test-vm` + console readiness sentinel):
 - Directional conclusion (sufficient to proceed): per-task microVM ≈ 4.8 s is
   heavy; warm in-VM nspawn is expected sub-second. Tiered model holds; exact
   fast-tier number is nice-to-have, not architecture-blocking.
+- **UPDATE 2026-06-18 — BOTH backends now validated end-to-end:**
+  - *Container backend* (fast/default): real dogfood SUCCEEDED — claude implemented
+    `queue.Peek()` in an unprivileged NixOS container, oracle-graded 10/10. Needs
+    `nix develop --accept-flake-config --no-sandbox` (no kernel sandbox).
+  - *Micro-VM backend* (hard tier): `guests/worker-vm.nix` boots, SSH-reachable as
+    non-root worker, `nix develop --accept-flake-config` resolves the full toolchain
+    in-VM — **no `--no-sandbox`** (own kernel). Required fixes: tap→bridge enslave +
+    guest systemd-networkd DHCP (microvm networking was broken); writableStoreOverlay
+    (shared host store is read-only); no `nixpkgs.config` in the guest (external nixpkgs).
+  - Micro-VM is the *cleaner* nix story (sandbox works) but costs VM boot + SSH access;
+    container is faster to iterate. The `launch(template)` backend interface picks per tier.
 - Note: `enable-ksm.service` fails in the unprivileged incus container
   (`/sys/kernel/mm/ksm/run` read-only) — benign, pre-existing; disable to quiet
   activation.
