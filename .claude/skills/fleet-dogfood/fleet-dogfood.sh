@@ -61,29 +61,28 @@ for i in $(seq 1 20); do st=$($INCUS exec "$WORKER" -- systemctl is-system-runni
 
 # --- deliver repo@ref + brief + token + fleet-worker flake ---
 log "deliver repo@$DF_REF + brief + token"
-# Deliver everything AS THE WORKER (uid 1000, gid 0) — not root-then-chown. This matters
-# beyond the work-tree: `nix develop` (run as the worker) writes flake.lock INTO the
-# delivered fleet-worker dir, so that dir must be worker-owned or the run fails before
-# claude starts. (Flake inputs/fetchGit only ever yield READ-ONLY store paths — see the
-# flake-checkout note in SKILL.md — so the editable work-tree is always a real clone.)
+# Deliver + run AS ROOT in /root. The disposable container IS the sandbox, so claude runs
+# as root via IS_SANDBOX=1 (verified) — no non-root worker, no uid/gid, no ownership dance:
+# root owns/writes everything (repo, flake.lock, claude's edits). Much simpler than the
+# non-root path. (Flake inputs/fetchGit only yield READ-ONLY store paths — see SKILL.md —
+# so the editable work-tree is still a real clone, just root-owned now.)
 ( cd "$DF_REPO" && git bundle create "/tmp/df-$DF_NAME.bundle" "$DF_REF" >/dev/null 2>&1 )
-$INCUS file push --uid 1000 --gid 0 "/tmp/df-$DF_NAME.bundle" "$WORKER/home/worker/repo.bundle"
-$INCUS file push -r --uid 1000 --gid 0 "$ROOT_DIR/fleet-worker" "$WORKER/home/worker/" >/dev/null
-$INCUS file push --uid 1000 --gid 0 "$DF_BRIEF" "$WORKER/home/worker/brief.txt"
-printf '%s' "$FLEET_TOKEN" | $INCUS exec "$WORKER" --user 1000 --env HOME=/home/worker -- tee /home/worker/.fleet-token >/dev/null
-# Clone the work-tree as the worker (writable, worker-owned; claude's Write needs it).
-$INCUS exec "$WORKER" --user 1000 --env HOME=/home/worker -- \
-  bash -lc 'rm -rf ~/let-go && git clone -q ~/repo.bundle ~/let-go' >/dev/null
+$INCUS file push "/tmp/df-$DF_NAME.bundle" "$WORKER/root/repo.bundle"
+$INCUS file push -r "$ROOT_DIR/fleet-worker" "$WORKER/root/" >/dev/null
+$INCUS file push "$DF_BRIEF" "$WORKER/root/brief.txt"
+printf '%s' "$FLEET_TOKEN" | $INCUS exec "$WORKER" -- tee /root/.fleet-token >/dev/null
+$INCUS exec "$WORKER" -- bash -lc 'rm -rf /root/let-go && git clone -q /root/repo.bundle /root/let-go' >/dev/null
 
-# --- run the worker (runner.sh inside the flake env; toolchain from local cache) ---
-log "run worker (nix develop … runner.sh, timeout=${DF_TIMEOUT}s)"
-$INCUS exec "$WORKER" --user 1000 --env HOME=/home/worker -- bash -lc \
-  "nix develop /home/worker/fleet-worker --accept-flake-config --no-sandbox --command bash /home/worker/fleet-worker/runner.sh $DF_TIMEOUT" || true
+# --- run the worker as root (runner.sh inside the flake env; IS_SANDBOX=1 lets claude run
+# as root; toolchain from the local cache) ---
+log "run worker (nix develop … runner.sh as root, timeout=${DF_TIMEOUT}s)"
+$INCUS exec "$WORKER" --env HOME=/root --env IS_SANDBOX=1 -- bash -lc \
+  "nix develop /root/fleet-worker --accept-flake-config --no-sandbox --command bash /root/fleet-worker/runner.sh $DF_TIMEOUT" || true
 
 # --- harvest ---
 log "harvest worker.diff + events.jsonl -> $DF_OUTDIR"
-$INCUS file pull "$WORKER/home/worker/worker.diff" "$DF_OUTDIR/worker.diff" 2>/dev/null || : > "$DF_OUTDIR/worker.diff"
-$INCUS file pull "$WORKER/home/worker/events.jsonl" "$DF_OUTDIR/events.jsonl" 2>/dev/null || : > "$DF_OUTDIR/events.jsonl"
+$INCUS file pull "$WORKER/root/worker.diff" "$DF_OUTDIR/worker.diff" 2>/dev/null || : > "$DF_OUTDIR/worker.diff"
+$INCUS file pull "$WORKER/root/events.jsonl" "$DF_OUTDIR/events.jsonl" 2>/dev/null || : > "$DF_OUTDIR/events.jsonl"
 
 # --- authoritative grade (clean checkout + apply + hidden oracle) ---
 log "grade on clean checkout"

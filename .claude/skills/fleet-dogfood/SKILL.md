@@ -36,11 +36,12 @@ hidden go-test oracle, have the script WRITE the test file then `go test` (so th
 never sees it — anti-reward-hack). See `test/meta-dogfood.sh`.
 
 ## Gotchas (each cost a debugging cycle — proven the hard way)
-- Worker is NON-root (claude refuses root); the run is uid 1000. Deliver everything AS
-  the worker — `incus file push --uid 1000 --gid 0` for the bundle/flake/brief, clone the
-  work-tree as the worker — NOT root-then-chown. Two reasons: claude's `Write` needs a
-  worker-owned work-tree, AND `nix develop` (run as the worker) writes `flake.lock` into
-  the delivered flake dir, so that dir must be worker-owned or the run dies before claude.
+- Runs AS ROOT in `/root` with `--env IS_SANDBOX=1` — the disposable container IS the
+  sandbox, so that env var lets `claude --dangerously-skip-permissions` run as root
+  (it otherwise hard-refuses root). This sidesteps the whole non-root ownership dance:
+  root owns/writes everything (repo, `flake.lock`, claude's edits) — no `--uid/--gid`,
+  no chown, no clone-as-worker. (The `nixos-incus-worker` skill's "worker must be non-root"
+  rule is obsolete once `IS_SANDBOX=1` is set.)
 - Repo delivery is a real `git clone` (writable, with `.git` for diffing). Flake inputs /
   `builtins.fetchGit` only ever yield READ-ONLY `/nix/store` paths (and strip `.git`), so
   they deliver *dependencies* — never the editable work-tree.
