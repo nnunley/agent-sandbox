@@ -66,15 +66,32 @@
    → Shared volumes remain intact
    → Decision log entry is written
 
-**Final observables:**
-- Directive state is done or escalated-to-<level>
-- Decision log contains complete audit trail
-- Worker instance no longer exists
-- Shared volumes are clean and ready for next directive
-- Result artifacts (diff, result.json, knowledge) are persisted
+**Final observables:** (✅ = asserted by the ITER-0000 harness; ⏳ = deferred subsystem, not yet asserted)
+- ✅ Directive state is done or escalated-to-<level>
+- ⏳ Decision log contains complete audit trail — DEFERRED: the D6 decision log is STORY-0063 AC-28 → ITER-0001 (ITER-0000 emits a plain stderr line). No harness assertion yet.
+- ✅ Worker instance no longer exists
+- ⏳ Shared volumes are clean and ready for next directive — DEFERRED: real-backend property (volume attach/detach lifecycle) → ITER-0005; the fake backend has no volumes to assert.
+- ✅ Result artifacts (diff, result.json, knowledge) are persisted (worker.diff + result.json; "knowledge" capture deferred with the lean-ctx bridge → ITER-0003)
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (fake backend, CI) + manually validated E2E on cluster
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0001` (nested go.mod — must run inside the module dir)
+
+**Evidence:**
+- Automated harness: `modules/incus-dispatcher/journey_test.go` — `TestJourney0001_OneShotLifecycle`
+  drives the real `Daemon` + `DefaultMapToTask` against a recording fake backend and asserts the
+  daemon-seam final observables (done outcome, queue drained, instance reaped exactly once, authoritative
+  grade present+passing, worker.diff + result.json harvested) plus the contracted phase order with
+  teardown strictly last. The two ⏳ observables above are intentionally NOT asserted (deferred subsystems).
+  `TestJourney0001_RejectedDirectiveNeverLaunches` proves the D1 gate (step 2 blocks step 3: a worker
+  proposing a privileged template never launches the backend and is never reaped).
+- Mutation coverage for the authoritative-grade rule: `daemon_test.go` —
+  `TestRunOnce_GradePatchNotAppliedIsFail` (patch-not-applied ⇒ fail) and
+  `TestRunOnce_FrameworkErrorIsFail` (framework/infra error ⇒ fail) pin `passed()`.
+- Manual E2E (EXIT b, 2026-06-18): headless claude on a NixOS worker implemented `queue.Peek()`;
+  authoritative clean-room grade passed 10/10 incl. 3 hidden oracle tests. See iteration-log.md ITER-0000.
+- Real-backend wiring of `DefaultMapToTask` to the proven `nix develop ./fleet-worker
+  --accept-flake-config --no-sandbox --command bash runner.sh` invocation is tracked as a
+  cluster-evidence-gated follow-up — see roadmap ITER-0003 canonical runner modes.
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:310-325`

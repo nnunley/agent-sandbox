@@ -115,7 +115,9 @@ in the worker/daemon design notes as Task 0's first output.
 - Volumes: STORY-0051 attaches nix-cache (RO) + handoff-store (RW); STORY-0052 only
   delivers repo + (gated) imports handoff.
 
-**Status:** pending
+**Status:** done (both exit criteria met: (a) JOURNEY-0001 automated harness green;
+(b) real dogfood — graded `queue.Peek()` 10/10. Off-critical-path follow-ups deferred:
+real-Runner→fleet-worker wiring → ITER-0003; spikes STORY-0034/STORY-0025 → audit.)
 
 ## Iteration list
 

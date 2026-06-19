@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -135,5 +136,32 @@ func TestRunOnce_GradePassIsDone(t *testing.T) {
 	out, _, _ := dm.RunOnce(context.Background())
 	if out != OutcomeDone {
 		t.Fatalf("grade-pass → %q, want done", out)
+	}
+}
+
+func TestRunOnce_GradePatchNotAppliedIsFail(t *testing.T) {
+	// Oracle exited 0 but the worker's patch FAILED to apply → not a real pass.
+	// Pins the `PatchApplied &&` half of passed() (daemon.go): a `&&`→`||` mutation
+	// would wrongly call this done.
+	r := &fakeRunner{result: &Result{ExitCode: 0, ExternalGradingResult: &GradingResult{ExitCode: 0, PatchApplied: false}}}
+	dm, q := newDaemon(r)
+	q.Push(validDirective())
+	out, _, _ := dm.RunOnce(context.Background())
+	if out != OutcomeRequeued {
+		t.Fatalf("grade-exit-0-but-patch-not-applied → %q, want requeued", out)
+	}
+}
+
+func TestRunOnce_FrameworkErrorIsFail(t *testing.T) {
+	// A framework/infra error (NOT an "exec command" error) with a zero exit code
+	// must fail — the run never legitimately completed. Pins the
+	// `runErr != nil && !isCommandErr(runErr)` clause in passed() (daemon.go:96):
+	// deleting it would let a zero-exit result slip through as done.
+	r := &fakeRunner{result: &Result{ExitCode: 0}, err: errors.New("incus: instance launch failed")}
+	dm, q := newDaemon(r)
+	q.Push(validDirective())
+	out, _, _ := dm.RunOnce(context.Background())
+	if out != OutcomeRequeued {
+		t.Fatalf("framework error → %q, want requeued (run did not complete)", out)
 	}
 }
