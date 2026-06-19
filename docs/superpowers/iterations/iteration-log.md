@@ -34,10 +34,26 @@
 - Teardown fix (STORY-0062/0063) VALIDATED on a real container: stop-then-delete took 2s,
   no `incus delete -f` hang.
 
-### Remaining ITER-0000 tasks
-- Wire DefaultMapToTask / the runner invocation to `nix develop … --accept-flake-config
-  --no-sandbox --command bash runner.sh` (template→runner mapping; thin for ITER-0000).
-- E2E journey harness (Task 0 harness half) + grader fixture.
+### Non-root NixOS worker (STORY-0075) — declarative, VALIDATED 2026-06-18
+- `fleet-worker/worker-container.nix`: non-root `worker` user + nix (flakes, numtide cache,
+  trusted-users, `sandbox=false`, `allowUnfree`, `NIX_PATH` session var). Applied to a stock
+  container via `nixos-rebuild switch` → `worker` uid 1000 with proper PAM/groups.
+- Gotchas hit + fixed (now encoded in skills `nixos-incus-worker`, `nixos-declarative-configuration`):
+  imperative useradd→PAM fail; non-login exec missing NIX_PATH; unprivileged sandbox wall on
+  rebuild itself (NIX_CONFIG bootstrap + declarative sandbox=false); substituter trust for non-root.
+
+### EXIT (b) — REAL DOGFOOD SUCCEEDED 2026-06-18 ✅
+- Dispatched headless claude-sonnet to the NixOS worker on the Peek task (queue.Peek()).
+  Worker ran via `nix develop ./fleet-worker --accept-flake-config --no-sandbox` (47 events, rc=0,
+  6575-byte diff). go build/vet/test available in the devShell (stdenv pulls cc/gcc).
+- **Authoritative clean-room grade PASSED**: applied the worker's diff to an untouched checkout +
+  the HIDDEN oracle test → `go build`/`go vet` clean, `go test ./queue/` **10/10** (7 orig + 3
+  hidden Peek tests the worker never saw). The Peek implementation is correct.
+- The full ITER-0000 loop is proven end-to-end: dispatch → NixOS worker → claude → diff →
+  authoritative external grade.
+
+### Remaining ITER-0000 (polish, not blocking)
+- Wire DefaultMapToTask to the `nix develop … --command bash runner.sh` invocation (thin mapping).
+- E2E journey harness (codify today's manual dogfood as the automated JOURNEY-0001 harness).
 - Parallel spikes (off critical path): ctx_handoff (STORY-0034), latency (STORY-0025, partly done).
-- **Exit (b): real dogfood run — a claude -p task on a worker → oracle-graded diff (needs a
-  target task/brief + API token in the container).**
+- Optional: merge the dogfood's graded Peek() into the repo (real, useful, oracle-passed).
