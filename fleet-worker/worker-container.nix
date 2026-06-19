@@ -44,15 +44,27 @@
   };
   security.sudo.wheelNeedsPassword = false;
 
-  # Nix: flakes + the numtide binary cache SYSTEM-WIDE so the worker substitutes
+  # Nix: flakes + binary caches SYSTEM-WIDE so the worker substitutes
   # claude-code / lean-ctx prebuilt (no build → no unprivileged-sandbox wall),
   # without needing per-command --accept-flake-config. worker is a trusted user so
   # the flake's own nixConfig substituters are honored too.
+  #
+  # LOCAL-FIRST: file:///srv/nix-shared (the shared nix-shared volume, mounted RO by
+  # the dispatcher) is listed FIRST so the agent toolchain resolves from the LOCAL
+  # cache with zero network — Mac-off / offline ready. numtide is the fallback for
+  # paths not yet published locally. Populate the local cache with
+  # `scripts/populate-nix-cache.sh` (builds the fleet-worker inputDerivation closure
+  # on nix-server and `nix copy`s it to file:///srv/nix-shared). The local cache is
+  # unsigned (RO volume is the trust boundary) ⇒ require-sigs = false.
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" ];
     trusted-users = [ "root" "worker" ];
-    extra-substituters = [ "https://cache.numtide.com" ];
+    # NOTE: `substituters` (not extra-) sets the full ordered list — we keep
+    # cache.nixos.org (base nixpkgs / nixos-rebuild) and add numtide (agent CLIs not
+    # yet published locally), with the LOCAL cache first.
+    substituters = [ "file:///srv/nix-shared" "https://cache.nixos.org" "https://cache.numtide.com" ];
     extra-trusted-public-keys = [ "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=" ];
+    require-sigs = false;
     # Unprivileged LXC has no kernel-namespace build sandbox; disable it
     # DECLARATIVELY so neither nixos-rebuild nor the worker's `nix develop` needs
     # --no-sandbox. Rely on substitution; the only builds are tiny (mkShell env,
