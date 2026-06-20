@@ -13,6 +13,7 @@ type Decision struct {
 	Grade       string    // short grade summary
 	Rule        string    // coordination rule that fired
 	Action      string    // action taken: done | requeue | park | escalate | reap | ...
+	Reason      string    // denial/explanation detail (empty for routine decisions)
 	Ts          time.Time
 }
 

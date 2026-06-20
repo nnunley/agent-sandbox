@@ -36,7 +36,7 @@ func (p *Policy) ValidateTemplate(d queue.Directive) error {
 		return fmt.Errorf("policy: template %q not in allowlist", d.Template)
 	}
 	if isWorkerOrigin(d.Origin) && !rule.AllowWorkerOrigin {
-		return fmt.Errorf("policy: origin %q may not propose template %q (privileged)", d.Origin, d.Template)
+		return fmt.Errorf("policy: worker-origin not allowed for privileged templates: origin %q template %q", d.Origin, d.Template)
 	}
 	return nil
 }

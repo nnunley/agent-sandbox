@@ -100,6 +100,10 @@ Flags:
 	}
 
 	// Build task
+	cleanEnv, strippedKeys := SanitizeWorkerEnv(parseEnv())
+	if len(strippedKeys) > 0 {
+		log.Printf("stripped raw provider credentials from worker env: %v", strippedKeys)
+	}
 	task := Task{
 		Name:                    *name,
 		Repo:                    *repo,
@@ -109,7 +113,7 @@ Flags:
 		ImageName:               imageName,
 		Timeout:                 *timeout,
 		KeepOnFailure:           *keepOnFailure,
-		Env:                     parseEnv(),
+		Env:                     cleanEnv,
 		Provider:                prov,
 		Model:                   *model,
 		RunAsRoot:               *runAsRoot,

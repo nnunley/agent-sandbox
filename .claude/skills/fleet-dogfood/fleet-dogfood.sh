@@ -59,6 +59,16 @@ else
 fi
 for i in $(seq 1 20); do st=$($INCUS exec "$WORKER" -- systemctl is-system-running 2>/dev/null || true); case "$st" in running|degraded) break;; esac; done
 
+# Wait for the nix-daemon socket to actually accept connections. systemd reporting
+# "degraded" can precede nix-daemon.socket being up, so concurrent golden clones race here
+# and `nix develop` dies with "cannot connect to socket … Connection refused". Nudge the
+# socket each iteration and confirm with a real client ping before proceeding.
+for i in $(seq 1 30); do
+  if $INCUS exec "$WORKER" -- bash -lc 'nix store ping --store daemon >/dev/null 2>&1'; then break; fi
+  $INCUS exec "$WORKER" -- systemctl start nix-daemon.socket nix-daemon.service >/dev/null 2>&1 || true
+  sleep 1
+done
+
 # --- deliver repo@ref + brief + token + fleet-worker flake ---
 log "deliver repo@$DF_REF + brief + token"
 # Deliver + run AS ROOT in /root. The disposable container IS the sandbox, so claude runs

@@ -50,9 +50,14 @@ func (dm *Daemon) clock() time.Time {
 }
 
 // record appends a D6 decision-log entry (no-op when no log is configured).
-func (dm *Daemon) record(directiveID, grade, rule, action string) {
+// An optional reason argument populates Decision.Reason (denial/explanation detail).
+func (dm *Daemon) record(directiveID, grade, rule, action string, reason ...string) {
 	if dm.Log != nil {
-		_ = dm.Log.Append(Decision{DirectiveID: directiveID, Grade: grade, Rule: rule, Action: action, Ts: dm.clock()})
+		r := ""
+		if len(reason) > 0 {
+			r = reason[0]
+		}
+		_ = dm.Log.Append(Decision{DirectiveID: directiveID, Grade: grade, Rule: rule, Action: action, Reason: r, Ts: dm.clock()})
 	}
 }
 
@@ -86,7 +91,7 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 		log.Printf("directive %s REJECTED: %v", d.ID, verr)
 		_ = dm.Q.Done(lease)
 		dm.setStatus(d.ID, StatusAbandoned)
-		dm.record(d.ID, "", "template-invalid", "rejected")
+		dm.record(d.ID, "", "template-invalid", "rejected", verr.Error())
 		return OutcomeRejected, d.ID, nil
 	}
 
