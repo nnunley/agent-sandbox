@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,18 +85,81 @@ func TestRunOnce_FailRequeues(t *testing.T) {
 	}
 }
 
-func TestRunOnce_ParkAfterMaxAttempts(t *testing.T) {
-	r := &fakeRunner{result: &Result{ExitCode: 1}}
-	dm, q := newDaemon(r)
-	d := validDirective()
-	d.MaxAttempts = 1
-	q.Push(d)
-	out, _, _ := dm.RunOnce(context.Background())
-	if out != OutcomeParked {
-		t.Fatalf("fail at max attempts → %q, want parked", out)
+// D4 escalation ladder: a persistently-failing directive climbs retry-same →
+// stronger-worker → hard-tier (autonomous requeues) → human (parked + escalated), with a D6
+// decision-log entry per transition and thread status ending blocked. (Replaces the
+// ITER-0000 park-after-max behavior, which the ladder supersedes.)
+func TestRunOnce_LadderClimbsThenEscalates(t *testing.T) {
+	r := &fakeRunner{result: &Result{ExitCode: 1}} // always fails
+	q := queue.NewMemoryQueue()
+	logmem := NewMemoryDecisionLog()
+	tracker := NewThreadTracker(func() time.Time { return time.Unix(0, 0) })
+	lane := NewMemoryEscalationLane()
+	dm := &Daemon{
+		Q: q, Runner: r, Policy: testPolicy(), Consumer: "test", LeaseDur: time.Minute,
+		Log: logmem, Threads: tracker, Escalations: lane, Now: func() time.Time { return time.Unix(0, 0) },
+		MapToTask: func(d queue.Directive) Task { return Task{Name: d.ID, Cmd: []string{"true"}} },
 	}
-	if p, c := q.Len(); p != 0 || c != 0 {
-		t.Fatalf("queue after park = %d/%d, want 0/0", p, c)
+	id, _ := q.Push(validDirective())
+
+	for i, want := range []DirectiveOutcome{OutcomeRequeued, OutcomeRequeued, OutcomeRequeued, OutcomeEscalated} {
+		out, _, _ := dm.RunOnce(context.Background())
+		if out != want {
+			t.Fatalf("run %d: outcome %q, want %q", i, out, want)
+		}
+	}
+
+	// Ladder rule sequence, read back from the D6 decision log.
+	var rungs []string
+	for _, d := range logmem.Records() {
+		if d.Action == "requeue" || d.Action == "escalate-human" {
+			rungs = append(rungs, d.Rule)
+		}
+	}
+	if got, want := strings.Join(rungs, ","), "retry-same,stronger-worker,hard-tier,human"; got != want {
+		t.Fatalf("ladder rungs = %q, want %q", got, want)
+	}
+	// Terminal: thread blocked, directive parked (durable hold), present in the lane.
+	if tracker.Status(id) != StatusBlocked {
+		t.Fatalf("final status = %q, want blocked", tracker.Status(id))
+	}
+	if q.Parked() != 1 || len(lane.List()) != 1 {
+		t.Fatalf("want parked=1 lane=1, got parked=%d lane=%d", q.Parked(), len(lane.List()))
+	}
+}
+
+// AC-6: an autonomous climb (rungs 0..2) never lands in the escalations lane; only the human
+// rung does. Here a single failure (attempts=0 → retry-same) must NOT touch the lane.
+func TestRunOnce_AutonomousRungDoesNotEscalate(t *testing.T) {
+	r := &fakeRunner{result: &Result{ExitCode: 1}}
+	q := queue.NewMemoryQueue()
+	lane := NewMemoryEscalationLane()
+	dm := &Daemon{Q: q, Runner: r, Policy: testPolicy(), Consumer: "t", LeaseDur: time.Minute, Escalations: lane,
+		MapToTask: func(d queue.Directive) Task { return Task{Name: d.ID, Cmd: []string{"true"}} }}
+	q.Push(validDirective())
+	if out, _, _ := dm.RunOnce(context.Background()); out != OutcomeRequeued {
+		t.Fatalf("first fail → %q, want requeued (autonomous)", out)
+	}
+	if len(lane.List()) != 0 {
+		t.Fatalf("autonomous rung leaked into the escalations lane: %+v", lane.List())
+	}
+}
+
+// D6: a passing run writes a reap decision (teardown, AC-28) then a done decision, in order.
+func TestRunOnce_PassWritesReapThenDone(t *testing.T) {
+	r := &fakeRunner{result: &Result{ExitCode: 0}}
+	q := queue.NewMemoryQueue()
+	logmem := NewMemoryDecisionLog()
+	dm := &Daemon{Q: q, Runner: r, Policy: testPolicy(), Consumer: "t", LeaseDur: time.Minute, Log: logmem,
+		MapToTask: func(d queue.Directive) Task { return Task{Name: d.ID, Cmd: []string{"true"}} }}
+	q.Push(validDirective())
+	dm.RunOnce(context.Background())
+	var actions []string
+	for _, d := range logmem.Records() {
+		actions = append(actions, d.Action)
+	}
+	if got := strings.Join(actions, ","); got != "reap,done" {
+		t.Fatalf("decision actions = %q, want \"reap,done\"", got)
 	}
 }
 
