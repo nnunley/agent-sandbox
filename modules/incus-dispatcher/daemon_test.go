@@ -128,6 +128,23 @@ func TestRunOnce_LadderClimbsThenEscalates(t *testing.T) {
 	if q.Parked() != 1 || len(lane.List()) != 1 {
 		t.Fatalf("want parked=1 lane=1, got parked=%d lane=%d", q.Parked(), len(lane.List()))
 	}
+	// AC-2 status transitions across the climb: each RunOnce records active (on claim) then
+	// the outcome status — queued for the 3 autonomous requeues, blocked for the human rung.
+	// This pins setStatus() on the requeue + escalate paths (audit: not previously asserted).
+	var tos []ThreadStatus
+	queued := 0
+	for _, tr := range tracker.Transitions(id) {
+		tos = append(tos, tr.To)
+		if tr.To == StatusQueued {
+			queued++
+		}
+	}
+	if len(tos) != 8 || tos[len(tos)-1] != StatusBlocked {
+		t.Fatalf("status chain = %v, want 8 transitions ending blocked", tos)
+	}
+	if queued != 3 {
+		t.Fatalf("queued transitions = %d, want 3 (one per autonomous requeue)", queued)
+	}
 }
 
 // AC-6: an autonomous climb (rungs 0..2) never lands in the escalations lane; only the human

@@ -42,19 +42,19 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0029 | D2: Micro-VM boot-to-ready ≤ 5 s with closure realized | process-level | iteration | TBD | STORY-0017 |
 | SCENARIO-0030 | D3: ctx_agent diary write and read preserve progression state | integration | iteration | TBD | STORY-0018 |
 | SCENARIO-0031 | D3: Authoritative state (diff + grade) independent of lean-ctx loss | e2e | iteration | TBD | STORY-0018 |
-| SCENARIO-0032 | D4: Pass grade → mark thread done (no escalation) | unit | iteration | TBD | STORY-0055 |
-| SCENARIO-0033 | D4: Fail-transient grade → retry with temporal backoff | integration | iteration | TBD | STORY-0055 |
-| SCENARIO-0034 | D4: Fail-repeats grade → escalate to stronger worker model (pre-approv | process-level | iteration | TBD | STORY-0055 |
-| SCENARIO-0035 | D4: Fail-still grade → escalate resources/template (pre-approved hard- | process-level | iteration | TBD | STORY-0055 |
-| SCENARIO-0036 | D4: Authority-limit grade → escalate to human (non-blocking escalation | process-level | iteration | TBD | STORY-0055 |
-| SCENARIO-0037 | D4: Privileged rungs reachable only via human escalations lane | integration | iteration | TBD | STORY-0055 |
+| SCENARIO-0032 | D4: Pass grade → mark thread done (no escalation) | unit | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_Pass` | STORY-0055 |
+| SCENARIO-0033 | D4: Fail-transient grade → retry with temporal backoff | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_FailRequeues` | STORY-0055 |
+| SCENARIO-0034 | D4: Fail-repeats grade → escalate to stronger worker model (pre-approv | process-level | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_LadderClimbsThenEscalates` | STORY-0055 |
+| SCENARIO-0035 | D4: Fail-still grade → escalate resources/template (pre-approved hard- | process-level | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_LadderClimbsThenEscalates` | STORY-0055 |
+| SCENARIO-0036 | D4: Authority-limit grade → escalate to human (non-blocking escalation | process-level | iteration | `cd modules/incus-dispatcher && go test . -run "TestRunOnce_LadderClimbsThenEscalates|TestRunOnce_HumanRungParksWithoutLane"` | STORY-0055 |
+| SCENARIO-0037 | D4: Privileged rungs reachable only via human escalations lane | integration | iteration | `cd modules/incus-dispatcher && go test . -run "TestRunOnce_AutonomousRungDoesNotEscalate|TestJourney0001_RejectedDirectiveNeverLaunches"` | STORY-0055 |
 | SCENARIO-0038 | D4: Stale human-pending escalations re-notified by Temporal (urgency r | process-level | iteration | TBD | STORY-0055 |
 | SCENARIO-0039 | D5: Stop container with timeout before delete | unit | iteration | TBD | STORY-0062 |
 | SCENARIO-0040 | D5: Stop timeout → out-of-band reaper (non-blocking) | process-level | iteration | TBD | STORY-0062 |
 | SCENARIO-0041 | D5: Launch via incus copy from golden with fresh names (prevent collis | integration | iteration | TBD | STORY-0062 |
-| SCENARIO-0042 | D6: Decision log is append-only JSONL format | unit | iteration | TBD | STORY-0056 |
-| SCENARIO-0043 | D6: Decision log entries contain directive, grade, rule, action, times | integration | iteration | TBD | STORY-0056 |
-| SCENARIO-0044 | D6: Writer interface is swappable (JSONL → tamper-evident without rear | unit | iteration | TBD | STORY-0056 |
+| SCENARIO-0042 | D6: Decision log is append-only JSONL format | unit | iteration | `cd modules/incus-dispatcher && go test . -run "DecisionLog|TestRunOnce_PassWritesReapThenDone"` | STORY-0056 |
+| SCENARIO-0043 | D6: Decision log entries contain directive, grade, rule, action, times | integration | iteration | `cd modules/incus-dispatcher && go test . -run DecisionLog` | STORY-0056 |
+| SCENARIO-0044 | D6: Writer interface is swappable (JSONL → tamper-evident without rear | unit | iteration | `cd modules/incus-dispatcher && go test . -run DecisionLog` | STORY-0056 |
 | SCENARIO-0045 | Valid directive with all required fields accepted | unit | iteration | TBD | STORY-0064 |
 | SCENARIO-0046 | Directive with access_cmd field rejected as malformed | unit | iteration | TBD | STORY-0064 |
 | SCENARIO-0047 | Directive with root field rejected as malformed | unit | iteration | TBD | STORY-0064 |
@@ -80,7 +80,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0067 | Provider routing allows cheap implementers with deterministic grading | integration | iteration | TBD | STORY-0076 |
 | SCENARIO-0068 | Built worker image exposes the curated skill set at the discovery path | app-level | iteration | TBD | STORY-0077 |
 | SCENARIO-0069 | Worker image build captures skills bundle with correct layout and filt | process-level | iteration | TBD | STORY-0077 |
-| SCENARIO-0070 | Daemon claim rule: task transitions from unowned to owned | unit | iteration | TBD | STORY-0059 |
+| SCENARIO-0070 | Daemon claim rule: task transitions from unowned to owned | unit | iteration | `cd modules/incus-dispatcher && go test ./queue/ -run TestPark` | STORY-0059 |
 | SCENARIO-0071 | Daemon lease rule: owned task extends ownership window | unit | iteration | TBD | STORY-0059 |
 | SCENARIO-0072 | Daemon requeue rule: task returns to unowned queue | unit | iteration | TBD | STORY-0059 |
 | SCENARIO-0073 | Daemon park rule: task enters durable hold state | unit | iteration | TBD | STORY-0059 |
@@ -95,7 +95,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0082 | Rescore authority: human can move item to any bucket | integration | iteration | TBD | STORY-0047 |
 | SCENARIO-0083 | Rescore authority: agent rescore beyond bound rejected | unit | iteration | TBD | STORY-0047 |
 | SCENARIO-0084 | Rescore authority: privileged rescore routed to approval | integration | iteration | TBD | STORY-0047 |
-| SCENARIO-0085 | Escalation: autonomous climb through pre-approved rungs | integration | iteration | TBD | STORY-0061 |
+| SCENARIO-0085 | Escalation: autonomous climb through pre-approved rungs | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_AutonomousRungDoesNotEscalate` | STORY-0061 |
 | SCENARIO-0086 | Escalation: privileged escalation lands in escalations lane | integration | iteration | TBD | STORY-0061 |
 | SCENARIO-0087 | Escalation: stale escalation resurfaced by rising urgency | integration | iteration | TBD | STORY-0061 |
 | SCENARIO-0088 | Mac-off: human-only escalations queue durably for Mac return | e2e | iteration | TBD | STORY-0074 |

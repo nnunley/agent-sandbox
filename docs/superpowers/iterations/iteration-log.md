@@ -149,3 +149,16 @@ non-blocking), with a D6 decision-log entry per transition. Everything substrate
 and behind interfaces (DecisionLog/EscalationLane/Queue) so ITER-0006 substrate + ITER-0007 Temporal
 graft on without rework. Notably, 3 of 7 tasks were built BY THE FLEET ITSELF via the fleet-dogfood
 skill — the fleet building the fleet. Suite 36→69 green under `go test -race`, vet clean.
+
+**Audit (PAR, 2026-06-19):** Two parallel adversarial auditors, three tiers. Verdict CLEAN — no
+correctness bugs, no semantics drift, `go test -race` clean (69), JOURNEY-0001 sentinel green, all
+ITER-0001 ACs proven at the correct (daemon-integration) seam, honest partials, no dead code,
+boxing-in low-risk (Queue/DecisionLog/EscalationLane clean interfaces; Policy is a struct — minor,
+refactorable for ITER-0002). Two evidence-quality gaps found + resolved inline:
+- Scenario-corpus registration (both auditors): SCENARIO-0032/0033/0034/0035/0036/0037/0042/0043/0044/
+  0070/0085 were claimed proven in the log but marked Command:TBD in behavior-corpus.md → now
+  registered with verified-passing `go test -run` commands.
+- Status-transition coverage (auditor B): the climb test only pinned active→done → extended
+  TestRunOnce_LadderClimbsThenEscalates to assert the full chain (8 transitions, 3 queued, ending
+  blocked), pinning setStatus() on the requeue + escalate paths.
+ITER-0001 CONFIRMED DONE.
