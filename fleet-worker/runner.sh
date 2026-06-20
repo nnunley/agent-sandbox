@@ -22,6 +22,34 @@ git reset --hard >/dev/null 2>&1; git clean -fdq >/dev/null 2>&1
 echo "=== worker start wall=${WALL_CLOCK}s sonnet $(date -u +%FT%TZ) ===" > "$HOME/worker.log"
 echo "claude: $(command -v claude || echo MISSING)  go: $(go version 2>/dev/null)" >> "$HOME/worker.log"
 
+# STORY-0069: lean-ctx FULL enablement — ctx_* MCP tools (cached reads + shell compression) AND
+# the compression proxy (measured savings). FAIL-OPEN: any lean-ctx hiccup must not break the run;
+# we only route claude through the proxy once it is confirmed up, else fall back to the direct API.
+# (Chain proven 2026-06-20: claude OAuth Bearer → lean-ctx proxy :4444 → api.anthropic.com; the
+# keyless worker→lean-ctx→fleet-llm-proxy leg is the ITER-0005 micro-VM path.)
+if command -v lean-ctx >/dev/null 2>&1; then
+  lean-ctx init --agent claude >> "$HOME/worker.log" 2>&1 || true
+  lean-ctx setup               >> "$HOME/worker.log" 2>&1 || true
+  lean-ctx serve --daemon      >> "$HOME/worker.log" 2>&1 || true   # AC-2: bridge daemon + ctx_* tools
+  lean-ctx proxy enable        >> "$HOME/worker.log" 2>&1 || true
+  setsid nohup lean-ctx proxy start --port 4444 > "$HOME/lean-ctx-proxy.out" 2>&1 < /dev/null &
+  # Gate on the port actually accepting connections (curl proven reliable in the spike: 401 = up,
+  # token-auth). `proxy status` text was too slow/unreliable mid-startup. Fail-open if curl absent (000).
+  for _i in $(seq 1 15); do
+    code=$(curl -sS -o /dev/null -m 2 -w '%{http_code}' http://127.0.0.1:4444/ 2>/dev/null || echo 000)
+    case "$code" in
+      200|401|404|405)
+        export ANTHROPIC_BASE_URL="http://127.0.0.1:4444"   # route claude through the proxy (keep OAuth Bearer)
+        echo "lean-ctx proxy ON (http $code) → ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL" >> "$HOME/worker.log"
+        break;;
+    esac
+    sleep 1
+  done
+  [ -n "${ANTHROPIC_BASE_URL:-}" ] || echo "lean-ctx proxy not up; claude runs direct (fail-open)" >> "$HOME/worker.log"
+else
+  echo "lean-ctx not found; running without compression" >> "$HOME/worker.log"
+fi
+
 timeout --signal=INT "$WALL_CLOCK" \
   claude --model claude-sonnet-4-6 \
          --dangerously-skip-permissions --max-turns "$MAX_TURNS" \
@@ -37,3 +65,18 @@ echo "worker done rc=$rc $(date -u +%FT%TZ)" >> "$HOME/worker.log"
 git -C "$REPO" add -A -N >/dev/null 2>&1 || true
 git -C "$REPO" diff --no-ext-diff > "$HOME/worker.diff" 2>/dev/null
 echo "diff bytes: $(wc -c < "$HOME/worker.diff")" >> "$HOME/worker.log"
+
+# STORY-0072 AC-1: always leave a structured result.json. The worker is expected to write its own;
+# if it ran out of turns/context before doing so, synthesize a fallback so the orchestrator always
+# has structured output and can defer to the authoritative external grader (anti-reward-hack, AC-2).
+if [ ! -s "$HOME/result.json" ]; then
+  printf '{"status":"UNKNOWN","rc":%s,"harvested_diff_path":"%s"}\n' "$rc" "$HOME/worker.diff" > "$HOME/result.json"
+  echo "synthesized fallback result.json (worker wrote none)" >> "$HOME/worker.log"
+fi
+
+# STORY-0069: capture measured savings. proxy status is authoritative (Requests/Compressed/Tokens
+# saved); gain is the dashboard view. Best-effort — never fail the run on these.
+if command -v lean-ctx >/dev/null 2>&1; then
+  lean-ctx proxy status > "$HOME/lean-ctx-proxy-status.txt" 2>&1 || true
+  lean-ctx gain         > "$HOME/lean-ctx-gain.txt"         2>&1 || true
+fi
