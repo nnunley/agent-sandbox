@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,7 @@ type DecisionLog interface{ Append(Decision) error }
 // JSONLDecisionLog writes one compact JSON object per line (append-only, AC-1) to w.
 // If a Decision's Ts is the zero value, it is stamped with now() at Append time.
 type JSONLDecisionLog struct {
+	mu  sync.Mutex
 	w   io.Writer
 	now func() time.Time
 }
@@ -33,7 +35,9 @@ func NewJSONLDecisionLog(w io.Writer, now func() time.Time) *JSONLDecisionLog {
 	return &JSONLDecisionLog{w: w, now: now}
 }
 
-// Append marshals d as compact JSON followed by a single newline and writes it to w.
+// Append marshals d as compact JSON followed by a single newline and writes it as ONE
+// Write to w. The mutex makes Append atomic under concurrent callers (the line is never
+// interleaved with another goroutine's).
 func (j *JSONLDecisionLog) Append(d Decision) error {
 	if d.Ts.IsZero() {
 		d.Ts = j.now()
@@ -43,13 +47,16 @@ func (j *JSONLDecisionLog) Append(d Decision) error {
 		return err
 	}
 	b = append(b, '\n')
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	_, err = j.w.Write(b)
 	return err
 }
 
 // MemoryDecisionLog is an in-memory DecisionLog that records appended Decisions in order
-// (a test double and a base for future writers).
+// (a test double and a base for future writers). Safe for concurrent use.
 type MemoryDecisionLog struct {
+	mu      sync.Mutex
 	records []Decision
 }
 
@@ -60,11 +67,17 @@ func NewMemoryDecisionLog() *MemoryDecisionLog {
 
 // Append records d in order.
 func (m *MemoryDecisionLog) Append(d Decision) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.records = append(m.records, d)
 	return nil
 }
 
-// Records returns all appended Decisions in the order they were appended.
+// Records returns all appended Decisions in append order (a defensive copy).
 func (m *MemoryDecisionLog) Records() []Decision {
-	return m.records
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]Decision, len(m.records))
+	copy(out, m.records)
+	return out
 }

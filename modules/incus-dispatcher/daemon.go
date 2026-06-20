@@ -115,6 +115,9 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 
 	// Human rung — authority/judgment limit. Park the directive into a durable hold and push
 	// it to the NON-BLOCKING escalations lane; the loop keeps draining other directives.
+	// The Park + the "escalate-human" D6 decision below ALWAYS happen, so even when no lane is
+	// configured the directive is not lost — it is durably parked (recoverable via Q.Parked())
+	// and recorded in the decision log. The lane is the convenience surface a human polls.
 	_ = dm.Q.Park(lease)
 	if dm.Escalations != nil {
 		_ = dm.Escalations.Push(EscalationItem{DirectiveID: d.ID, Reason: "authority-limit", Origin: d.Origin})

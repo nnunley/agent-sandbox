@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type ThreadStatus string
 
@@ -21,8 +24,10 @@ type Transition struct {
 }
 
 // ThreadTracker tracks the current status of each thread (keyed by directive id) and
-// records every transition in order. Clock-injected for deterministic timestamps.
+// records every transition in order. Clock-injected for deterministic timestamps. Safe for
+// concurrent use (the daemon may run concurrent consumers, like MemoryQueue).
 type ThreadTracker struct {
+	mu          sync.Mutex
 	now         func() time.Time
 	current     map[string]ThreadStatus
 	transitions map[string][]Transition
@@ -37,6 +42,8 @@ func NewThreadTracker(now func() time.Time) *ThreadTracker {
 }
 
 func (t *ThreadTracker) Set(id string, s ThreadStatus) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	from := t.current[id]
 	t.current[id] = s
 	t.transitions[id] = append(t.transitions[id], Transition{
@@ -47,10 +54,14 @@ func (t *ThreadTracker) Set(id string, s ThreadStatus) {
 }
 
 func (t *ThreadTracker) Status(id string) ThreadStatus {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	return t.current[id]
 }
 
 func (t *ThreadTracker) Transitions(id string) []Transition {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	src := t.transitions[id]
 	out := make([]Transition, len(src))
 	copy(out, src)

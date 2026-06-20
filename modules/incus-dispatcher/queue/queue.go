@@ -74,7 +74,11 @@ type Directive struct {
 	Task       string     `json:"task,omitempty"`
 	HandoffIn  string     `json:"handoff_in,omitempty"` // optional lean-ctx bundle (gated on the ctx_handoff spike)
 	Grade      *GradeSpec `json:"grade,omitempty"`
-	MaxAttempts int       `json:"max_attempts,omitempty"`
+	// MaxAttempts: DEPRECATED as of ITER-0001. The D4 graduated escalation ladder
+	// (daemon nextRung) supersedes a flat attempt cap — failures climb retry-same →
+	// stronger-worker → hard-tier → human by attempt count. Retained for wire
+	// compatibility; not read by the coordinator.
+	MaxAttempts int `json:"max_attempts,omitempty"`
 
 	// Attempts counts how many times this directive has been claimed+requeued.
 	Attempts int `json:"attempts"`

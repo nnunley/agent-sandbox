@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -163,6 +165,79 @@ func TestRunOnce_PassWritesReapThenDone(t *testing.T) {
 	}
 }
 
+// Review fix (PAR-A): at the human rung WITHOUT an escalations lane, the directive must not
+// be lost — it is durably parked and the escalate-human transition is decision-logged.
+func TestRunOnce_HumanRungParksWithoutLane(t *testing.T) {
+	r := &fakeRunner{result: &Result{ExitCode: 1}}
+	q := queue.NewMemoryQueue()
+	logmem := NewMemoryDecisionLog()
+	dm := &Daemon{Q: q, Runner: r, Policy: testPolicy(), Consumer: "t", LeaseDur: time.Minute, Log: logmem,
+		MapToTask: func(d queue.Directive) Task { return Task{Name: d.ID, Cmd: []string{"true"}} }}
+	d := validDirective()
+	d.Attempts = 3 // terminal rung → human
+	q.Push(d)
+	if out, _, _ := dm.RunOnce(context.Background()); out != OutcomeEscalated {
+		t.Fatalf("human rung → %q, want escalated", out)
+	}
+	if q.Parked() != 1 {
+		t.Fatalf("Parked() = %d, want 1 (recoverable hold even without a lane)", q.Parked())
+	}
+	var escalated bool
+	for _, dec := range logmem.Records() {
+		if dec.Action == "escalate-human" && dec.Rule == "human" {
+			escalated = true
+		}
+	}
+	if !escalated {
+		t.Fatalf("escalate-human decision not logged: %+v", logmem.Records())
+	}
+}
+
+// Review fix (PAR-B): a passing run records the full status chain active → done.
+func TestRunOnce_PassStatusChain(t *testing.T) {
+	r := &fakeRunner{result: &Result{ExitCode: 0}}
+	q := queue.NewMemoryQueue()
+	tracker := NewThreadTracker(func() time.Time { return time.Unix(0, 0) })
+	dm := &Daemon{Q: q, Runner: r, Policy: testPolicy(), Consumer: "t", LeaseDur: time.Minute, Threads: tracker,
+		MapToTask: func(d queue.Directive) Task { return Task{Name: d.ID, Cmd: []string{"true"}} }}
+	id, _ := q.Push(validDirective())
+	dm.RunOnce(context.Background())
+	if tracker.Status(id) != StatusDone {
+		t.Fatalf("status = %q, want done", tracker.Status(id))
+	}
+	var chain []ThreadStatus
+	for _, tr := range tracker.Transitions(id) {
+		chain = append(chain, tr.To)
+	}
+	if len(chain) != 2 || chain[0] != StatusActive || chain[1] != StatusDone {
+		t.Fatalf("status chain = %v, want [active done]", chain)
+	}
+}
+
+// Review fix (PAR-B): ThreadTracker and MemoryDecisionLog must be concurrent-safe (run with
+// -race). Without the mutexes this trips the race detector / a concurrent-map-write panic.
+func TestConcurrentTrackerAndLog(t *testing.T) {
+	tracker := NewThreadTracker(func() time.Time { return time.Unix(0, 0) })
+	logmem := NewMemoryDecisionLog()
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			id := "t" + strconv.Itoa(n%5)
+			tracker.Set(id, StatusActive)
+			_ = tracker.Status(id)
+			_ = tracker.Transitions(id)
+			_ = logmem.Append(Decision{DirectiveID: id, Action: "x"})
+			_ = logmem.Records()
+		}(i)
+	}
+	wg.Wait()
+	if len(logmem.Records()) != 50 {
+		t.Fatalf("concurrent appends recorded %d, want 50", len(logmem.Records()))
+	}
+}
+
 func TestRunOnce_RejectedTemplateNotRun(t *testing.T) {
 	r := &fakeRunner{result: &Result{ExitCode: 0}}
 	dm, q := newDaemon(r)
@@ -229,3 +304,4 @@ func TestRunOnce_FrameworkErrorIsFail(t *testing.T) {
 		t.Fatalf("framework error → %q, want requeued (run did not complete)", out)
 	}
 }
+
