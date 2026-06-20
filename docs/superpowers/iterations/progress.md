@@ -1,11 +1,20 @@
 # Progress
 
-**Phase:** ITER-0002 DONE + AUDITED CLEAN + MERGED to main (f359310), 2026-06-20 — D1 security
-perimeter + credential isolation. Three-tier PAR audit CLEAN (both auditors). Worktree isolation
-(main was lease-held by a concurrent agent, now gone) fast-forwarded into main; branch/worktree
-cleaned up. ITER-0003 next pending (awaiting go-ahead).
-**Iterations:** 3/9 done (ITER-0000, ITER-0001, ITER-0002); ITER-0003 next pending.
-**Sentinel corpus:** JOURNEY-0001 green. Suite: incus-dispatcher 86 + llm-proxy 16 under -race.
+**Phase:** ITER-0003 SCOPE LOCKED (2026-06-20) — Worker reliability & robust result contract.
+Scope reviewed (PAR REVISE→revised→approved). **Implementation NOT yet started — checkpointed for a
+fresh lean session** (ITER-0003 is cluster-heavy + 0069-spike-gated; this orchestration session is
+OOM-prone per the architecture note — restart-before-implement is the recorded policy).
+**Sentinel baseline:** JOURNEY-0001 green. Suite: incus-dispatcher 86 + llm-proxy 16 -race.
+**Revised ITER-0003 scope (see roadmap ITER-0003 block for full detail):**
+- Stories: STORY-0072, 0068, 0069, 0070, 0071. **STORY-0015 deferred → ITER-0008** (Run-object collision).
+- Done now: Task 0 — 13→0 fixture captured to modules/incus-dispatcher/testdata/journey0003/ (was ephemeral /tmp).
+- Splits: 0068 AC-1(CI)/AC-2(cluster e2e); 0071 AC-1(CI projector)/AC-2(integration). 0069 spike-first.
+  0070 sequenced after 0069+0072, container-only interim. SCENARIO-0061 seam unit→integration.
+- Two tracks: Track1 runner (0069-spike→0072→0069→0070, cluster); Track2 grading/observability
+  (0068 AC-1 + 0071 AC-1 CI cores; then cluster e2e). Track2 survives if the 0069 spike stalls Track1.
+**Resume:** "continue iterative development" → running-an-iteration picks ITER-0003; scope is recorded,
+so proceed to the 0069 spike + decomposition; dogfood isolatable code tasks to the fleet (dispatch policy).
+**Iterations:** 3/9 done (ITER-0000/0001/0002); ITER-0003 scope locked, impl pending.
 
 **ITER-0002 — fleet-dogfooded (TDD + hidden holdout oracle on clean checkouts):**
 - T1 STORY-0049 AC-1 — queue.ParseDirective strict schema (reject access_cmd/root/unknown) — pass

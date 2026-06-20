@@ -291,7 +291,10 @@ and dispatch decisions are made by the Tier-2 coordinator (ITER-0008).
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:348-351, 160, 182, 225-237`
 
-**Status:** pending
+**Status:** pending — **deferred from ITER-0003 → ITER-0008 (PAR scope review 2026-06-20):** the
+Run object (run_id/artifact_refs/log_refs) is not in the productization spec and its shape collides
+with STORY-0011's Run (worker_id/worker_kind/policy_id); build them together in ITER-0008. ITER-0003
+keeps artifact capture via the existing `Result.Artifacts`.
 
 ## STORY-0016
 

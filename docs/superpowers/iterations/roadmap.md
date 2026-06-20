@@ -187,17 +187,39 @@ boundary; live wiring rides the laneq substrate (ITER-0006).
 
 ### ITER-0003 — Worker reliability & robust result contract
 
-**Stories:** STORY-0072, STORY-0068, STORY-0069, STORY-0070, STORY-0015, STORY-0071
-**Rationale:** The productization-plan reliability cluster (Go-exec PATH fix
-STORY-0067 pulled forward to the ITER-0000 dogfood): truncation-robust result
-contract, grading round-trip proof, lean-ctx bridge ON,
-canonical runner modes, artifact capture, ctx_*-aware heartbeat. Plus a *minimal*
-Mac-off smoke in the harness (daemon keeps claiming/running/grading while the Mac
-is disconnected — no Temporal, no full ladder yet). The FULL Mac-off acceptance
-test (STORY-0074) is rescheduled to ITER-0008 (after substrate + Temporal exist).
-**Status:** pending
-**Impacted scenarios:** result-survives-truncation; minimal Mac-off smoke; bridge-ON; heartbeat
-**Look-ahead check:** minimal smoke exercises ITER-0000..0002; full STORY-0074 → ITER-0008.
+**Stories (revised after PAR scope review):** STORY-0072, STORY-0068, STORY-0069, STORY-0070, STORY-0071
+**Rationale:** The productization-plan reliability cluster: truncation-robust result
+contract, grading round-trip proof, lean-ctx bridge ON, canonical runner modes, ctx_*-aware
+heartbeat. (Go-exec PATH fix STORY-0067 landed in ITER-0000.)
+**Status:** SCOPE REVIEWED — PAR REVISE→revised (2026-06-20), ready to implement. **Impl deferred
+to a fresh lean session** (see progress.md): ITER-0003 is cluster-heavy + spike-gated, and this
+orchestration session is OOM-prone (per docs/plans/2026-06-20-fleet-multi-agent-substrate-architecture.md).
+**Scope revisions (PAR consensus — both reviewers REVISE):**
+- **STORY-0015 (Run object/artifact_refs) DEFERRED → ITER-0008** — not in the productization spec;
+  its Run shape collides with STORY-0011's Run (worker_id/worker_kind/policy_id). ITER-0003 keeps
+  artifact capture via the existing `Result.Artifacts`.
+- **Evidence durability (Critical):** the 13→0 fixture is now captured in-repo at
+  `modules/incus-dispatcher/testdata/journey0003/` (was ephemeral `/tmp/lvl1-focused.diff`).
+- **STORY-0068 split:** AC-1 = generic grader mechanism + grade-JSON shape, proven in **CI** vs a
+  small synthetic in-repo fixture; AC-2 = reproduce 13→0 as a **cluster e2e** (JOURNEY-0003) using
+  the captured fixture + a pinned `let-go` ref (ref TODO at impl time).
+- **STORY-0071 split:** AC-1 = events.jsonl→working-state **projector logic (CI unit)**; AC-2 = live
+  heartbeat (**integration/cluster**).
+- **STORY-0069:** **spike first** — prove in-container `lean-ctx serve` + bridge reachability before
+  building AC-1/AC-2 (container-only; microVM path is ITER-0005). Fix SCENARIO-0061 seam `unit`→`integration`.
+- **STORY-0070:** sequence AFTER 0069+0072 (its AC composes them); scope to **interim
+  container-runner modes** — multi-backend canonicalization → ITER-0005.
+**Decomposition (two tracks; Track 2 proceeds even if the 0069 spike stalls Track 1):**
+- Task 0 (DONE): capture 13→0 fixture into testdata.
+- Track 1 (runner, cluster-gated): 0069-spike → STORY-0072 (fallback result.json) → STORY-0069
+  (bridge ON) → STORY-0070 (runner --fresh/--continue capstone).
+- Track 2 (grading/observability): STORY-0068 AC-1 (grader+synthetic fixture, CI) + STORY-0071 AC-1
+  (projector, CI); then STORY-0068 AC-2 (13→0 e2e) + STORY-0071 AC-2 (live heartbeat) as cluster evidence.
+- "Minimal Mac-off smoke" is harness scaffolding (full STORY-0074 → ITER-0008); not an owning story.
+**Impacted scenarios:** SCENARIO-0061 (bridge-ON, integration), SCENARIO-0062 (heartbeat),
+SCENARIO-0063 (truncation fallback), JOURNEY-0003 (13→0 grading, e2e).
+**Look-ahead check:** runner work (0069/0070) is container-only → ITER-0005 microVM backend grafts a
+new runner path; STORY-0015 Run object → ITER-0008.
 
 ### ITER-0004 — State passthrough & continuity (post-spike)
 
@@ -260,7 +282,7 @@ escalation-resurface (SCENARIO-0087)
 
 ### ITER-0008 — Tier-2 coordinator, recursive delegation & operator UX
 
-**Stories:** STORY-0073, STORY-0028, STORY-0012, STORY-0013, STORY-0014, STORY-0026, STORY-0006, STORY-0003, STORY-0009, STORY-0032, STORY-0074, **STORY-0027 AC-3 (operator pause/block/resume from TUI — split in from ITER-0001), STORY-0054 (audit all runs/delegations/mutations + replayability — moved from ITER-0001, folds into STORY-0032's genome/delegation audit), STORY-0016 (versioned execution policies — moved from ITER-0002 PAR: delegation_rules/mutation_allowed gain meaning with recursive delegation here), STORY-0011 (policy-driven worker dispatch — moved from ITER-0002 PAR: needs multiple worker_kinds (post-ITER-0005) + Tier-2 dispatch decisions), STORY-0049 AC-4 (worker-authored child-directive inherits non-privileged provisioning — moved from ITER-0002 PAR: needs the recursive child-directive emit path built here)**
+**Stories:** STORY-0073, STORY-0028, STORY-0012, STORY-0013, STORY-0014, STORY-0026, STORY-0006, STORY-0003, STORY-0009, STORY-0032, STORY-0074, **STORY-0027 AC-3 (operator pause/block/resume from TUI — split in from ITER-0001), STORY-0054 (audit all runs/delegations/mutations + replayability — moved from ITER-0001, folds into STORY-0032's genome/delegation audit), STORY-0016 (versioned execution policies — moved from ITER-0002 PAR: delegation_rules/mutation_allowed gain meaning with recursive delegation here), STORY-0011 (policy-driven worker dispatch — moved from ITER-0002 PAR: needs multiple worker_kinds (post-ITER-0005) + Tier-2 dispatch decisions), STORY-0049 AC-4 (worker-authored child-directive inherits non-privileged provisioning — moved from ITER-0002 PAR: needs the recursive child-directive emit path built here), STORY-0015 (capture artifacts: Run object with run_id/artifact_refs/log_refs — moved from ITER-0003 PAR: build with STORY-0011's Run shape to avoid a colliding/duplicate Run definition)**
 **Rationale:** Bidirectional steering (file-feed now), operator TUI for
 thread/worker management (incl. STORY-0027 AC-3 thread pause/block/resume — it needs the TUI built
 here), the full agent/delegation/mutation audit + replay (STORY-0054, alongside STORY-0032 genome
