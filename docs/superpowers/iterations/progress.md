@@ -1,8 +1,9 @@
 # Progress
 
-**Phase:** ITER-0002 DONE (closed 2026-06-20) — D1 security perimeter + credential isolation,
-on branch `iter-0002` (main was lease-held; isolated worktree per user direction). Awaiting
-orchestrator audit (auditing-progress) + merge to main.
+**Phase:** ITER-0002 DONE + AUDITED CLEAN + MERGED to main (f359310), 2026-06-20 — D1 security
+perimeter + credential isolation. Three-tier PAR audit CLEAN (both auditors). Worktree isolation
+(main was lease-held by a concurrent agent, now gone) fast-forwarded into main; branch/worktree
+cleaned up. ITER-0003 next pending (awaiting go-ahead).
 **Iterations:** 3/9 done (ITER-0000, ITER-0001, ITER-0002); ITER-0003 next pending.
 **Sentinel corpus:** JOURNEY-0001 green. Suite: incus-dispatcher 86 + llm-proxy 16 under -race.
 
