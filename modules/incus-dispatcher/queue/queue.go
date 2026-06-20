@@ -117,6 +117,12 @@ type Queue interface {
 	// no eligible pending directive exists.
 	Peek() (Directive, error)
 
+	// Park moves a CLAIMED directive (held by lease) into a DURABLE parked hold state —
+	// distinct from done (removed) and pending (claimable). A parked directive is NOT returned
+	// by Claim/Peek and is NOT reclaimed by Reap; it stays until manual intervention.
+	// Returns ErrLeaseLost if the lease is expired/unknown (match Done/Requeue lease handling).
+	Park(lease Lease) error
+
 	// Len reports pending + claimed directive counts (for tests/observability).
 	Len() (pending, claimed int)
 }

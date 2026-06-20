@@ -20,6 +20,7 @@ type MemoryQueue struct {
 	seq     int
 	pending []*Directive          // eligible/deferred, awaiting claim
 	claimed map[string]*claimItem // by directive ID
+	parked  map[string]*Directive // durable hold; excluded from all queue ops
 }
 
 type claimItem struct {
@@ -34,7 +35,7 @@ func NewMemoryQueue() *MemoryQueue { return NewMemoryQueueWithClock(time.Now) }
 // NewMemoryQueueWithClock returns a stub queue using the supplied clock — used
 // by tests to drive lease expiry and not-before deterministically.
 func NewMemoryQueueWithClock(now func() time.Time) *MemoryQueue {
-	return &MemoryQueue{now: now, claimed: map[string]*claimItem{}}
+	return &MemoryQueue{now: now, claimed: map[string]*claimItem{}, parked: map[string]*Directive{}}
 }
 
 func (q *MemoryQueue) newID() string {
@@ -187,9 +188,30 @@ func (q *MemoryQueue) Reap() (int, error) {
 	return len(expired), nil
 }
 
-// Len reports pending and claimed counts.
+// Len reports pending and claimed counts. Parked directives are excluded.
 func (q *MemoryQueue) Len() (int, int) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return len(q.pending), len(q.claimed)
+}
+
+// Park moves a claimed directive into a durable parked hold. It is no longer
+// returned by Claim/Peek, never reclaimed by Reap, and excluded from Len.
+func (q *MemoryQueue) Park(lease Lease) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	it, err := q.live(lease)
+	if err != nil {
+		return err
+	}
+	delete(q.claimed, lease.DirectiveID)
+	q.parked[lease.DirectiveID] = it.d
+	return nil
+}
+
+// Parked returns the number of directives in the durable parked hold state.
+func (q *MemoryQueue) Parked() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return len(q.parked)
 }
