@@ -146,7 +146,11 @@ Temporal-aged yet), thread-status tracking, and the D6 append-only decision log 
 writer interface. Everything here is substrate- AND Temporal-independent; the escalations lane is a
 plain durable queue and retries are synchronous. The time-plane behaviors (urgency aging, Temporal
 backoff, resurfacing) split out to ITER-0007; TUI control and agent/delegation/mutation audit to ITER-0008.
-**Status:** pending
+**Status:** done:ITER-0001 (2026-06-19) — T1 decision log / T2 thread status / T3 park
+dogfood-authored (TDD + holdout); T4 ladder / T5 human lane / T6+T7 D4 daemon loop local TDD;
+PAR-reviewed (concurrency + coverage fixes applied); suite 69 green under -race, JOURNEY-0001
+sentinel green. Stories done: 0055, 0056, 0059, 0063; partial (deferred ACs remain): 0058
+(AC-24→0007, AC-25→0004), 0061 (AC-3→0007), 0027 (AC-3→0008).
 **PAR scope review (2026-06-19):** 2 adversarial reviewers → both REVISE. High-confidence findings,
 all applied at roadmap AC-scoping level: (1) 3 Temporal-coupled ACs split to ITER-0007 (0055 AC-7,
 0058 AC-24, 0061 AC-3); (2) STORY-0027 AC-3 (TUI) → ITER-0008; (3) **STORY-0054 (audit all runs/

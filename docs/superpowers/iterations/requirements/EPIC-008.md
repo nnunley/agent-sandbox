@@ -3,7 +3,7 @@
 **Summary:** Coordination loop & escalation
 **Stories:** STORY-0055, STORY-0056, STORY-0057, STORY-0058, STORY-0059, STORY-0060, STORY-0061
 **Primary sources:** `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 1/7 done
+**Status:** 4/7 done
 ## STORY-0055
 
 **Epic:** EPIC-008 — Coordination loop & escalation
@@ -25,7 +25,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:188-208`
 
-**Status:** pending
+**Status:** done:ITER-0001 (D4 loop + ladder AC-1..6; AC-7 Temporal resurface→ITER-0007)
 
 ## STORY-0056
 
@@ -45,7 +45,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:222-228`
 
-**Status:** pending
+**Status:** done:ITER-0001 (D6 decision log AC-1..4: log type in T1, decisions emitted from the D4 loop in T7)
 
 ## STORY-0057
 
@@ -83,7 +83,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:322-324`
 
-**Status:** partial:ITER-0000 (AC-22 pass→done done); AC-23 ladder→ITER-0001, AC-24 Temporal→ITER-0007, AC-25 handoff→ITER-0004
+**Status:** partial:ITER-0000+0001 (AC-22 done ITER-0000, AC-23 synchronous ladder done ITER-0001); AC-24 Temporal→ITER-0007, AC-25 handoff→ITER-0004
 
 ## STORY-0059
 
@@ -103,7 +103,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:395`
 
-**Status:** pending
+**Status:** done:ITER-0001 (claim/lease/requeue/park AC-1..4; park added in T3)
 
 ## STORY-0060
 
@@ -141,4 +141,4 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:413-415`
 
-**Status:** pending
+**Status:** partial:ITER-0001 (AC-1 autonomous climb + AC-2 non-blocking human lane done); AC-3 urgency resurface→ITER-0007

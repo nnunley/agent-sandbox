@@ -4,7 +4,6 @@
 **Stories:** STORY-0026, STORY-0027, STORY-0028
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
 **Status:** 0/3 done
-
 ## STORY-0026
 
 **Epic:** EPIC-003 — Mac-off governance & constraints
@@ -41,7 +40,7 @@
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:149, 513-514`
 
-**Status:** pending
+**Status:** partial:ITER-0001 (AC-1 status field + AC-2 transitions done); AC-3 TUI pause/block/resume→ITER-0008
 
 ## STORY-0028
 

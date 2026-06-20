@@ -115,3 +115,37 @@ correctness bugs; gaps were evidence-quality), all resolved inline before confir
 - Minor: softened the harness doc comment to match actual coverage; added explicit `cleanups==0`
   assertion to the rejection test.
 Re-verified after fixes: 36 tests green, `go vet` clean, both validators pass.
+
+## ITER-0001 — Coordination plane (DONE — closed 2026-06-19)
+
+**Completed:** 2026-06-19
+
+**Stories delivered:** STORY-0056 (D6 decision log, done), STORY-0027 (thread status AC-1/2,
+partial — AC-3 TUI→ITER-0008), STORY-0059 (claim/lease/requeue/park, done — park added),
+STORY-0055 (D4 loop + ladder AC-1..6, done — AC-7→ITER-0007), STORY-0058 (AC-23 synchronous
+ladder, partial — AC-24→ITER-0007/AC-25→ITER-0004), STORY-0061 (autonomous rungs + human lane
+AC-1/2, partial — AC-3→ITER-0007), STORY-0063 (decision-log write on reap AC-28, done).
+
+**Tasks executed:**
+- T1 D6 decision log (decisionlog.go), T2 thread status (threadstatus.go), T3 durable Park
+  (queue) — all FLEET-AUTHORED via fleet-dogfood (worker TDD + hidden holdout oracle, reviewed,
+  applied): commits d4e313a / 6ac3432 / fe67309.
+- T4 escalation ladder (ladder.go), T5 human escalations lane (escalationlane.go), T6+T7 full
+  D4 RunOnce composition (daemon.go) — local TDD: commits 3721bc4 / 95d1300 / 6aa2384.
+- PAR review (2 adversarial reviewers, both CHANGES-NEEDED) → concurrency mutexes
+  (ThreadTracker/MemoryDecisionLog/JSONLDecisionLog), nil-lane clarification + tests, MaxAttempts
+  deprecation, status-chain coverage: commit d4b7d76. False positives dismissed with evidence.
+
+**Scenarios:** JOURNEY-0001 sentinel stays GREEN through the daemon rewrite (no regression). D4
+behavior covered by daemon_test.go: ladder-climbs-then-escalates (SCENARIO-0032/0034/0035 at the
+integration seam), autonomous-rung-does-not-escalate (AC-6), human-rung-parks-without-lane,
+pass-status-chain, pass-writes-reap-then-done (SCENARIO-0042), concurrent-tracker-and-log (-race).
+Queue rules (SCENARIO-0070) in queue/park_test.go.
+
+**Summary:** Promoted the ITER-0000 minimal outcome loop to the full D4 deterministic coordination
+plane: claim → thread-status → D1 validate → run → reap-log → authoritative grade → graduated
+escalation ladder (autonomous retry/stronger/hard-tier requeues → human rung parks + escalates
+non-blocking), with a D6 decision-log entry per transition. Everything substrate/Temporal-independent
+and behind interfaces (DecisionLog/EscalationLane/Queue) so ITER-0006 substrate + ITER-0007 Temporal
+graft on without rework. Notably, 3 of 7 tasks were built BY THE FLEET ITSELF via the fleet-dogfood
+skill — the fleet building the fleet. Suite 36→69 green under `go test -race`, vet clean.

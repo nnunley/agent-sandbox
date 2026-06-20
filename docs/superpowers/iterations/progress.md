@@ -1,5 +1,14 @@
 # Progress
 
+**Phase:** ITER-0001 DONE (closed 2026-06-19) — coordination plane shipped (3/7 tasks fleet-dogfooded,
+4/7 local TDD), PAR-reviewed (concurrency + coverage fixes), 69 tests green under -race, JOURNEY-0001
+sentinel green. **Iterations:** 2/9 done (ITER-0000, ITER-0001); ITER-0002 next pending.
+**ITER-0001 stories:** done — 0055/0056/0059/0063; partial (deferred ACs) — 0058(→0007/0004),
+0061(→0007), 0027(→0008).
+
+---
+(historical, pre-ITER-0001)
+
 **Phase:** ITER-0001 scope CONVERGED (PAR REVISE applied) → ready to decompose + implement
 **Iterations:** 1/9 done (ITER-0000), ITER-0001 in prep, 7 pending (ITER-0006 blocked post-Patrick)
 **Backlog reconciled:** ITER-0000's 7 fully-delivered stories marked done:ITER-0000; 4 splits marked
