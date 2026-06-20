@@ -31,9 +31,13 @@ FLEET_TOKEN="$(cat ~/.fleet-token)" bash .claude/skills/fleet-dogfood/fleet-dogf
 Outputs in `--output-dir` (default `./dogfood-out/ID`): `worker.diff`, `events.jsonl`,
 `grade.json`. **Exit 0 iff the oracle passed.**
 
-The `--oracle` is a script run on a CLEAN checkout with the worker's diff applied. For a
-hidden go-test oracle, have the script WRITE the test file then `go test` (so the worker
-never sees it — anti-reward-hack). See `test/meta-dogfood.sh`.
+**Methodology: TDD + holdout.** The brief should require the worker to work TEST-FIRST
+(red-green-refactor) and ship its own tests in the diff. The `--oracle` is an INDEPENDENT
+HOLDOUT — a script run on a CLEAN checkout with the worker's diff applied, that WRITES its
+own hidden test file then `go test`s it (so the worker never sees it). This is the
+train/holdout split: the worker's own tests catch its mistakes; the holdout catches overfit
+and reward-hacking. Pin exact API signatures in the brief so the worker's impl and the
+holdout agree. See `test/meta-dogfood.sh` and `.iter-scratch/iter0001-t1-*` for examples.
 
 ## Gotchas (each cost a debugging cycle — proven the hard way)
 - Runs AS ROOT in `/root` with `--env IS_SANDBOX=1` — the disposable container IS the
