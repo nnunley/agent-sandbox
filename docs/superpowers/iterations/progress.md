@@ -14,7 +14,29 @@ OOM-prone per the architecture note — restart-before-implement is the recorded
   (0068 AC-1 + 0071 AC-1 CI cores; then cluster e2e). Track2 survives if the 0069 spike stalls Track1.
 **Resume:** "continue iterative development" → running-an-iteration picks ITER-0003; scope is recorded,
 so proceed to the 0069 spike + decomposition; dogfood isolatable code tasks to the fleet (dispatch policy).
-**Iterations:** 3/9 done (ITER-0000/0001/0002); ITER-0003 scope locked, impl pending.
+**Iterations:** 3/9 done (ITER-0000/0001/0002); ITER-0003 IN PROGRESS.
+
+**ITER-0003 progress (2026-06-20) — checkpoint; impl continues in a fresh session:**
+- ✅ STORY-0071 AC-1 (working-state projector) — fleet-dogfooded + holdout-graded, committed f2e847e.
+- ✅ STORY-0069 (lean-ctx FULL enablement) — committed e6b847e, smoke-validated on a real worker.
+  DIAGNOSIS (resolved): `gain`'s "Bridge: OFF — proxy not reachable" is NOT the serve daemon (29/29
+  doctor, daemon healthy); it needs lean-ctx's SEPARATE compression **proxy** (`proxy enable` +
+  `proxy start --port 4444`, "compress tool_results before LLM API"). The fleet **OAuth Bearer token
+  forwards transparently through the proxy** to api.anthropic.com (spike-proven). runner.sh now wires
+  init+setup+serve --daemon (AC-2) + proxy enable + setsid-nohup proxy start + ANTHROPIC_BASE_URL,
+  gated on a curl healthcheck, FAIL-OPEN. Smoke: Tokens saved 376, no "Bridge: OFF".
+  (Chain = worker→lean-ctx proxy→Anthropic for the dogfood; worker→lean-ctx→fleet-llm-proxy is ITER-0005.)
+- ✅ STORY-0072 AC-1 (fallback result.json on truncation) — committed e6b847e, smoke-validated.
+- Commits this iteration: f2e847e (0071 AC-1), e6b847e (0069 + 0072 AC-1). Suite 106 -race (Go side).
+
+**ITER-0003 REMAINING (fresh session):**
+- STORY-0070 (runner --fresh/--continue modes; composes 0069+0072 — now both exist).
+- STORY-0068 AC-1 (grader + grade-JSON {passed,clusterA,...}; CI vs synthetic fixture) + AC-2 (13→0
+  e2e using the captured fixture at modules/incus-dispatcher/testdata/journey0003/ + pin let-go ref).
+- STORY-0071 AC-2 (live heartbeat integration), STORY-0072 AC-2 evidence (grader-is-truth).
+- Evidence/corpus: SCENARIO-0061/0062/0063 + JOURNEY-0003 commands; wrap-up; then auditing-progress.
+**Resume:** "continue iterative development" → ITER-0003 scope is recorded in the roadmap; pick up at
+STORY-0070. Reusable lean-ctx spike scripts in /tmp/leanctx-*.sh + /tmp/iter0003-*.sh.
 
 **ITER-0002 — fleet-dogfooded (TDD + hidden holdout oracle on clean checkouts):**
 - T1 STORY-0049 AC-1 — queue.ParseDirective strict schema (reject access_cmd/root/unknown) — pass
