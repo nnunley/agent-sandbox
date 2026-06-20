@@ -3,7 +3,7 @@
 **Summary:** Provisioning & template security
 **Stories:** STORY-0048, STORY-0049, STORY-0050, STORY-0051, STORY-0052, STORY-0053
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 1/6 done
+**Status:** 4/6 done
 ## STORY-0048
 
 **Epic:** EPIC-006 — Provisioning & template security
@@ -21,7 +21,10 @@
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:127-128, 342-346`
 
-**Status:** pending
+**Status:** done:ITER-0002 — AC-1/2/3 satisfied: SanitizeWorkerEnv strips raw provider
+credentials (fail-closed by name + pattern) from worker env; broker proxy is the sole
+credential holder. Evidence: SCENARIO-0020 (container/proxy seam). microVM host-socket
+isolation deferred to ITER-0005.
 
 ## STORY-0049
 
@@ -42,7 +45,13 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:99-116`
 
-**Status:** pending
+**Status:** done:ITER-0002 — AC-1 (strict directive schema, queue.ParseDirective rejecting
+access_cmd/root/unknown fields; unit evidence SCENARIO-0026), AC-2 (allowlist reject) +
+AC-3 (origin reject) at the daemon, evidence SCENARIO-0025. **DEFERRED (PAR scope review):
+AC-4 (worker-authored child-directive inheritance — no child-directive emit machinery yet)
+→ ITER-0008; AC-5 (immutable root + tmpfs scratch — NixOS image config) → ITER-0005 (folds
+into STORY-0075 golden image).** Note: ParseDirective is the JSON ingestion boundary; its
+live wiring rides the laneq substrate (ITER-0006).
 
 ## STORY-0050
 
@@ -117,4 +126,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:396-397`
 
-**Status:** pending
+**Status:** done:ITER-0002 — AC-1 (worker-origin privileged proposal rejected; denial reason
+'worker-origin not allowed for privileged templates' + directive ID recorded to the D6
+decision log) + AC-2 (allowlist evaluation deterministic + race-free; immutable map).
+Evidence: SCENARIO-0074 + concurrency test under -race.

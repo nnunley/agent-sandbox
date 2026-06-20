@@ -210,7 +210,9 @@
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:73-80, 186-201, 202-223`
 
-**Status:** pending
+**Status:** pending — **deferred from ITER-0002 → ITER-0008 (PAR scope review):** Worker-object +
+dispatch routing is greenfield with no owning scenarios; worker_kind "microvm" needs ITER-0005,
+and dispatch decisions are made by the Tier-2 coordinator (ITER-0008).
 
 ## STORY-0012
 
@@ -309,7 +311,9 @@
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:282-286, 202-223`
 
-**Status:** pending
+**Status:** pending — **deferred from ITER-0002 → ITER-0008 (PAR scope review):** greenfield
+versioned-policy object with no owning scenarios; delegation_rules/mutation_allowed gain meaning
+only with recursive delegation (ITER-0008). Avoids premature abstraction.
 
 ## STORY-0017
 

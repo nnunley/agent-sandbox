@@ -162,3 +162,42 @@ refactorable for ITER-0002). Two evidence-quality gaps found + resolved inline:
   TestRunOnce_LadderClimbsThenEscalates to assert the full chain (8 transitions, 3 queued, ending
   blocked), pinning setStatus() on the requeue + escalate paths.
 ITER-0001 CONFIRMED DONE.
+
+## ITER-0002 — D1 security perimeter + credential isolation (DONE — closed 2026-06-20)
+
+**Completed:** 2026-06-20
+
+**Stories delivered:** STORY-0049 (D1 directives — AC-1/2/3 done; AC-4 child-inheritance→ITER-0008,
+AC-5 immutable-root→ITER-0005), STORY-0053 (origin-restricted allowlist — AC-1/2 done),
+STORY-0048 (secret broker — AC-1/2/3 done). Deferred whole by PAR scope review: STORY-0016
+(versioned policy obj) + STORY-0011 (worker dispatch) → ITER-0008.
+
+**Tasks executed:** Built BY THE FLEET via fleet-dogfood (TDD + hidden holdout oracle graded on a
+clean checkout the worker never saw):
+- T1 STORY-0049 AC-1 — `queue.ParseDirective` strict JSON decode (DisallowUnknownFields +
+  trailing-data guard) rejecting access_cmd/root/unknown fields. (parse.go + parse_test.go)
+- T2 STORY-0053 AC-1/2 — `Decision.Reason`; daemon records the denial reason on D1 reject; policy
+  denial message 'worker-origin not allowed for privileged templates'; deterministic-concurrency
+  policy test. (daemon.go/decisionlog.go/policy.go/policy_test.go)
+- T5 STORY-0048 AC-1 — `SanitizeWorkerEnv` strips raw provider credentials from worker env, wired
+  into main.go; **hardened fail-closed** (review follow-up) to also strip credential-pattern names
+  (_API_KEY/_KEY/_TOKEN/_SECRET/PASSWORD) so an unlisted provider key cannot leak. (creds.go)
+Evidence tasks (orchestrator-authored): scenario_d1_test.go (SCENARIO-0025/0074), llm-proxy
+scenario0020_test.go (broker round-trip). Harness fix: fleet-dogfood.sh waits for the nix-daemon
+socket before `nix develop` (fixed concurrent golden-clone "Connection refused").
+
+**Scenarios:** SCENARIO-0026 (unit, ParseDirective) automated; SCENARIO-0025 + SCENARIO-0074
+(daemon-integration: D1 reject + audited worker-origin denial) automated; SCENARIO-0020 (secret
+broker) automated at the container/proxy integration seam — rescoped from its Firecracker-microVM
+precondition, which (host credential-socket isolation) defers to ITER-0005. JOURNEY-0001 sentinel
+stayed GREEN. incus-dispatcher 86 + llm-proxy 16 tests green under `go test -race`; vet clean.
+
+**Summary:** Closed the D1/D2 security perimeter on the walking skeleton: directives are strictly
+schema-checked at the JSON ingestion boundary (ready for the laneq substrate, ITER-0006), worker-
+origin privileged-template proposals are denied with an audited reason in the D6 decision log,
+allowlist evaluation is proven deterministic/race-free, and workers can never carry raw provider
+credentials (fail-closed env guard) — they reach providers only through the broker proxy. Ran on
+the fleet itself: 3 code tasks dogfooded with independent holdout grading; lease contention on
+`main` was sidestepped with an isolated `iter-0002` worktree per user direction. Two PAR scope
+rounds (REVISE→APPROVE) split heterogeneous/greenfield work to ITER-0005/0008; a PAR impl review
+drove the ParseDirective-boundary documentation and the fail-closed credential hardening.

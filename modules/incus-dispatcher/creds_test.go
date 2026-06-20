@@ -98,3 +98,66 @@ func TestSanitizeWorkerEnv_allProviderKeys(t *testing.T) {
 		t.Errorf("clean should have exactly 1 entry, got %d: %v", len(clean), clean)
 	}
 }
+
+func TestSanitizeWorkerEnv_patternNet(t *testing.T) {
+	// Vars not in the explicit list but matching credential-like patterns must be stripped.
+	input := map[string]string{
+		"GEMINI_API_KEY": "gemini-secret", // _API_KEY suffix, not in explicit list
+		"SOME_TOKEN":     "tok123",         // _TOKEN suffix
+		"DB_PASSWORD":    "hunter2",        // contains PASSWORD
+		"X_SECRET":       "shh",            // _SECRET suffix
+		"DEBUG":          "1",
+		"PATH":           "/usr/bin",
+		"HOME":           "/root",
+		"NId":            "nope",
+	}
+	clean, stripped := SanitizeWorkerEnv(input)
+
+	for _, cred := range []string{"GEMINI_API_KEY", "SOME_TOKEN", "DB_PASSWORD", "X_SECRET"} {
+		if _, ok := clean[cred]; ok {
+			t.Errorf("%s must be stripped but survived in clean", cred)
+		}
+	}
+	benign := map[string]string{"DEBUG": "1", "PATH": "/usr/bin", "HOME": "/root", "NId": "nope"}
+	for k, want := range benign {
+		if got, ok := clean[k]; !ok || got != want {
+			t.Errorf("benign var %s must survive with value %q, got ok=%v v=%q", k, want, ok, got)
+		}
+	}
+	if len(stripped) != 4 {
+		t.Fatalf("expected 4 stripped, got %d: %v", len(stripped), stripped)
+	}
+	// sorted: DB_PASSWORD < GEMINI_API_KEY < SOME_TOKEN < X_SECRET
+	expected := []string{"DB_PASSWORD", "GEMINI_API_KEY", "SOME_TOKEN", "X_SECRET"}
+	for i, want := range expected {
+		if stripped[i] != want {
+			t.Errorf("stripped[%d]: want %q, got %q", i, want, stripped[i])
+		}
+	}
+}
+
+func TestLooksLikeCredential(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"GEMINI_API_KEY", true},
+		{"SOME_TOKEN", true},
+		{"DB_PASSWORD", true},
+		{"X_SECRET", true},
+		{"MY_KEY", true},
+		{"gemini_api_key", true}, // case-insensitive
+		{"some_token", true},
+		{"DEBUG", false},
+		{"PATH", false},
+		{"HOME", false},
+		{"NId", false},
+		{"MONKEY", false}, // ends with KEY but not _KEY
+	}
+	for _, tc := range cases {
+		got := looksLikeCredential(tc.name)
+		if got != tc.want {
+			t.Errorf("looksLikeCredential(%q) = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

@@ -962,8 +962,9 @@
 - All requests are audited at proxy level
 - Credential compromise is bounded to proxy host
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (ITER-0002, rescoped to container/proxy integration seam;
+microVM host-socket isolation → ITER-0005)
+**Execution command:** `cd modules/llm-proxy && go test -race -run TestScenario0020`
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:127-128, 342-346`
@@ -1133,8 +1134,8 @@
 - Directive rejected, no container launched
 - W1 remains unprivileged
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (ITER-0002)
+**Execution command:** `cd modules/incus-dispatcher && go test -race -run TestScenario0025`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:99-110`
@@ -1156,8 +1157,8 @@
 - Validation succeeds if and only if these fields present
 - Directive schema rejects payloads containing access_cmd or root
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (ITER-0002; unit seam — queue.ParseDirective)
+**Execution command:** `cd modules/incus-dispatcher && go test -run TestParseDirective ./queue`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:99-105`
@@ -2593,8 +2594,8 @@
 - rejection reason includes 'worker-origin not allowed for privileged templates'
 - audit log contains denial event
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (ITER-0002)
+**Execution command:** `cd modules/incus-dispatcher && go test -race -run TestScenario0074`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:396-397`

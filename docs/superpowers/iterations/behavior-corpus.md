@@ -30,13 +30,13 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0017 | Long-running scheduler maintains priority queue | process-level | iteration | TBD | STORY-0037, STORY-0013, STORY-0012 |
 | SCENARIO-0018 | Capture and learn from repeated stumble pattern | process-level | iteration | TBD | STORY-0031, STORY-0032 |
 | SCENARIO-0019 | Recursive delegation via message emission | e2e | iteration | TBD | STORY-0012, STORY-0014 |
-| SCENARIO-0020 | Worker accesses provider through broker proxy without exposing credent | integration | iteration | TBD | STORY-0048 |
+| SCENARIO-0020 | Worker accesses provider through broker proxy without exposing credent | integration | iteration | `cd modules/llm-proxy && go test -race -run TestScenario0020` | STORY-0048 |
 | SCENARIO-0021 | Operator uses TUI to create, inspect, and manage threads | app-level | iteration | TBD | STORY-0028 |
 | SCENARIO-0022 | Budget enforcement prevents runaway spending | integration | iteration | TBD | STORY-0036, STORY-0032 |
 | SCENARIO-0023 | One-shot worker consumes task, exits | integration | iteration | TBD | STORY-0013 |
 | SCENARIO-0024 | Coordinator rejects superseding work without explicit declaration | integration | iteration | TBD | STORY-0030 |
-| SCENARIO-0025 | D1: Worker directive with root flag is rejected | integration | iteration | TBD | STORY-0049 |
-| SCENARIO-0026 | D1: Directive body contains no access_cmd or root flag | unit | iteration | TBD | STORY-0049 |
+| SCENARIO-0025 | D1: Worker directive with root flag is rejected | integration | iteration | `cd modules/incus-dispatcher && go test -race -run TestScenario0025` | STORY-0049 |
+| SCENARIO-0026 | D1: Directive body contains no access_cmd or root flag | unit | iteration | `cd modules/incus-dispatcher && go test -run TestParseDirective ./queue` | STORY-0049 |
 | SCENARIO-0027 | D1: Child directive from worker inherits immutable provisioning, not p | integration | iteration | TBD | STORY-0049 |
 | SCENARIO-0028 | D2: Backend interface abstracts container vs. micro-VM delivery | unit | iteration | TBD | STORY-0017 |
 | SCENARIO-0029 | D2: Micro-VM boot-to-ready ≤ 5 s with closure realized | process-level | iteration | TBD | STORY-0017 |
@@ -84,7 +84,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0071 | Daemon lease rule: owned task extends ownership window | unit | iteration | TBD | STORY-0059 |
 | SCENARIO-0072 | Daemon requeue rule: task returns to unowned queue | unit | iteration | TBD | STORY-0059 |
 | SCENARIO-0073 | Daemon park rule: task enters durable hold state | unit | iteration | TBD | STORY-0059 |
-| SCENARIO-0074 | Template allowlist: worker-origin privileged template denied | integration | iteration | TBD | STORY-0053 |
+| SCENARIO-0074 | Template allowlist: worker-origin privileged template denied | integration | iteration | `cd modules/incus-dispatcher && go test -race -run TestScenario0074` | STORY-0053 |
 | SCENARIO-0075 | Graceful container teardown: stop-timeout routes to reaper | process-level | iteration | TBD | STORY-0060 |
 | SCENARIO-0076 | Container backend interface: passes existing contract tests | integration | iteration | TBD | STORY-0020 |
 | SCENARIO-0077 | Context handoff round-trip: validate spike unblocks feature | integration | iteration | TBD | STORY-0034 |

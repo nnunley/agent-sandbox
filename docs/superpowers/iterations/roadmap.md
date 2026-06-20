@@ -165,14 +165,24 @@ SCENARIO-0085 (autonomous climb). (SCENARIO-0087 urgency-resurface moves with AC
 **Look-ahead check:** depends on ITER-0000's outcome hook; decision-log + claim/lease stay behind
 interfaces so the ITER-0006 substrate swap and the ITER-0007 Temporal time-plane graft on without rework.
 
-### ITER-0002 — Provisioning & template security hardening
+### ITER-0002 — D1 security perimeter + credential isolation
 
-**Stories:** STORY-0049, STORY-0053, STORY-0048, STORY-0016, STORY-0011
-**Rationale:** Full D1 intent/template provisioning + origin/authority enforcement,
-secret broker (no raw provider creds to workers), externalized/versioned execution
-policies, policy-driven dispatch. Hardens the skeleton's minimal template check.
-**Status:** pending
-**Impacted scenarios:** privilege-escalation-denial; secret-isolation; policy dispatch
+**Stories:** STORY-0049 (AC-1/2/3), STORY-0053 (AC-1/2), STORY-0048 (AC-1/2/3)
+**Rationale:** D1 intent/template provisioning + origin/authority enforcement with audited
+denial; secret broker (no raw provider creds to workers). Hardens the skeleton's minimal
+template check.
+**Status:** done:ITER-0002 (2026-06-20) — fleet-dogfooded (TDD + hidden holdout oracle on
+clean checkouts): T1 queue.ParseDirective (strict schema, STORY-0049 AC-1), T2 denial-reason
+audit + deterministic allowlist (STORY-0053), T5 SanitizeWorkerEnv fail-closed credential
+guard (STORY-0048 AC-1). Evidence: SCENARIO-0025/0026/0074 + SCENARIO-0020 (broker proof,
+container/proxy seam). incus-dispatcher 86 + llm-proxy 16 tests green under -race; vet clean.
+PAR scope review (2 rounds REVISE→APPROVE) + PAR impl review applied.
+**Scope revisions (PAR):** STORY-0049 AC-5 (immutable root + tmpfs) → ITER-0005; STORY-0049
+AC-4 (worker child-directive inheritance) → ITER-0008; STORY-0016 + STORY-0011 (greenfield
+policy/dispatch objects, no scenarios) → ITER-0008. ParseDirective is the JSON ingestion
+boundary; live wiring rides the laneq substrate (ITER-0006).
+**Impacted scenarios:** SCENARIO-0025 (D1 reject), SCENARIO-0026 (schema), SCENARIO-0074
+(worker-origin denial + audit), SCENARIO-0020 (secret broker).
 **Look-ahead check:** depends on ITER-0000 template validation; independent of substrate.
 
 ### ITER-0003 — Worker reliability & robust result contract
@@ -211,8 +221,13 @@ via agent-skills-nix, provider routing, immutable golden copies, the durable VM
 hosting disposable tiered units, fast/hard isolation tiers selected per template,
 trust-domain VMs, and the second (micro-VM) backend behind the interface. Gated on
 STORY-0025 benchmark choosing the disposable substrate.
+**Split-in (from ITER-0002 PAR):** STORY-0049 AC-5 (launched template is immutable root with
+writable scratch — /workspace, /tmp tmpfs/overlay) lands here as part of the golden image
+(STORY-0075); plus SCENARIO-0020's microVM host credential-socket isolation (the broker proof
+itself shipped in ITER-0002 at the container/proxy seam).
 **Status:** pending
-**Impacted scenarios:** tier-selection; immutable-image; VM-boot-readiness; backend-parity
+**Impacted scenarios:** tier-selection; immutable-image; VM-boot-readiness; backend-parity;
+immutable-root-scratch (STORY-0049 AC-5)
 **Look-ahead check:** gated by STORY-0025 (ITER-0000); reuses ITER-0000 backend interface.
 
 ### ITER-0006 — Queue substrate (POST-PATRICK; substrate-coupled)
@@ -245,7 +260,7 @@ escalation-resurface (SCENARIO-0087)
 
 ### ITER-0008 — Tier-2 coordinator, recursive delegation & operator UX
 
-**Stories:** STORY-0073, STORY-0028, STORY-0012, STORY-0013, STORY-0014, STORY-0026, STORY-0006, STORY-0003, STORY-0009, STORY-0032, STORY-0074, **STORY-0027 AC-3 (operator pause/block/resume from TUI — split in from ITER-0001), STORY-0054 (audit all runs/delegations/mutations + replayability — moved from ITER-0001, folds into STORY-0032's genome/delegation audit)**
+**Stories:** STORY-0073, STORY-0028, STORY-0012, STORY-0013, STORY-0014, STORY-0026, STORY-0006, STORY-0003, STORY-0009, STORY-0032, STORY-0074, **STORY-0027 AC-3 (operator pause/block/resume from TUI — split in from ITER-0001), STORY-0054 (audit all runs/delegations/mutations + replayability — moved from ITER-0001, folds into STORY-0032's genome/delegation audit), STORY-0016 (versioned execution policies — moved from ITER-0002 PAR: delegation_rules/mutation_allowed gain meaning with recursive delegation here), STORY-0011 (policy-driven worker dispatch — moved from ITER-0002 PAR: needs multiple worker_kinds (post-ITER-0005) + Tier-2 dispatch decisions), STORY-0049 AC-4 (worker-authored child-directive inherits non-privileged provisioning — moved from ITER-0002 PAR: needs the recursive child-directive emit path built here)**
 **Rationale:** Bidirectional steering (file-feed now), operator TUI for
 thread/worker management (incl. STORY-0027 AC-3 thread pause/block/resume — it needs the TUI built
 here), the full agent/delegation/mutation audit + replay (STORY-0054, alongside STORY-0032 genome
