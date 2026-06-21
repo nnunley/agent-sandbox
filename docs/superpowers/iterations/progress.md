@@ -1,9 +1,11 @@
 # Progress
 
-**Phase:** ITER-0004 DONE + AUDIT CLEAN (2026-06-21) — State passthrough & continuity. All tasks T0–T8 delivered. PAR audit: Reviewer A CLEAN; Reviewer B found 1 SERIOUS (CreateHandoff allowed an empty session_id) → FIXED inline (fail-closed + regression test). ITER-0004 CONFIRMED DONE.
-**Iterations:** 5/9 done (ITER-0000/0001/0002/0003/0004). ITER-0006 BLOCKED (Patrick sync). Next pending: ITER-0005 (gated on STORY-0025 benchmark spike).
+**Phase:** ITER-0004 DONE + AUDIT CLEAN; **STORY-0025 benchmark spike DONE → ITER-0005 GATE CLEARED** (2026-06-21).
+**Iterations:** 5/9 done (ITER-0000/0001/0002/0003/0004). **Next eligible: ITER-0005** (micro-VM backend / NixOS golden / isolation tiers — gate cleared). ITER-0006 BLOCKED (Patrick sync).
 **Sentinel corpus:** JOURNEY-0001 green; incus-dispatcher + llm-proxy 166 tests green under -race; vet clean; zero TODO(ITER-0004).
-**Last event:** 2026-06-21 — PAR audit complete; CreateHandoff session-id fail-closed fix committed; ITER-0004 confirmed done.
+**STORY-0025 spike result:** nspawn Fast tier **76 ms** mean/97 ms p99 (N=100, nesting-enabled Incus NixOS container, warm /nix) vs Firecracker Hard tier **1861 ms** mean/2134 ms p99 (N=20). nspawn 24.5× faster = substrate-selection signal; microVM boot amortizes to <0.7% of a 5–10 min task. Decision: **two-tier** — nspawn (`security.nesting=true`) for trusted lanes, Firecracker for untrusted. Nesting research: Incus PR #2624 (in host's 6.23) drops sys/proc AppArmor protections when `security.nesting=true` → no privileged needed; default-off nesting is why agent-host failed. Artifacts: `fleet-worker/spikes/` (bench-spinup.sh + results + STORY-0025-benchmark-results.md).
+**Open follow-up (optional):** set `security.nesting=true` on `agent-host` permanently (needs container restart, briefly bounces microVMs) — currently a noted follow-up, not done.
+**Last event:** 2026-06-21 — STORY-0025 benchmark spike complete (nspawn measured); ITER-0005 gate cleared.
 
 **ITER-0004 delivered (commits):**
 - T0 handoff-bundle schema doc (d67823a); T1+T2 Thread/Run/StumbleSignal data model (04b8687, 8663fe4);

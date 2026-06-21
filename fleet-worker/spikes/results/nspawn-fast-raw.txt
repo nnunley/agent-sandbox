@@ -1,0 +1,115 @@
+# nspawn Fast-Tier Spin-Up Benchmark - Raw Data
+# Date: 2026-06-21
+# Environment: Incus NixOS 25.11 container with nesting=true, privileged=true
+# Container: ndn-desktop:nspawn-bench-0025
+# Number of runs: 100
+#
+# Configuration:
+# - Ephemeral mode: -D /var/lib/machines/tmpl --ephemeral
+# - Bind mount: --bind-ro=/nix:/nix (warm /nix store, 31G on host)
+# - Command: /nix/store/.../bash -c 'echo READY'
+# - Readiness: bash command exits successfully in container namespace
+# - Timer precision: nanosecond (date +%s%N), converted to milliseconds
+#
+# Per-run latencies (milliseconds):
+
+67
+69
+78
+86
+94
+79
+85
+69
+83
+84
+95
+69
+97
+86
+75
+84
+68
+69
+65
+78
+78
+69
+70
+88
+71
+79
+97
+71
+85
+76
+82
+70
+66
+81
+84
+82
+87
+82
+80
+74
+78
+77
+80
+76
+68
+85
+88
+84
+82
+87
+88
+67
+87
+76
+67
+73
+71
+72
+77
+76
+76
+81
+79
+69
+72
+65
+72
+71
+69
+63
+78
+76
+75
+76
+75
+74
+61
+71
+79
+72
+68
+82
+71
+74
+71
+80
+71
+76
+95
+70
+80
+84
+67
+70
+71
+67
+69
+74
+73
+68

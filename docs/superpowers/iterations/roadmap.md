@@ -121,7 +121,8 @@ The Task 0 E2E harness is JOURNEY-0001 evidence, not a separate backlog story.)
 **Status:** done (both exit criteria met: (a) JOURNEY-0001 automated harness green;
 (b) real dogfood — graded `queue.Peek()` 10/10. Off-critical-path follow-ups deferred:
 real-Runner→fleet-worker wiring → ITER-0003 (done); STORY-0034 spike → **PASS 2026-06-21** (cleared
-the ITER-0004 gate; SCENARIO-0077); STORY-0025 benchmark spike → still pending (gates ITER-0005).)
+the ITER-0004 gate; SCENARIO-0077); STORY-0025 benchmark spike → **DONE 2026-06-21** (nspawn 76 ms vs
+microVM 1861 ms; SCENARIO-0008/0009; cleared the ITER-0005 gate).)
 
 ## Iteration list
 
@@ -344,10 +345,15 @@ STORY-0025 benchmark choosing the disposable substrate.
 writable scratch — /workspace, /tmp tmpfs/overlay) lands here as part of the golden image
 (STORY-0075); plus SCENARIO-0020's microVM host credential-socket isolation (the broker proof
 itself shipped in ITER-0002 at the container/proxy seam).
-**Status:** pending
+**Status:** pending — **GATE CLEARED 2026-06-21** (STORY-0025 benchmark done): the substrate decision
+is evidence-backed. nspawn Fast tier **76 ms** mean/97 ms p99 (N=100) vs Firecracker Hard tier **1861 ms**
+mean/2134 ms p99 (N=20) — nspawn is 24.5× faster and is the substrate-selection signal; microVM boot is a
+one-time amortized cost (<0.7% of a 5–10 min task). Decision: **two-tier model** — `nspawn --ephemeral`
+(shared kernel, `security.nesting=true`) for trusted lanes, per-task Firecracker microVM for sensitive/
+untrusted lanes. ITER-0005 is now the next eligible iteration (ITER-0006 stays blocked on the Patrick sync).
 **Impacted scenarios:** tier-selection; immutable-image; VM-boot-readiness; backend-parity;
-immutable-root-scratch (STORY-0049 AC-5)
-**Look-ahead check:** gated by STORY-0025 (ITER-0000); reuses ITER-0000 backend interface.
+immutable-root-scratch (STORY-0049 AC-5); SCENARIO-0008/0009 (benchmark, done)
+**Look-ahead check:** STORY-0025 gate (ITER-0000) **CLEARED**; reuses ITER-0000 backend interface.
 
 ### ITER-0006 — Queue substrate (POST-PATRICK; substrate-coupled)
 

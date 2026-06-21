@@ -552,8 +552,10 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - Variance is low (warm store is reliable)
 - Result informs decision: Fast tier is viable for trusted lanes
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** measured (spike, cluster/manual) — nspawn `--ephemeral` boot-to-marker in a
+nesting-enabled Incus NixOS container, warm /nix bind-ro. N=100: mean 76 ms, p50 76, p99 97, stddev
+7.8 ms — sub-second confirmed, low variance. Results: `fleet-worker/spikes/STORY-0025-benchmark-results.md`.
+**Execution command:** `cd fleet-worker/spikes && ./bench-spinup.sh nspawn 100` (needs an Incus NixOS container with `security.nesting=true` on the ndn-desktop host)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:91-94`
@@ -585,8 +587,11 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - Boot cost is amortized over task lifetime (is not the limiting factor for Hard tier)
 - nspawn spin-up time (not VM boot) is the signal for substrate selection
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** measured (spike, cluster/manual) — Firecracker microVM stop→start→ready cycles
+on agent-host. N=20: mean 1861 ms, p50 1811, p99 2134, stddev 139 ms. Amortization <0.7% for a 5–10 min
+task — boot is NOT the limiting factor; nspawn (76 ms) is the substrate-selection signal. Results:
+`fleet-worker/spikes/STORY-0025-benchmark-results.md`.
+**Execution command:** `cd fleet-worker/spikes && ./bench-spinup.sh microvm 20` (on the ndn-desktop agent-host)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:91-94`

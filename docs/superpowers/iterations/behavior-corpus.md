@@ -18,8 +18,8 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0005 | Trusted lane task uses Fast (namespace) isolation | integration | iteration | TBD | STORY-0021 |
 | SCENARIO-0006 | Sensitive lane task uses Hard (hardware) isolation | integration | iteration | TBD | STORY-0022 |
 | SCENARIO-0007 | Multi-tenant execution isolated by VM per trust domain | e2e | iteration | TBD | STORY-0024 |
-| SCENARIO-0008 | Benchmark shows nspawn spin-up time with boot-readiness probe | process-level | iteration | TBD | STORY-0025 |
-| SCENARIO-0009 | Benchmark shows per-task microVM spin-up time is not the limiting fact | process-level | iteration | TBD | STORY-0025 |
+| SCENARIO-0008 | Benchmark shows nspawn spin-up time with boot-readiness probe | process-level | spike | `cd fleet-worker/spikes && ./bench-spinup.sh nspawn 100` | STORY-0025 |
+| SCENARIO-0009 | Benchmark shows per-task microVM spin-up time is not the limiting fact | process-level | spike | `cd fleet-worker/spikes && ./bench-spinup.sh microvm 20` | STORY-0025 |
 | SCENARIO-0010 | Mac disconnected → fleet still claims, runs, grades, escalates; succes | e2e | iteration | TBD | STORY-0026 |
 | SCENARIO-0011 | Static endpoint injection: worker receives fixed llm-proxy and queue a | integration | iteration | TBD | STORY-0009 |
 | SCENARIO-0012 | [BLOCKED-ON-SUBSTRATE-DECISION] Laneq-as-cluster-service: MCP clients  | e2e | iteration | TBD | STORY-0010 |

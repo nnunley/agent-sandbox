@@ -3,7 +3,7 @@
 **Summary:** Isolation tiers & micro-VM
 **Stories:** STORY-0021, STORY-0022, STORY-0023, STORY-0024, STORY-0025
 **Primary sources:** `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/5 done
+**Status:** 1/5 done (STORY-0025 benchmark spike done:2026-06-21; STORY-0021/0022/0023/0024 → ITER-0005)
 
 ## STORY-0021
 
@@ -96,4 +96,4 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:91-94`
 
-**Status:** pending
+**Status:** done (spike, 2026-06-21) — AC-1/AC-2/AC-3 all MEASURED. nspawn Fast tier 76 ms mean / 97 ms p99 (N=100, nesting-enabled Incus NixOS container, warm /nix); Firecracker Hard tier 1861 ms mean / 2134 ms p99 (N=20), amortizing to <0.7% of a 5–10 min task. nspawn is **24.5× faster** and is the substrate-selection signal (AC-3); VM boot is a one-time amortized cost. Evidence SCENARIO-0008/0009; harness + raw data + report in `fleet-worker/spikes/`. **Clears the ITER-0005 gate.**
