@@ -285,9 +285,19 @@ Scope revisions applied (round 2 confirming review → APPROVE):**
 - **Artifact debt (RESOLVED 2026-06-21):** added explicit citation of Thread-object def lines (req.md:160-161) to
   STORY-0030 AC-1 sources in EPIC-004.md. Requirement-card sync (round-2 PAR) also applied: STORY-0031 AC-3/AC-4
   deferral note, STORY-0029 AC-4 split note, STORY-0018 AC-3 schema-doc deliverable + AC-4/AC-5 rescope note.
-**Status:** scope-APPROVED (2 PAR rounds: R1 REVISE→substantive revisions; R2 REVISE→artifact-sync + 2
-clarifications, all applied; both R2 reviewers VERIFIED the core design — additive Run, abstract lease, schema-lock,
-gate cleared). Decomposed into tasks (below) — ready to implement ON THE FLEET (cluster-graded per user pref).
+**Status:** done:ITER-0004 (2026-06-21) — all tasks T0–T8 delivered. T0 handoff-bundle schema doc; T1 Thread
+struct + daemon-local thread store; T2 Run/StumbleSignal + 9-value enum; T3 workspace-lease registry; T4
+ReconstructResumeAudit; T5 SCENARIO-0015 harness (resume-continues / supersede-with-reason); T6 LeanCtxProvider
+(default ContextProvider adapter — diary/knowledge/handoff via real lean-ctx, evidence SCENARIO-0030 incl. a
+genuine isolated round-trip); T7 NoopProvider anti-reward-hack + daemon work-queue guard (AC-4/AC-5,
+SCENARIO-0031 CI); T8 fresh handoff bundle on each autonomous requeue (STORY-0058 AC-25, SCENARIO-0054). Stories
+done: STORY-0029/0030/0033/0018; partial done: STORY-0031 (AC-1/2; AC-3/4 → ITER-0008), STORY-0058 (AC-25;
+AC-24 → ITER-0007). Suite 165 green under -race, vet clean, JOURNEY-0001 sentinel green, zero TODO(ITER-0004).
+**Scope was APPROVED** via 2 PAR rounds (R1 REVISE→revisions; R2 REVISE→artifact-sync; both R2 reviewers
+VERIFIED the core design — additive Run, abstract lease, schema-lock, gate cleared). **Decision (2026-06-21):
+T6/T8 built local-TDD against the real lean-ctx binary + fake-backend daemon seam** — the cross-one-shot session
+round-trip itself was already cluster-proven by the STORY-0034 spike (SCENARIO-0077), so no fresh cluster run was
+required for the adapter logic.
 
 **Task decomposition (TDD; interleaved code + evidence; fleet-dogfooded — local only for quick sentinel checks):**
 - **T0** (doc): write `docs/plans/2026-06-21-handoff-bundle-schema.md` — versioned handoff-bundle schema (STORY-0018 AC-3 deliverable; unblocks ITER-0006).

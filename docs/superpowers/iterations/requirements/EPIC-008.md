@@ -83,7 +83,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:322-324`
 
-**Status:** partial:ITER-0000+0001 (AC-22 done ITER-0000, AC-23 synchronous ladder done ITER-0001); AC-24 Temporal→ITER-0007, AC-25 handoff→ITER-0004
+**Status:** partial:ITER-0000+0001+0004 (AC-22 done ITER-0000, AC-23 synchronous ladder done ITER-0001, **AC-25 done:ITER-0004** — daemon emits a fresh handoff bundle on each autonomous requeue, evidence SCENARIO-0054 daemon seam); AC-24 Temporal→ITER-0007
 
 ## STORY-0059
 

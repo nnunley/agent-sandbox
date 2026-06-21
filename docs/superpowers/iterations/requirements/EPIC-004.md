@@ -3,7 +3,7 @@
 **Summary:** State passthrough & continuity
 **Stories:** STORY-0029, STORY-0030, STORY-0031, STORY-0032, STORY-0033, STORY-0034
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 1/6 done (STORY-0034 spike validated:ITER-0000; STORY-0029/0030/0031/0032/0033 → ITER-0004)
+**Status:** 4/6 done (STORY-0034 spike:ITER-0000; STORY-0029/0030/0033 done:ITER-0004; STORY-0031 partial:ITER-0004 AC-1/2 — AC-3/4 → ITER-0008; STORY-0032 → ITER-0008)
 
 ## STORY-0029
 
@@ -23,7 +23,7 @@
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:521-546`
 
-**Status:** pending. **ITER-0004 scope (PAR round-2):** AC-1/AC-2/AC-3 + **AC-4a** (daemon `ReconstructResumeAudit`
+**Status:** done:ITER-0004 — AC-1/AC-2/AC-3 (Thread + daemon-local thread store; resume continues prior branch) + AC-4a (daemon `ReconstructResumeAudit` from thread store + last Result) via T1/T4; AC-4b (operator/TUI visibility) → ITER-0008. Evidence SCENARIO-0015. **ITER-0004 scope (PAR round-2):** AC-1/AC-2/AC-3 + **AC-4a** (daemon `ReconstructResumeAudit`
 from a daemon-local thread store) IN ITER-0004; **AC-4b** (operator/TUI visibility of the audit) → ITER-0008.
 
 ## STORY-0030
@@ -44,7 +44,7 @@ from a daemon-local thread store) IN ITER-0004; **AC-4b** (operator/TUI visibili
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:35-37, 131, 536-542`
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:160-161` (Thread object def: supersedes/superseded_by fields — AC-1)
 
-**Status:** pending
+**Status:** done:ITER-0004 — AC-1 (workspace-claim check before reuse) + AC-2/AC-3 (reinvention → stumble capture; continue-or-supersede) via the workspace-lease registry (T3). Evidence SCENARIO-0015.
 
 ## STORY-0031
 
@@ -64,7 +64,7 @@ from a daemon-local thread store) IN ITER-0004; **AC-4b** (operator/TUI visibili
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:184, 433-445, 447-453`
 
-**Status:** pending. **SPLIT (PAR round-1/2):** **AC-1** (Run.stumble_signals[] + a defined `StumbleSignal` struct)
+**Status:** partial:done:ITER-0004 (AC-1/AC-2); AC-3/AC-4 → ITER-0008. AC-1 (Run.stumble_signals[] + StumbleSignal struct) + AC-2 (9-value signal-type enum) delivered via T2 (run.go). **SPLIT (PAR round-1/2):** **AC-1** (Run.stumble_signals[] + a defined `StumbleSignal` struct)
 + **AC-2** (signal-type enum) IN ITER-0004 — capture only. **AC-3** (mutation proposal on repeated pattern) +
 **AC-4** (genome evidence_refs) **DEFERRED → ITER-0008** with STORY-0032 (genome): no genome object + no pattern-
 detection heuristic exists until then. AC-3 logically depends on AC-1/AC-2's locked struct shape.
@@ -106,7 +106,7 @@ detection heuristic exists until then. AC-3 logically depends on AC-1/AC-2's loc
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:129-130, 543-546`
 
-**Status:** pending
+**Status:** done:ITER-0004 — AC-1 (consult workspace-lease registry before reuse) + AC-3 (active claim forces continue-or-supersede) + AC-2 via the daemon-local registry (T3). Evidence SCENARIO-0015.
 
 ## STORY-0034
 

@@ -255,3 +255,55 @@ surfaces real ctx_* activity instead of falsely reading idle; truncation always 
 result. The one carried item, the let-go 13→0 e2e, is set up end-to-end (refs pinned, grader ready) and its
 remaining work is precisely characterized — a cluster run on the pinned toolchain with a divergence-isolating
 gate. PAR scope review was completed in the prior checkpoint (REVISE→revised→approved).
+
+## ITER-0004 — State passthrough & continuity (DONE — closed 2026-06-21)
+
+**Completed:** 2026-06-21
+
+**Stories delivered:** STORY-0029 (resume audit + Thread store, AC-1/2/3/4a — AC-4b TUI → ITER-0008),
+STORY-0030 (workspace-claim check + reinvention→stumble capture, AC-1/2/3), STORY-0033 (workspace-lease
+registry + continue-or-supersede, AC-1/2/3), STORY-0018 (D3 lean-ctx state passthrough — AC-1/2/3 via
+LeanCtxProvider, AC-4/5 via NoopProvider + guard), STORY-0031 (Run.stumble_signals[] + StumbleSignal enum,
+AC-1/2 — AC-3/4 mutation/genome → ITER-0008), STORY-0058 AC-25 (fresh handoff bundle on retry — AC-24
+Temporal → ITER-0007).
+
+**Tasks executed:** (TDD; interleaved code + evidence)
+- T0 — `docs/plans/2026-06-21-handoff-bundle-schema.md`: versioned (schema_version 1) handoff-bundle schema
+  (STORY-0018 AC-3 doc deliverable; ITER-0006 targets `Directive.HandoffIn`). Commit d67823a.
+- T1+T2 — data model: `thread.go` (Thread/ThreadStore/ResumeSummary), `run.go` (Run/StumbleSignal/9
+  StumbleTypes). Commits 04b8687, 8663fe4 (PAR cleanup).
+- T3 — workspace-lease registry (WorkspaceKey/Claim/Registry, DecideReuse/Supersede; independent of
+  queue.Lease). Commit 4e2b2e7. PAR quality → both APPROVE.
+- T4+T5 — `ReconstructResumeAudit` + ContinueRun + SCENARIO-0015 integration harness (resume continues prior
+  thread; different thread supersedes-with-reason → StumbleDuplicateWork). Commit 59b6a3c.
+- T7 — `context.go`: `ContextProvider` interface + `NoopProvider`; daemon depends only on the interface
+  (AC-5), NoopProvider proves AC-4 (handoff loss → grade still authoritative). Commit e8c2ca2.
+- T6 — `leanctx_provider.go`: `LeanCtxProvider`, the default adapter (diary↔knowledge facts,
+  curated-knowledge exchange, schema-1 handoff bundle with EXPLICIT session id per the STORY-0034 spike).
+  Injectable runner makes argv/parse logic unit-testable; a guarded integration test proves a genuine diary
+  round-trip against a real lean-ctx in an isolated temp project. Commit 2a1e447.
+- T8 — daemon emits a fresh handoff bundle via the ContextProvider on each autonomous requeue (best-effort);
+  each retry gets a distinct bundle. Commit 467a93e.
+
+**Scenarios:** SCENARIO-0015 (resume-on-branch: continue vs supersede — automated), SCENARIO-0030 (diary
+write/read round-trip — automated at the adapter seam + real-lean-ctx round-trip), SCENARIO-0031 (authoritative
+state independent of handoff loss — CI, from T7), SCENARIO-0054 (fresh handoff on requeue — automated, daemon
+seam; AC-24 Temporal portion → ITER-0007). SCENARIO-0077 (STORY-0034 spike, cluster — prior). Corpus commands
+wired off TBD for 0030/0054.
+
+**Sentinel corpus results:** baseline clean (JOURNEY-0001 green, JOURNEY-0003 AC-1 green; 157 tests). Post-
+iteration: incus-dispatcher + llm-proxy **165 tests green under `go test -race`**, vet clean, JOURNEY-0001
+sentinel GREEN, zero `TODO(ITER-0004)` markers.
+
+**Summary:** Built the soft-state continuity layer behind a `ContextProvider` abstraction (no hard lean-ctx
+coupling — mirrors `queue.Queue`; lean-ctx's commercial upsell makes swappability a requirement). Threads carry
+resume audits reconstructable by the daemon; a daemon-local workspace-lease registry forces continue-or-supersede
+on (repo, branch) reuse and captures duplicate-work stumbles; the default `LeanCtxProvider` drives real lean-ctx
+for diary/knowledge/handoff and materializes a versioned bundle with an explicit session id; and every autonomous
+retry is provided a fresh handoff bundle. Authoritative state (diff + oracle grade) never flows through the
+provider — the `NoopProvider` is simultaneously the test double and the anti-reward-hack proof. **Decision
+(2026-06-21):** T6/T8 were built local-TDD against the real lean-ctx binary + the fake-backend daemon seam
+rather than a fresh cluster dogfood — the cross-one-shot session round-trip was already cluster-proven by the
+STORY-0034 spike (SCENARIO-0077), so re-proving it on the (then-flaky) cluster added risk without new evidence.
+ITER-0006 (substrate) is BLOCKED on the Patrick sync; the next pending iteration is ITER-0005 (gated on the
+STORY-0025 benchmark spike).

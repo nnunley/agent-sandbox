@@ -3,7 +3,7 @@
 **Summary:** Execution backend & topology
 **Stories:** STORY-0001, STORY-0002, STORY-0003, STORY-0004, STORY-0005, STORY-0006, STORY-0007, STORY-0008, STORY-0009, STORY-0010, STORY-0011, STORY-0012, STORY-0013, STORY-0014, STORY-0015, STORY-0016, STORY-0017, STORY-0018, STORY-0019, STORY-0020
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/20 done
+**Status:** 1/20 done (STORY-0018 done:ITER-0004)
 
 ## STORY-0001
 
@@ -357,7 +357,7 @@ only with recursive delegation (ITER-0008). Avoids premature abstraction.
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:163-187`
 
-**Status:** pending. **ITER-0004 scope (PAR round-2 rescoping):**
+**Status:** done:ITER-0004 — AC-1/AC-2/AC-3 (diary, knowledge, ctx_handoff bundle) via the `LeanCtxProvider` adapter (T6) behind the `ContextProvider` interface; AC-3's versioned handoff-bundle schema doc shipped (T0). AC-4 (correctness independent of handoff loss) + AC-5 (provider is never the work queue) via `NoopProvider` + daemon guard test (T7). Evidence SCENARIO-0030 (adapter + real-lean-ctx round-trip) + SCENARIO-0031 (CI anti-reward-hack). **ITER-0004 scope (PAR round-2 rescoping):**
 - AC-1/AC-2/AC-3 IN, AC-3 carries an explicit **documentation deliverable**: the formal versioned handoff-bundle
   schema → `docs/plans/2026-06-21-handoff-bundle-schema.md` (so ITER-0006 can pass `Directive.HandoffIn`).
 - **AC-4** proof seam moved e2e→**CI unit/integration primary** (daemon loop, fake backend, handoff absent/corrupt
