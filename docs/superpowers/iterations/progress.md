@@ -1,6 +1,39 @@
 # Progress
 
-**Phase:** ITER-0003 DONE + AUDIT CLEAN (2026-06-21) — Worker reliability & robust result contract.
+**Phase:** ITER-0004 SCOPE REVIEW (2026-06-21) — State passthrough & continuity. Gate (STORY-0034 spike) CLEARED.
+Sentinel baseline this session: JOURNEY-0001 green, JOURNEY-0003 AC-1 green; incus-dispatcher 123 tests -race-clean, vet clean.
+Citation check OK (78 cited stories exist). Scope: STORY-0029/0030/0033/0018/0031 + STORY-0058 AC-25.
+**PAR scope review round 1 → both REVISE** (high agreement). Revisions applied to roadmap: STORY-0031 AC-3/AC-4
+→ ITER-0008 (keep AC-1/2 capture); STORY-0018 AC-4→anti-reward-hack test, AC-5→discipline proof, AC-3→emit
+bundle schema; STORY-0029 AC-4 split (4a here / 4b TUI→ITER-0008); STORY-0033 lease registry daemon-local;
+schema-lock-upfront (Thread+deadline / Run additive / StumbleSignal / handoff-bundle); SCENARIO-0078 new (AC-25).
+**PAR scope review COMPLETE (2 rounds):** R1 both REVISE (substantive); R2 both REVISE (artifact-sync + 2
+clarifications) — both R2 reviewers VERIFIED core design (additive Run, abstract lease, schema-lock, gate cleared).
+All findings applied: SCENARIO-0078 collision → SCENARIO-0054; STORY-0029 AC-4a daemon-reconstruct path; SCENARIO-0031
+CI-primary seam (no carry-item); STORY-0033 lease registry = separate daemon-local map (not queue.Lease); req-card
+sync (EPIC-001/004). Citation check OK. **Scope APPROVED.**
+**Decomposed into T0–T8** (T0 bundle-schema doc; T1 Thread struct+store; T2 Run/StumbleSignal; T3 workspace-lease
+registry; T4 ReconstructResumeAudit; T5 SCENARIO-0015 harness; T6 lean-ctx wiring FLEET; T7 AC-4/AC-5 CI; T8 AC-25
+fresh-handoff-on-retry). Executing FLEET-DOGFOODED (TDD brief + hidden holdout oracle, graded on clean checkout).
+**Local memory guard set:** GOMEMLIMIT=2GiB in .claude/settings.local.json (user's 16GB Mac — avoid macOS OOM).
+
+**Status this session (2026-06-21 continued):**
+- ✅ T0 DONE — docs/plans/2026-06-21-handoff-bundle-schema.md (STORY-0018 AC-3 deliverable).
+- ✅ T1+T2 DONE — Data model: thread.go (Thread/ThreadStore) + run.go (Run/StumbleSignal/9 StumbleTypes). Fleet
+  dogfood executed, oracle verified locally (all 107 tests pass -race-clean, vet clean). Diff applied+committed to
+  HEAD (commit 04b8687). Deliverable hygiene verified (excluded stray AGENTS.md/LEAN-CTX.md that broke grader).
+  Covers STORY-0029/0030/0031 AC-1/AC-2.
+- ⏳ T3 READY TO DISPATCH — workspace-lease registry (WorkspaceKey, WorkspaceClaim, WorkspaceRegistry, ReuseDecision,
+  Claim/ActiveClaim/Release/DecideReuse/Supersede). Brief + oracle staged (.iter-scratch/iter0004-workspace-*).
+  Depends on T1+T2 at HEAD (✅ committed). Covers STORY-0033 AC-1/2/3 + STORY-0030 AC-2/3.
+**Sequencing:** Each dogfood grades on a clean HEAD checkout; graded diffs applied+committed before next dispatch
+(T3 needs thread.go/run.go ✅ at HEAD; T4 needs Thread+Result; T6/T7/T8 build further).
+**Next:** Dispatch T3 fleet dogfood (brief: .iter-scratch/iter0004-workspace-brief.txt; oracle:
+.iter-scratch/iter0004-workspace-oracle.sh; ref: HEAD). Fleet infrastructure via incus + nix shared cache.
+
+---
+
+**Phase (prior):** ITER-0003 DONE + AUDIT CLEAN (2026-06-21) — Worker reliability & robust result contract.
 Closed this fresh lean session, resuming the scope-locked checkpoint. **PAR audit (2 adversarial auditors,
 3 tiers) → CLEAN:** every ITER-0003 AC met at the correct seam; STORY-0068 AC-2 confirmed honestly carried
 (not falsely done); JOURNEY-0001 sentinel green; one MINOR (runner lib-only guard return-vs-exit) fixed.
@@ -64,3 +97,4 @@ STORY-0049 AC-4 + STORY-0016 + STORY-0011 → ITER-0008. ParseDirective wiring r
 
 **Commits (branch iter-0002):** db2d3ec (reviewed code) + hardening/artifacts commit.
 **Last event:** 2026-06-20 — all 6 tasks green, artifacts updated, log+citations validated.
+
