@@ -1,9 +1,9 @@
 # Progress
 
-**Phase:** ITER-0004 DONE (2026-06-21) — State passthrough & continuity. All tasks T0–T8 delivered.
+**Phase:** ITER-0004 DONE + AUDIT CLEAN (2026-06-21) — State passthrough & continuity. All tasks T0–T8 delivered. PAR audit: Reviewer A CLEAN; Reviewer B found 1 SERIOUS (CreateHandoff allowed an empty session_id) → FIXED inline (fail-closed + regression test). ITER-0004 CONFIRMED DONE.
 **Iterations:** 5/9 done (ITER-0000/0001/0002/0003/0004). ITER-0006 BLOCKED (Patrick sync). Next pending: ITER-0005 (gated on STORY-0025 benchmark spike).
-**Sentinel corpus:** JOURNEY-0001 green; incus-dispatcher + llm-proxy 165 tests green under -race; vet clean; zero TODO(ITER-0004).
-**Last event:** 2026-06-21 — T6 (LeanCtxProvider) + T8 (fresh-handoff-on-requeue) committed; iteration wrapped, artifacts synced.
+**Sentinel corpus:** JOURNEY-0001 green; incus-dispatcher + llm-proxy 166 tests green under -race; vet clean; zero TODO(ITER-0004).
+**Last event:** 2026-06-21 — PAR audit complete; CreateHandoff session-id fail-closed fix committed; ITER-0004 confirmed done.
 
 **ITER-0004 delivered (commits):**
 - T0 handoff-bundle schema doc (d67823a); T1+T2 Thread/Run/StumbleSignal data model (04b8687, 8663fe4);

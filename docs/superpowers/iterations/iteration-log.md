@@ -307,3 +307,16 @@ rather than a fresh cluster dogfood — the cross-one-shot session round-trip wa
 STORY-0034 spike (SCENARIO-0077), so re-proving it on the (then-flaky) cluster added risk without new evidence.
 ITER-0006 (substrate) is BLOCKED on the Patrick sync; the next pending iteration is ITER-0005 (gated on the
 STORY-0025 benchmark spike).
+
+**Audit (PAR, 2026-06-21):** Two parallel adversarial auditors, three tiers. **Reviewer A: CLEAN** (all
+ACs met at declared seams, deferred ACs genuinely not implemented, no reward-hacking, 165 `-race` green).
+**Reviewer B: GAPS FOUND — 1 SERIOUS:** `LeanCtxProvider.CreateHandoff` silently wrote an EMPTY
+`session_id` to manifest.json when `lean-ctx session save` output failed the parse regex, violating the
+schema's REQUIRED `session_snapshot_ref.session_id` (handoff-bundle-schema.md:50); no test covered the
+regex-non-match path. Both Tier-2/Tier-3 verdicts agreed: no regressions, JOURNEY-0001 + JOURNEY-0003 AC-1
+sentinels green, no unrequested features, no leftover TODO markers. **Resolution (inline, TDD):**
+`CreateHandoff` now captures+validates the explicit session id BEFORE any mkdir and FAILS CLOSED (returns
+an error, writes no bundle) when no id can be parsed — correct for soft state (better no bundle than a
+non-conformant one) and unblocks ITER-0006's reliance on a non-empty SessionID. Regression test
+`TestLeanCtxProvider_CreateHandoffRequiresExplicitSessionID` added. Suite 166 green under `-race`, vet clean.
+**ITER-0004 CONFIRMED DONE.**

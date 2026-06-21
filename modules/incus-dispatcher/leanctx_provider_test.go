@@ -164,6 +164,25 @@ func TestLeanCtxProvider_CreateImportHandoffRoundTrip(t *testing.T) {
 	}
 }
 
+// The schema makes session_snapshot_ref.session_id REQUIRED (handoff-bundle-schema.md). If
+// `session save` output can't be parsed into an explicit id, CreateHandoff must FAIL CLOSED — emit no
+// bundle rather than a non-conformant one with an empty session_id. (PAR audit finding, ITER-0004.)
+func TestLeanCtxProvider_CreateHandoffRequiresExplicitSessionID(t *testing.T) {
+	root := t.TempDir()
+	sr := &scriptedRunner{respond: func(args []string) (string, error) {
+		return "unexpected output with no parseable id", nil
+	}}
+	p := &LeanCtxProvider{BundleRoot: root, run: sr.run}
+
+	_, err := p.CreateHandoff("t1", "r1", WorkflowState{})
+	if err == nil {
+		t.Fatal("CreateHandoff must fail when no explicit session id can be captured (schema requires it)")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "t1", "r1", "manifest.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("no bundle should be written when the session id is missing; stat err = %v", statErr)
+	}
+}
+
 // SCENARIO-0030 — genuine diary round-trip against a REAL lean-ctx, isolated in a temp project
 // (lean-ctx knowledge is project-scoped by CWD, so a fresh dir is its own empty store). Skips when
 // lean-ctx is unavailable so CI without it stays green; never touches the repo's own project store.

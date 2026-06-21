@@ -188,19 +188,23 @@ type bundleManifest struct {
 // id (never "latest" — the STORY-0034 spike lesson), exports curated knowledge into the bundle, and
 // writes manifest.json. Soft state only: no diff/grade ever enters the bundle (AC-4).
 func (p *LeanCtxProvider) CreateHandoff(threadID, runID string, st WorkflowState) (string, error) {
-	dir := filepath.Join(p.BundleRoot, threadID, runID)
-	if err := os.MkdirAll(filepath.Join(dir, "session"), 0o755); err != nil {
-		return "", fmt.Errorf("create bundle dir: %w", err)
-	}
-
-	// Capture an explicit session id (resolving by "latest" is unsafe — spike note).
+	// Capture an explicit session id FIRST (resolving by "latest" is unsafe — spike note). The schema
+	// makes session_snapshot_ref.session_id REQUIRED, so if `session save` output can't be parsed we
+	// FAIL CLOSED — no bundle is written rather than a non-conformant one with an empty id. Done before
+	// any mkdir so a failure leaves no orphan bundle dir on the shared volume.
 	saveOut, err := p.runner()(p.ProjectDir, "session", "save")
 	if err != nil {
 		return "", fmt.Errorf("session save: %w", err)
 	}
-	sessionID := ""
-	if m := sessionSaveID.FindStringSubmatch(saveOut); m != nil {
-		sessionID = m[1]
+	m := sessionSaveID.FindStringSubmatch(saveOut)
+	if m == nil {
+		return "", fmt.Errorf("session save produced no explicit session id; refusing to write a bundle with an empty session_id (schema requires it)")
+	}
+	sessionID := m[1]
+
+	dir := filepath.Join(p.BundleRoot, threadID, runID)
+	if err := os.MkdirAll(filepath.Join(dir, "session"), 0o755); err != nil {
+		return "", fmt.Errorf("create bundle dir: %w", err)
 	}
 
 	// Export curated knowledge into the bundle (best-effort; an empty store is fine).
