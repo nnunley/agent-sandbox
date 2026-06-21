@@ -15,6 +15,14 @@ for i in $(seq 1 20); do st=$($INCUS exec "$BASE" -- systemctl is-system-running
 $INCUS file push "$REPO_ROOT/fleet-worker/worker-container.nix" "$BASE/etc/nixos/configuration.nix"
 # nix-shared RO mount so the local cache is visible during the rebuild + nix develop.
 $INCUS config device add "$BASE" nix-shared disk pool=default source=nix-shared path=/srv/nix-shared readonly=true >/dev/null 2>&1 || true
+# A freshly-launched container reports systemd "degraded" BEFORE nix-daemon.socket is listening,
+# so nix-channel/nixos-rebuild below race the socket and die with "cannot connect to socket …".
+# Confirm the daemon answers a real client ping (nudging the socket each iteration) FIRST.
+for i in $(seq 1 30); do
+  if $INCUS exec "$BASE" -- bash -lc 'nix store ping --store daemon >/dev/null 2>&1'; then break; fi
+  $INCUS exec "$BASE" -- systemctl start nix-daemon.socket nix-daemon.service >/dev/null 2>&1 || true
+  sleep 1
+done
 $INCUS exec "$BASE" -- bash -lc 'export NIX_CONFIG="sandbox = false"; nix-channel --update && nixos-rebuild switch' >/dev/null
 
 # Measure: time the worker resolving the toolchain from the local cache (the slow bit a golden would skip).

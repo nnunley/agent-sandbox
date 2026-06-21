@@ -55,6 +55,14 @@ else
   for i in $(seq 1 20); do st=$($INCUS exec "$WORKER" -- systemctl is-system-running 2>/dev/null || true); case "$st" in running|degraded) break;; esac; done
   $INCUS file push "$ROOT_DIR/fleet-worker/worker-container.nix" "$WORKER/etc/nixos/configuration.nix"
   $INCUS config device add "$WORKER" nix-shared disk pool=default source=nix-shared path=/srv/nix-shared readonly=true >/dev/null 2>&1 || true
+  # A freshly-launched container reports systemd "degraded" BEFORE nix-daemon.socket is listening,
+  # so nix-channel/nixos-rebuild below race the socket and die with "cannot connect to socket …".
+  # Confirm the daemon answers a real client ping (nudging the socket each iteration) FIRST.
+  for i in $(seq 1 30); do
+    if $INCUS exec "$WORKER" -- bash -lc 'nix store ping --store daemon >/dev/null 2>&1'; then break; fi
+    $INCUS exec "$WORKER" -- systemctl start nix-daemon.socket nix-daemon.service >/dev/null 2>&1 || true
+    sleep 1
+  done
   $INCUS exec "$WORKER" -- bash -lc 'export NIX_CONFIG="sandbox = false"; nix-channel --update && nixos-rebuild switch' >/dev/null
 fi
 for i in $(seq 1 20); do st=$($INCUS exec "$WORKER" -- systemctl is-system-running 2>/dev/null || true); case "$st" in running|degraded) break;; esac; done
