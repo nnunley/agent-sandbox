@@ -1,20 +1,23 @@
 # Progress
 
-**Phase:** ITER-0003 SCOPE LOCKED (2026-06-20) — Worker reliability & robust result contract.
-Scope reviewed (PAR REVISE→revised→approved). **Implementation NOT yet started — checkpointed for a
-fresh lean session** (ITER-0003 is cluster-heavy + 0069-spike-gated; this orchestration session is
-OOM-prone per the architecture note — restart-before-implement is the recorded policy).
-**Sentinel baseline:** JOURNEY-0001 green. Suite: incus-dispatcher 86 + llm-proxy 16 -race.
-**Revised ITER-0003 scope (see roadmap ITER-0003 block for full detail):**
-- Stories: STORY-0072, 0068, 0069, 0070, 0071. **STORY-0015 deferred → ITER-0008** (Run-object collision).
-- Done now: Task 0 — 13→0 fixture captured to modules/incus-dispatcher/testdata/journey0003/ (was ephemeral /tmp).
-- Splits: 0068 AC-1(CI)/AC-2(cluster e2e); 0071 AC-1(CI projector)/AC-2(integration). 0069 spike-first.
-  0070 sequenced after 0069+0072, container-only interim. SCENARIO-0061 seam unit→integration.
-- Two tracks: Track1 runner (0069-spike→0072→0069→0070, cluster); Track2 grading/observability
-  (0068 AC-1 + 0071 AC-1 CI cores; then cluster e2e). Track2 survives if the 0069 spike stalls Track1.
-**Resume:** "continue iterative development" → running-an-iteration picks ITER-0003; scope is recorded,
-so proceed to the 0069 spike + decomposition; dogfood isolatable code tasks to the fleet (dispatch policy).
-**Iterations:** 3/9 done (ITER-0000/0001/0002); ITER-0003 IN PROGRESS.
+**Phase:** ITER-0003 DONE (2026-06-20) — Worker reliability & robust result contract. Closed this
+fresh lean session, resuming the scope-locked checkpoint. Next: ITER-0004 (State passthrough &
+continuity, post-spike) — gated on the STORY-0034 handoff spike (still OFF critical path / pending).
+**Sentinel baseline (this session):** JOURNEY-0001 green; incus-dispatcher 118 -race, vet clean.
+**ITER-0003 delivered:** STORY-0069 (lean-ctx bridge+proxy, smoke), STORY-0070 (runner
+--fresh/--continue, CI shell test), STORY-0071 (projector AC-1 dogfooded + heartbeat renderer AC-2 CI),
+STORY-0072 (fallback result.json AC-1 smoke + grader-is-truth AC-2 CI), STORY-0068 **AC-1** (multi-gate
+external grader + grade JSON, CI vs synthetic fixtures; `grade` subcommand; generated-artifact exclusion).
+STORY-0015 stayed deferred → ITER-0008.
+**CARRIED (the one open item) — STORY-0068 AC-2 (let-go 13→0 cluster e2e):** refs PINNED (fix
+#249=23bfd87f1, target=parent d4c36cf2d; testdata/journey0003/README.md). Local repro (go1.26.4) showed
+the captured FOCUSED `lvl1-focused.diff` is a SUBSET of #249 — it fixes the cluster-A lowering divergence
+but leaves the test-package lowering (register-test!/use-fixtures), so the whole-package `gogen_ir` build
+gate fails. Remaining work (cluster, nix-pinned toolchain): a cluster-A-isolating gate (count divergence
+without gating on the full lowered-package build) OR a complete #249-equivalent diff. Grader is ready.
+**Resume:** "continue iterative development" → running-an-iteration picks ITER-0004. Optionally schedule a
+cluster-evidence pass for STORY-0068 AC-2 + STORY-0071 AC-2 live heartbeat-print on a real fleet worker.
+**Iterations:** 4/9 done (ITER-0000/0001/0002/0003); ITER-0004 next (ITER-0006 blocked on Patrick sync).
 
 **ITER-0003 progress (2026-06-20) — checkpoint; impl continues in a fresh session:**
 - ✅ STORY-0071 AC-1 (working-state projector) — fleet-dogfooded + holdout-graded, committed f2e847e.
