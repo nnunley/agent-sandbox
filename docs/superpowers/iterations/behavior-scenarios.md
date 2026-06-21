@@ -1272,8 +1272,11 @@ microVM host-socket isolation → ITER-0005)
 - Soft state successfully carried between one-shots
 - Loss of diary does not break correctness (code diff + grade still authoritative)
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (adapter seam — `LeanCtxProvider` argv/parse + a genuine diary
+round-trip against a real `lean-ctx` in an isolated temp project; skips if `lean-ctx` is absent. The
+session round-trip across one-shots was independently proven on a real cluster worker by the
+STORY-0034 spike — SCENARIO-0077.)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestLeanCtxProvider`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:169-175`

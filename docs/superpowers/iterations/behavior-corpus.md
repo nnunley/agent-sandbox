@@ -40,7 +40,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0027 | D1: Child directive from worker inherits immutable provisioning, not p | integration | iteration | TBD | STORY-0049 |
 | SCENARIO-0028 | D2: Backend interface abstracts container vs. micro-VM delivery | unit | iteration | TBD | STORY-0017 |
 | SCENARIO-0029 | D2: Micro-VM boot-to-ready ≤ 5 s with closure realized | process-level | iteration | TBD | STORY-0017 |
-| SCENARIO-0030 | D3: ctx_agent diary write and read preserve progression state | integration | iteration | TBD | STORY-0018 |
+| SCENARIO-0030 | D3: ctx_agent diary write and read preserve progression state | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestLeanCtxProvider` | STORY-0018 |
 | SCENARIO-0031 | D3: Authoritative state (diff + grade) independent of lean-ctx loss | e2e | iteration | TBD | STORY-0018 |
 | SCENARIO-0032 | D4: Pass grade → mark thread done (no escalation) | unit | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_Pass` | STORY-0055 |
 | SCENARIO-0033 | D4: Fail-transient grade → retry with temporal backoff | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_FailRequeues` | STORY-0055 |
