@@ -19,17 +19,22 @@ fresh-handoff-on-retry). Executing FLEET-DOGFOODED (TDD brief + hidden holdout o
 
 **Status this session (2026-06-21 continued):**
 - ✅ T0 DONE — docs/plans/2026-06-21-handoff-bundle-schema.md (STORY-0018 AC-3 deliverable).
-- ✅ T1+T2 DONE — Data model: thread.go (Thread/ThreadStore) + run.go (Run/StumbleSignal/9 StumbleTypes). Fleet
-  dogfood executed, oracle verified locally (all 107 tests pass -race-clean, vet clean). Diff applied+committed to
-  HEAD (commit 04b8687). Deliverable hygiene verified (excluded stray AGENTS.md/LEAN-CTX.md that broke grader).
-  Covers STORY-0029/0030/0031 AC-1/AC-2.
-- ⏳ T3 READY TO DISPATCH — workspace-lease registry (WorkspaceKey, WorkspaceClaim, WorkspaceRegistry, ReuseDecision,
-  Claim/ActiveClaim/Release/DecideReuse/Supersede). Brief + oracle staged (.iter-scratch/iter0004-workspace-*).
-  Depends on T1+T2 at HEAD (✅ committed). Covers STORY-0033 AC-1/2/3 + STORY-0030 AC-2/3.
-**Sequencing:** Each dogfood grades on a clean HEAD checkout; graded diffs applied+committed before next dispatch
-(T3 needs thread.go/run.go ✅ at HEAD; T4 needs Thread+Result; T6/T7/T8 build further).
-**Next:** Dispatch T3 fleet dogfood (brief: .iter-scratch/iter0004-workspace-brief.txt; oracle:
-.iter-scratch/iter0004-workspace-oracle.sh; ref: HEAD). Fleet infrastructure via incus + nix shared cache.
+- ✅ T1+T2 DONE — Data model: thread.go (Thread/ThreadStore) + run.go (Run/StumbleSignal/9 StumbleTypes). Committed
+  04b8687, then PAR code-quality cleanup committed 8663fe4 (stumble_signals omitempty + AddStumble comment + gofmt).
+  Suite 131 -race green, vet clean, holdout oracle passes on clean checkout. Covers STORY-0029/0030/0031 AC-1/AC-2.
+  (Note: a redundant re-dispatch this turn reproduced the data model identically — confirms reproducibility.)
+- 🟡 T3 DISPATCHED (this turn) — workspace-lease registry (WorkspaceKey/Claim/Registry, ReuseDecision,
+  Claim/ActiveClaim/Release/DecideReuse/Supersede). Fleet dogfood running (name=iter0004-workspace; brief+oracle
+  .iter-scratch/iter0004-workspace-*; brief HARDENED to forbid lean-ctx init/stray files). Covers STORY-0033
+  AC-1/2/3 + STORY-0030 AC-2/3. Awaiting oracle grade.
+- ⏳ T4 NEXT — ReconstructResumeAudit (STORY-0029 AC-3/AC-4a). T5 SCENARIO-0015 harness. T6 lean-ctx wiring (FLEET).
+  T7 AC-4/AC-5 CI. T8 AC-25 fresh-handoff-on-retry (SCENARIO-0054).
+**Gotcha logged (brain):** fleet worker's `lean-ctx init` writes stray AGENTS.md/LEAN-CTX.md → breaks grader git apply
+(grade.json patch_applied:false false-negative). Briefs now forbid it. Also: `tee` makes bg dispatch exit 0 — read
+grade.json, not shell exit. dogfood-out/ now gitignored.
+**Sequencing:** Each dogfood grades on a clean HEAD checkout; graded diffs applied+committed before next dispatch.
+**On resume:** harvest dogfood-out/iter0004-workspace/grade.json (+ verify holdout locally) → PAR quality → apply
+(exclude stray files) → commit → dispatch T4.
 
 ---
 

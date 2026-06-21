@@ -243,9 +243,72 @@ round-trip across two `claude -p` invocations on a cluster worker, no data loss;
 ITER-0004 may now start, and STORY-0052 AC-10/11 (handoff import, gated in ITER-0000) are unblocked.
 **Implementation note from the spike:** the handoff machinery must resolve the explicit saved session id
 (or rely on lean-ctx auto-context); bare `lean-ctx session load` (id=`latest`) returns "starting fresh".
-**Status:** pending (gate cleared — ready to start)
-**Impacted scenarios:** handoff-round-trip (SCENARIO-0077, spike PASS); continuity; claim-before-reuse
-**Look-ahead check:** gate STORY-0034 (ITER-0000) **CLEARED**; independent of substrate.
+**PAR scope review (2026-06-21, round 1 — 2 adversarial reviewers → both REVISE; high agreement).
+Scope revisions applied (round 2 confirming review → APPROVE):**
+- **STORY-0031 split:** KEEP AC-1 (Run.stumble_signals[] with a *defined* StumbleSignal struct) + AC-2
+  (signal-type enum). **DEFER AC-3 (mutation proposal generated) + AC-4 (genome evidence_refs) → ITER-0008**
+  with STORY-0032 (genome) — both reviewers: untestable here (no genome object + no pattern-detect heuristic).
+- **STORY-0018 AC rescoping:** AC-1/2/3 stay (lean-ctx diary + knowledge + ctx_handoff bundle), and AC-3
+  **must emit a formal versioned handoff-bundle schema** (doc) so ITER-0006 substrate can pass HandoffIn.
+  AC-4 rescoped to the anti-reward-hack proof (handoff loss → oracle grade still authoritative). **Primary seam is
+  CI unit/integration (NOT cluster-only — resolves round-2 carry-item risk):** a daemon-loop test with the fake
+  backend where the handoff bundle is absent/corrupt asserts `passed()` still grades from Result.ExternalGradingResult.
+  SCENARIO-0031 cluster e2e is optional enrichment, not the gating evidence. AC-5 = a design-discipline proof
+  (architecture/guard test + code review: the daemon claims work only via the durable `queue.Queue` ledger, never a
+  lean-ctx message bus).
+- **STORY-0029 AC-4 split:** AC-4a (daemon *reconstructs* resume audit) stays in ITER-0004. **AC-4b (operator/TUI
+  visibility of that audit) → ITER-0008.** Implementation path (resolves round-2 "unimplementable" finding): a
+  **daemon-local thread store** (keyed thread_id; durable persistence deferred like the lease registry) is written
+  on run completion (resume_summary + last_verified_state from STORY-0029 AC-1/AC-2 + last harvested diff from
+  Result.PatchData). AC-4a = a `ReconstructResumeAudit(threadID)` method assembling `{branch, workspace, last_diff,
+  last_grade, open_questions}` from the thread store + last Result. Unit/integration seam with the fake backend —
+  no cluster needed for the reconstruction logic itself.
+- **STORY-0033 workspace-lease registry:** a **separate daemon-local map** `map[workspaceKey]workspaceClaim`
+  where `workspaceKey = {repo, branch}` and `workspaceClaim = {threadID, leaseToken, expiry}`. It is **independent
+  of `queue.Lease`** (which keys by DirectiveID and is NOT modified/extended) — the registry records which thread
+  *owns* a (repo, branch) workspace; the queue lease governs directive claim. STORY-0033 AC-1 consults this registry
+  before reuse; AC-3 forces continue-or-supersede on an active claim. Durable persistence deferred → ITER-0006/0008.
+- **Task 0 (upfront deliverable):** write the **formal versioned handoff-bundle schema** to
+  `docs/plans/2026-06-21-handoff-bundle-schema.md` (fields, version, types: workflow_state, session_snapshot_ref,
+  curated_knowledge) so ITER-0006 can pass `Directive.HandoffIn`. This is STORY-0018 AC-3's documentation deliverable.
+- **Note on "structs don't exist yet":** correct — Thread/Run/StumbleSignal are *defined by this iteration's first
+  tasks* (TDD), not a precondition. "Ready to decompose" means the schema shapes are locked in the roadmap below;
+  Task 1 writes them in `types.go`.
+- **Schema-lock-upfront (boxing-in mitigation):** before impl, define (a) **Thread** struct
+  (thread_id, status[reuse ThreadStatus], current_branch, current_workspace, resume_summary{prior_work,next_step},
+  last_verified_state, supersedes, superseded_by, **deadline *time.Time** — preemptive for ITER-0007); (b) **Run**
+  struct (run_id, thread_id, parent_run_id, stumble_signals[]) **designed additive** with ITER-0008's STORY-0011/0015
+  Run fields (worker_id/worker_kind/policy_id/artifact_refs/log_refs) to avoid a colliding Run definition;
+  (c) **StumbleSignal** {type, ts, run_id, evidence_summary}; (d) versioned **handoff-bundle** schema.
+- **STORY-0058 AC-25** sequenced AFTER STORY-0018 AC-3 (needs the bundle format); emit on requeue (orthogonal to
+  Temporal — ITER-0007 only schedules the retry).
+- **Artifact debt (RESOLVED 2026-06-21):** added explicit citation of Thread-object def lines (req.md:160-161) to
+  STORY-0030 AC-1 sources in EPIC-004.md. Requirement-card sync (round-2 PAR) also applied: STORY-0031 AC-3/AC-4
+  deferral note, STORY-0029 AC-4 split note, STORY-0018 AC-3 schema-doc deliverable + AC-4/AC-5 rescope note.
+**Status:** scope-APPROVED (2 PAR rounds: R1 REVISE→substantive revisions; R2 REVISE→artifact-sync + 2
+clarifications, all applied; both R2 reviewers VERIFIED the core design — additive Run, abstract lease, schema-lock,
+gate cleared). Decomposed into tasks (below) — ready to implement ON THE FLEET (cluster-graded per user pref).
+
+**Task decomposition (TDD; interleaved code + evidence; fleet-dogfooded — local only for quick sentinel checks):**
+- **T0** (doc): write `docs/plans/2026-06-21-handoff-bundle-schema.md` — versioned handoff-bundle schema (STORY-0018 AC-3 deliverable; unblocks ITER-0006).
+- **T1** (code, unit): define `Thread` struct (thread_id, status[reuse ThreadStatus], current_branch, current_workspace, resume_summary{prior_work,next_step}, last_verified_state, supersedes, superseded_by, deadline *time.Time) + daemon-local thread store. STORY-0029 AC-1/AC-2, STORY-0030 AC-1, STORY-0033 AC-2.
+- **T2** (code, unit): define `Run` struct (run_id, thread_id, parent_run_id, stumble_signals[]) — additive with ITER-0008 fields — + `StumbleSignal` {type, ts, run_id, evidence_summary} + signal-type enum. STORY-0031 AC-1/AC-2.
+- **T3** (code, unit): workspace-lease registry `map[workspaceKey]workspaceClaim` + check-before-reuse + continue-or-supersede. STORY-0033 AC-1/AC-3, STORY-0030 AC-2/AC-3 (reinvention → stumble capture).
+- **T4** (code, unit/integration): `ReconstructResumeAudit(threadID)` → {branch, workspace, last_diff, last_grade, open_questions} from thread store + last Result; new run continues current branch by default. STORY-0029 AC-3/AC-4a.
+- **T5** (evidence, integration): SCENARIO-0015 harness — directive A (repo,branch) → run → write thread state/handoff; directive B (same repo,branch) → detect thread → import handoff → resume OR explicit supersede. Covers STORY-0029/0030/0033.
+- **T6** (code, integration, FLEET): STORY-0018 AC-1/AC-2/AC-3 — wire ctx_agent diary (write/recall) + share/receive_knowledge + ctx_handoff create|export|import|pull into the runner/daemon (resolve explicit saved session id per spike note). Evidence SCENARIO-0030 on a real worker.
+- **T7** (code+evidence, CI unit/integration): STORY-0018 AC-4 — daemon-loop test, fake backend, handoff absent/corrupt → `passed()` still grades from Result.ExternalGradingResult (SCENARIO-0031 CI primary). AC-5 — guard/architecture test: daemon claims only via queue.Queue.
+- **T8** (code+evidence, integration): STORY-0058 AC-25 — emit a fresh handoff bundle on requeue in the ladder/requeue path; assert at SCENARIO-0054 daemon seam (fake backend, no Temporal). Sequenced after T6.
+
+**Impacted scenarios:** SCENARIO-0015 (resume on branch — explicit harness: directive A→handoff→directive B
+detect/resume/supersede; covers 0029/0030/0033), SCENARIO-0030 (ctx_agent diary write/read, integration/cluster),
+SCENARIO-0031 (authoritative state independent of handoff loss — **CI unit/integration primary**, cluster e2e
+optional), SCENARIO-0016 (RESCOPED: stumble CAPTURE only here; model-escalation → ITER-0007), **SCENARIO-0054
+(EXTENDED: STORY-0058 retry scenario now also asserts a fresh handoff bundle accompanies each retry — AC-25;
+replaces the mistaken "SCENARIO-0078" ref, which is already taken by deadline-prioritization/STORY-0045)**,
+SCENARIO-0077 (spike PASS). (SCENARIO-0018 pattern-learning → ITER-0008 with AC-3/AC-4.)
+**Look-ahead check:** gate STORY-0034 (ITER-0000) **CLEARED**; independent of substrate; Run/Thread/bundle schemas
+locked additive so ITER-0006 (substrate)/0007 (Temporal deadline)/0008 (Run augmentation + genome) graft without rework.
 
 ### ITER-0005 — Micro-VM backend, NixOS golden & isolation tiers (post-benchmark)
 

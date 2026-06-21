@@ -1297,7 +1297,10 @@ microVM host-socket isolation → ITER-0005)
 - Anti-reward-hack: loss of soft state does not degrade execution correctness
 
 **Automation status:** pending
-**Execution command:** TBD
+**Execution command:** TBD — **ITER-0004 primary seam is CI unit/integration** (daemon-loop test, fake backend,
+handoff bundle absent/corrupt → `passed()` still grades from `Result.ExternalGradingResult`). This keeps STORY-0018
+AC-4 a *testable* AC and avoids an ITER-0003-style cluster carry-item. A cluster e2e run is optional enrichment, not
+gating evidence.
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:177-182`
@@ -1933,7 +1936,14 @@ microVM host-socket isolation → ITER-0005)
 - Fresh handoff bundle is enqueued with retry
 
 **Automation status:** pending
-**Execution command:** TBD
+**Execution command:** TBD (ITER-0004 will wire the AC-25 portion at the daemon seam)
+
+**ITER-0004 scope note (PAR round-2):** this scenario is the home for **STORY-0058 AC-25** ("a fresh handoff
+bundle accompanies each retry"). ITER-0004 proves the *fresh-bundle-on-requeue* observables ("Fresh handoff bundle
+is prepared / enqueued with retry / prior handoff available in fresh bundle") at the daemon seam with the fake
+backend — no Temporal needed. The "Temporal backoff is scheduled / re-pushed by Temporal" observables remain
+**STORY-0058 AC-24 → ITER-0007**. (Earlier roadmap text mislabeled this as a new "SCENARIO-0078"; that ID belongs
+to deadline-prioritization/STORY-0045 — corrected to SCENARIO-0054.)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:322-324`

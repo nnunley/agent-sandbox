@@ -18,3 +18,4 @@ modules/incus-dispatcher/dispatcher
 .claude/*
 !.claude/skills/
 !.claude/skills/**
+dogfood-out/

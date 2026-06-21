@@ -357,7 +357,14 @@ only with recursive delegation (ITER-0008). Avoids premature abstraction.
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:163-187`
 
-**Status:** pending
+**Status:** pending. **ITER-0004 scope (PAR round-2 rescoping):**
+- AC-1/AC-2/AC-3 IN, AC-3 carries an explicit **documentation deliverable**: the formal versioned handoff-bundle
+  schema → `docs/plans/2026-06-21-handoff-bundle-schema.md` (so ITER-0006 can pass `Directive.HandoffIn`).
+- **AC-4** proof seam moved e2e→**CI unit/integration primary** (daemon loop, fake backend, handoff absent/corrupt
+  → `passed()` still grades from `Result.ExternalGradingResult`); SCENARIO-0031 cluster e2e is optional enrichment,
+  not gating. It stays a *testable* AC, not just a principle.
+- **AC-5** proof = architecture/guard test + code review (daemon claims work only via the durable `queue.Queue`
+  ledger, never a lean-ctx message bus).
 
 ## STORY-0019
 
