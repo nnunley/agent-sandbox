@@ -8,18 +8,64 @@
 #     --command bash /home/worker/runner.sh [WALL_CLOCK]
 # Streams one JSON event per line -> events.jsonl; harvests worker.diff. Worker runs NON-ROOT.
 set -uo pipefail
-WALL_CLOCK="${1:-2400}"; MAX_TURNS=200
+
+# STORY-0070 AC-1: canonical runner with two tree modes.
+#   --fresh    (default) reset working tree + clean untracked → independent task
+#   --continue           preserve the already-applied diff   → iterative debugging
+# Both modes set PATH, run lean-ctx setup+serve, harvest worker.diff + result.json,
+# and write lean-ctx gain output — only the pre-run tree handling differs.
+
+# parse_mode echoes the selected mode (fresh|continue) from the arg list.
+parse_mode() {
+  local m=fresh
+  for a in "$@"; do
+    case "$a" in
+      --fresh)    m=fresh ;;
+      --continue) m=continue ;;
+    esac
+  done
+  printf '%s' "$m"
+}
+
+# prepare_worktree readies REPO for the run per mode. fresh = clean baseline
+# (reset --hard + clean -fdq, the playbook's between-relaunch reset); continue =
+# leave the applied diff in place so the worker resumes from where it left off.
+prepare_worktree() {
+  local mode="$1" repo="$2"
+  git config --global --add safe.directory "$repo" 2>/dev/null || true
+  case "$mode" in
+    fresh)
+      git -C "$repo" reset --hard >/dev/null 2>&1
+      git -C "$repo" clean -fdq    >/dev/null 2>&1
+      ;;
+    continue)
+      : # preserve applied diff — no reset/clean
+      ;;
+    *)
+      echo "prepare_worktree: unknown mode '$mode'" >&2
+      return 2
+      ;;
+  esac
+}
+
+# Library-only mode: let tests source the functions above without running a worker.
+[ "${RUNNER_LIB_ONLY:-}" = 1 ] && return 0
+
+# Positional WALL_CLOCK may appear with or without a mode flag.
+MODE="$(parse_mode "$@")"
+WALL_CLOCK=2400
+for a in "$@"; do case "$a" in --fresh|--continue) ;; *) WALL_CLOCK="$a" ;; esac; done
+MAX_TURNS=200
 REPO="$HOME/let-go"
 cd "$REPO" || { echo "no repo at $REPO" >&2; exit 1; }
 
 export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$HOME/.fleet-token")"
 
-# Clean baseline (playbook: reset working tree between relaunches).
-git config --global --add safe.directory "$REPO" 2>/dev/null || true
-git reset --hard >/dev/null 2>&1; git clean -fdq >/dev/null 2>&1
+# Prepare the working tree per the selected mode (STORY-0070 AC-1).
+prepare_worktree "$MODE" "$REPO"
 
 : > "$HOME/events.jsonl"
-echo "=== worker start wall=${WALL_CLOCK}s sonnet $(date -u +%FT%TZ) ===" > "$HOME/worker.log"
+echo "=== worker start mode=${MODE} wall=${WALL_CLOCK}s sonnet $(date -u +%FT%TZ) ===" > "$HOME/worker.log"
 echo "claude: $(command -v claude || echo MISSING)  go: $(go version 2>/dev/null)" >> "$HOME/worker.log"
 
 # STORY-0069: lean-ctx FULL enablement — ctx_* MCP tools (cached reads + shell compression) AND
