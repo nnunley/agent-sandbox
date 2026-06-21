@@ -40,6 +40,16 @@ type Daemon struct {
 	Threads     *ThreadTracker             // thread-status tracking (optional)
 	Escalations EscalationLane             // non-blocking human escalations lane (optional)
 	Now         func() time.Time           // clock for decision timestamps (optional; defaults to time.Now)
+	Context     ContextProvider            // soft-state provider (optional; defaults to NoopProvider). Best-effort: handoff loss never affects correctness (STORY-0018 AC-4).
+}
+
+// ctx returns the configured ContextProvider, or a NoopProvider when none is set. The daemon claims
+// work ONLY via dm.Q (queue.Queue); the ContextProvider is never a work source (STORY-0018 AC-5).
+func (dm *Daemon) ctxProvider() ContextProvider {
+	if dm.Context != nil {
+		return dm.Context
+	}
+	return NoopProvider{}
 }
 
 func (dm *Daemon) clock() time.Time {
@@ -93,6 +103,13 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 		dm.setStatus(d.ID, StatusAbandoned)
 		dm.record(d.ID, "", "template-invalid", "rejected", verr.Error())
 		return OutcomeRejected, d.ID, nil
+	}
+
+	// Best-effort import of prior soft state. This NEVER affects correctness: the authoritative
+	// state is the diff + oracle grade computed below, not the handoff. A missing/corrupt bundle or
+	// a provider error is ignored — proving STORY-0018 AC-4 (correctness independent of handoff loss).
+	if d.HandoffIn != "" {
+		_, _ = dm.ctxProvider().ImportHandoff(d.HandoffIn)
 	}
 
 	task := mapFn(d)
