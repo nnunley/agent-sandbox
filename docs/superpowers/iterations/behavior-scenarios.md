@@ -788,8 +788,10 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - workspace is not reset
 - no duplicate reinvention occurred
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** passing (ITER-0004, integration seam, in-process fake backend)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0015`
+(TestScenario0015_ResumeOnBranch + TestScenario0015_SupersedeRequiresDeclaration — composes ThreadStore +
+WorkspaceRegistry + ReconstructResumeAudit + ContinueRun)
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:521-546`

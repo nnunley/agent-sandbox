@@ -25,7 +25,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0012 | [BLOCKED-ON-SUBSTRATE-DECISION] Laneq-as-cluster-service: MCP clients  | e2e | iteration | TBD | STORY-0010 |
 | SCENARIO-0013 | [BLOCKED-ON-SUBSTRATE-DECISION] Network-native backend (Postgres/NATS) | integration | iteration | TBD | STORY-0010 |
 | SCENARIO-0014 | [BLOCKED-ON-SUBSTRATE-DECISION] Dedicated queue host: survives worker- | process-level | iteration | TBD | STORY-0010 |
-| SCENARIO-0015 | Resume work on branch with existing thread | integration | iteration | TBD | STORY-0029, STORY-0030, STORY-0033 |
+| SCENARIO-0015 | Resume work on branch with existing thread | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0015` | STORY-0029, STORY-0030, STORY-0033 |
 | SCENARIO-0016 | Escalate to stronger model on verification failure | integration | iteration | TBD | STORY-0035, STORY-0038, STORY-0031 |
 | SCENARIO-0017 | Long-running scheduler maintains priority queue | process-level | iteration | TBD | STORY-0037, STORY-0013, STORY-0012 |
 | SCENARIO-0018 | Capture and learn from repeated stumble pattern | process-level | iteration | TBD | STORY-0031, STORY-0032 |
