@@ -14,6 +14,10 @@
     pkgs = nixpkgs.legacyPackages.${system};
     linuxPkgs = pkgs; # NixOS container workers read from a shared nix store on Linux
   in {
+    # Project Nix packages (built on a Nix host — the macOS dev box has no Nix; see the
+    # `nix-packaging` skill). cxdb = the StrongDM cxdb context store, S3-sync feature-gated off.
+    packages.${system}.cxdb = pkgs.callPackage ./pkgs/cxdb { };
+
     nixosConfigurations.agent-host = nixpkgs.lib.nixosSystem {
       inherit system;
       modules = [
@@ -36,6 +40,7 @@
         gnumake
         pkg-config
         bash
+        perl # dev tooling (patch authoring, text munging) — e.g. cxdb packaging edits
       ];
     };
   };

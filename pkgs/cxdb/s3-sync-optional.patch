@@ -1,0 +1,72 @@
+diff --git a/server/Cargo.toml b/server/Cargo.toml
+index 1e7b3d4..d5f83c9 100644
+--- a/server/Cargo.toml
++++ b/server/Cargo.toml
+@@ -32,10 +32,15 @@ libc = "0.2"
+ regex = "1.10"
+ tracing = "0.1"
+ 
+-# AWS SDK for S3 sync (optional feature for production deployments)
+-aws-config = { version = "1.5", features = ["behavior-version-latest"] }
+-aws-sdk-s3 = "1.65"
+-tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros"] }
++# AWS SDK for S3 sync — gated behind the optional `s3-sync` feature (see [features] below).
++aws-config = { version = "1.5", features = ["behavior-version-latest"], optional = true }
++aws-sdk-s3 = { version = "1.65", optional = true }
++tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros"], optional = true }
++
++[features]
++# S3 blob-store sync is an optional production feature that pulls the entire AWS SDK + tokio.
++# OFF by default so a local/fleet context backend builds lean. Enable with: --features s3-sync
++s3-sync = ["dep:aws-config", "dep:aws-sdk-s3", "dep:tokio"]
+ 
+ [dev-dependencies]
+ tempfile = "3.10"
+diff --git a/server/src/lib.rs b/server/src/lib.rs
+index 1694a31..ebdb424 100644
+--- a/server/src/lib.rs
++++ b/server/src/lib.rs
+@@ -14,6 +14,7 @@ pub mod metrics;
+ pub mod projection;
+ pub mod protocol;
+ pub mod registry;
++#[cfg(feature = "s3-sync")]
+ pub mod s3_sync;
+ pub mod store;
+ pub mod turn_store;
+diff --git a/server/src/main.rs b/server/src/main.rs
+index 981cf73..5946105 100644
+--- a/server/src/main.rs
++++ b/server/src/main.rs
+@@ -22,6 +22,7 @@ use cxdb_server::protocol::{
+     read_frame, write_frame, MsgType,
+ };
+ use cxdb_server::registry::Registry;
++#[cfg(feature = "s3-sync")]
+ use cxdb_server::s3_sync::{S3Sync, S3SyncConfig, S3SyncHandle};
+ use cxdb_server::store::Store;
+ 
+@@ -43,6 +44,7 @@ impl Drop for ConnectionCounterGuard {
+ 
+ fn main() -> Result<()> {
+     // Create tokio runtime for async S3 operations
++    #[cfg(feature = "s3-sync")]
+     let rt =
+         tokio::runtime::Runtime::new().map_err(|e| StoreError::Io(std::io::Error::other(e)))?;
+ 
+@@ -50,6 +52,7 @@ fn main() -> Result<()> {
+     std::fs::create_dir_all(&config.data_dir)?;
+ 
+     // S3 sync: restore from S3 if local data is empty
++    #[cfg(feature = "s3-sync")]
+     let s3_sync_handle: Option<S3SyncHandle> = if let Some(s3_config) = S3SyncConfig::from_env() {
+         // Run restore synchronously before opening stores
+         let restored = rt.block_on(async {
+@@ -202,6 +205,7 @@ fn main() -> Result<()> {
+     eprintln!("Shutting down...");
+ 
+     // Graceful S3 sync shutdown (performs final sync)
++    #[cfg(feature = "s3-sync")]
+     if let Some(handle) = s3_sync_handle {
+         rt.block_on(async {
+             handle.shutdown().await;
