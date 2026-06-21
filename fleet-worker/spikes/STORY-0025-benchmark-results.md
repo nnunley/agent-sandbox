@@ -172,10 +172,14 @@ denying them ([incus#1321](https://github.com/lxc/incus/issues/1321)). The fix
 **with just `security.nesting=true`, no `security.privileged` required**. Shipped in Incus 6.0.6 LTS
 / ~6.19+; **this host runs Incus server 6.23**, so the fix is present.
 
-- The 76 ms benchmark was run with `security.nesting=true` + `security.privileged=true`, but the
-  **production-correct config is `security.nesting=true` alone**. Spin-up cost is dominated by
-  namespace creation + tmpfs CoW snapshot, not privilege, so the number is expected to hold under
-  nesting-only.
+- The 76 ms benchmark used `security.nesting=true` + `security.privileged=true`. **Correction
+  (verified 2026-06-21 on agent-host):** `security.nesting=true` is necessary but NOT sufficient for
+  nested `systemd-nspawn` in an *unprivileged* container — nspawn still can't mount `/proc`/set up
+  idmapped mounts (a userns-capability limit, distinct from the AppArmor layer that PR #2624 fixes).
+  So nested nspawn needs EITHER `nesting=true` + `privileged=true`, OR — architecturally cleaner —
+  nspawn runs **inside a microVM guest** (own kernel, full caps), which is the design's literal
+  "nspawn in the live VM". The LXC microVM-*host* is not where Fast-tier units should run. The 76 ms
+  figure (namespace + tmpfs CoW dominated) is a sound estimate for the in-guest path.
 - **Restrictions to set nesting:** (1) `security.nesting=true` on the container; (2) Incus ≥ 6.0.6 /
   ~6.19 on the host (satisfied: 6.23); (3) if the container is in a *restricted* project,
   `restricted.containers.nesting=allow` (the default project is unrestricted — N/A here).

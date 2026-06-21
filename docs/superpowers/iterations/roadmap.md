@@ -349,8 +349,11 @@ itself shipped in ITER-0002 at the container/proxy seam).
 is evidence-backed. nspawn Fast tier **76 ms** mean/97 ms p99 (N=100) vs Firecracker Hard tier **1861 ms**
 mean/2134 ms p99 (N=20) — nspawn is 24.5× faster and is the substrate-selection signal; microVM boot is a
 one-time amortized cost (<0.7% of a 5–10 min task). Decision: **two-tier model** — `nspawn --ephemeral`
-(shared kernel, `security.nesting=true`) for trusted lanes, per-task Firecracker microVM for sensitive/
-untrusted lanes. ITER-0005 is now the next eligible iteration (ITER-0006 stays blocked on the Patrick sync).
+**inside the durable Firecracker micro-VM guest** (real kernel) for trusted lanes, per-task Firecracker
+microVM for sensitive/untrusted lanes. (NB: nspawn can NOT run in the unprivileged agent-host LXC even
+with `security.nesting=true` — proc-mount/idmap restriction, verified 2026-06-18 & 2026-06-21 and
+codified in `host/configuration.nix`; the fast tier lives in the VM guest, per the design's nested
+topology.) ITER-0005 is the next eligible iteration (ITER-0006 stays blocked on the Patrick sync).
 **Impacted scenarios:** tier-selection; immutable-image; VM-boot-readiness; backend-parity;
 immutable-root-scratch (STORY-0049 AC-5); SCENARIO-0008/0009 (benchmark, done)
 **Look-ahead check:** STORY-0025 gate (ITER-0000) **CLEARED**; reuses ITER-0000 backend interface.
