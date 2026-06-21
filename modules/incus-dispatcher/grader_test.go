@@ -207,6 +207,37 @@ func TestRunGrade_AppliesDiffToCheckout(t *testing.T) {
 	}
 }
 
+// TestGraderIgnoresWorkerSelfReport proves STORY-0072 AC-2 (anti-reward-hack):
+// the grade verdict is computed solely from the grader's own gate runs. Here a
+// worker writes a result.json claiming success while the oracle gate actually
+// fails — the grader still returns Passed=false. The grader never reads the
+// worker's result.json (RunGrade takes a checkout + diff + gates, nothing else).
+func TestGraderIgnoresWorkerSelfReport(t *testing.T) {
+	// A lying worker self-report sitting in a sibling dir — never consulted.
+	lyingReport := t.TempDir()
+	if err := os.WriteFile(filepath.Join(lyingReport, "result.json"),
+		[]byte(`{"status":"PASS","passed":true}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	gates := []GateSpec{
+		{Name: GateGenerate, Cmd: []string{"sh", "-c", "true"}},
+		{Name: GateClusterA, Cmd: []string{"sh", "-c", "echo '--- FAIL: TestCluster_A/case_00'; exit 1"}},
+		{Name: GateCheckGenerated, Cmd: []string{"sh", "-c", "true"}},
+		{Name: GateUntagged, Cmd: []string{"sh", "-c", "true"}},
+		{Name: GateE2E, Cmd: []string{"sh", "-c", "true"}},
+	}
+	report, _, err := RunGrade(context.Background(), "", nil, gates)
+	if err != nil {
+		t.Fatalf("RunGrade: %v", err)
+	}
+	if report.Passed {
+		t.Errorf("grader trusted the worker's lying self-report; expected Passed=false, got %+v", report)
+	}
+	if report.ClusterA != 1 {
+		t.Errorf("expected ClusterA=1 from the grader's own gate run, got %d", report.ClusterA)
+	}
+}
+
 func readFixture(t *testing.T, rel string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("testdata", rel))
