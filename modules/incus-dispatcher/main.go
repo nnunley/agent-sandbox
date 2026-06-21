@@ -27,6 +27,13 @@ import (
 )
 
 func main() {
+	// Subcommands are dispatched on os.Args[1] before the flag-based main path.
+	// `grade` runs the authoritative external grader (STORY-0068) and prints the
+	// structured grade JSON to stdout.
+	if len(os.Args) > 1 && os.Args[1] == "grade" {
+		os.Exit(runGradeCommand(os.Args[2:]))
+	}
+
 	// CLI flags
 	name := flag.String("name", "", "Task name (required)")
 	repo := flag.String("repo", "", "Git repository path (local) or URL to deliver (optional)")

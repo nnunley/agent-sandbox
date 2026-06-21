@@ -1,0 +1,44 @@
+=== RUN   TestCluster_A
+=== RUN   TestCluster_A/case_00
+=== RUN   TestCluster_A/case_01
+=== RUN   TestCluster_A/case_02
+=== RUN   TestCluster_A/case_03
+=== RUN   TestCluster_A/case_04
+=== RUN   TestCluster_A/case_05
+=== RUN   TestCluster_A/case_06
+=== RUN   TestCluster_A/case_07
+=== RUN   TestCluster_A/case_08
+=== RUN   TestCluster_A/case_09
+=== RUN   TestCluster_A/case_10
+=== RUN   TestCluster_A/case_11
+=== RUN   TestCluster_A/case_12
+--- FAIL: TestCluster_A (0.31s)
+    --- FAIL: TestCluster_A/case_00 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_01 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_02 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_03 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_04 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_05 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_06 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_07 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_08 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_09 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_10 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_11 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+    --- FAIL: TestCluster_A/case_12 (0.00s)
+        ir_test.go:42: engine divergence: native != tree-walk
+FAIL
+FAIL	let-go/pkg/ir	0.42s
+FAIL
