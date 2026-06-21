@@ -36,7 +36,9 @@ so proceed to the 0069 spike + decomposition; dogfood isolatable code tasks to t
 - STORY-0071 AC-2 (live heartbeat integration), STORY-0072 AC-2 evidence (grader-is-truth).
 - Evidence/corpus: SCENARIO-0061/0062/0063 + JOURNEY-0003 commands; wrap-up; then auditing-progress.
 **Resume:** "continue iterative development" → ITER-0003 scope is recorded in the roadmap; pick up at
-STORY-0070. Reusable lean-ctx spike scripts in /tmp/leanctx-*.sh + /tmp/iter0003-*.sh.
+STORY-0070. Reusable harness preserved IN-REPO (not /tmp): `fleet-worker/spikes/` (lean-ctx runner
+smoke + chain/doctor spikes + README with the proven recipe); ITER-0003 dogfood brief/oracle in
+`.iter-scratch/iter0003-t71-*`.
 
 **ITER-0002 — fleet-dogfooded (TDD + hidden holdout oracle on clean checkouts):**
 - T1 STORY-0049 AC-1 — queue.ParseDirective strict schema (reject access_cmd/root/unknown) — pass
