@@ -296,8 +296,18 @@ gate cleared). Decomposed into tasks (below) — ready to implement ON THE FLEET
 - **T3** (code, unit): workspace-lease registry `map[workspaceKey]workspaceClaim` + check-before-reuse + continue-or-supersede. STORY-0033 AC-1/AC-3, STORY-0030 AC-2/AC-3 (reinvention → stumble capture).
 - **T4** (code, unit/integration): `ReconstructResumeAudit(threadID)` → {branch, workspace, last_diff, last_grade, open_questions} from thread store + last Result; new run continues current branch by default. STORY-0029 AC-3/AC-4a.
 - **T5** (evidence, integration): SCENARIO-0015 harness — directive A (repo,branch) → run → write thread state/handoff; directive B (same repo,branch) → detect thread → import handoff → resume OR explicit supersede. Covers STORY-0029/0030/0033.
-- **T6** (code, integration, FLEET): STORY-0018 AC-1/AC-2/AC-3 — wire ctx_agent diary (write/recall) + share/receive_knowledge + ctx_handoff create|export|import|pull into the runner/daemon (resolve explicit saved session id per spike note). Evidence SCENARIO-0030 on a real worker.
-- **T7** (code+evidence, CI unit/integration): STORY-0018 AC-4 — daemon-loop test, fake backend, handoff absent/corrupt → `passed()` still grades from Result.ExternalGradingResult (SCENARIO-0031 CI primary). AC-5 — guard/architecture test: daemon claims only via queue.Queue.
+- **T6** (code, integration, FLEET): STORY-0018 AC-1/AC-2/AC-3 — **behind a `ContextProvider` interface (DECISION
+  2026-06-21: context abstraction, no hard lean-ctx coupling — lean-ctx has a commercial-license upsell, must be
+  swappable; mirrors the queue.Queue coordination abstraction).** Build a `LeanCtxProvider` adapter (the default;
+  wires ctx_agent diary write/recall + share/receive_knowledge + ctx_handoff create|export|import|pull into the
+  runner/daemon, resolving the explicit saved session id per the spike note) + a `NoopProvider` double. The daemon/
+  runner depend on the interface, never on lean-ctx directly. Evidence SCENARIO-0030 on a real worker (LeanCtxProvider).
+  Schema/interface: docs/plans/2026-06-21-handoff-bundle-schema.md (Provider abstraction section). YAGNI: only the
+  lean-ctx + noop adapters now, no speculative backends.
+- **T7** (code+evidence, CI unit/integration): STORY-0018 AC-4 — daemon-loop test with the **NoopProvider** (handoff
+  effectively lost) → `passed()` still grades from Result.ExternalGradingResult (SCENARIO-0031 CI primary; the noop
+  adapter IS the anti-reward-hack lever). AC-5 — guard/architecture test: daemon claims only via queue.Queue, and the
+  ContextProvider can never act as the work queue.
 - **T8** (code+evidence, integration): STORY-0058 AC-25 — emit a fresh handoff bundle on requeue in the ladder/requeue path; assert at SCENARIO-0054 daemon seam (fake backend, no Temporal). Sequenced after T6.
 
 **Impacted scenarios:** SCENARIO-0015 (resume on branch — explicit harness: directive A→handoff→directive B

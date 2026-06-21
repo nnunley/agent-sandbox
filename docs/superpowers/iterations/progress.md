@@ -33,13 +33,15 @@ fresh-handoff-on-retry). Executing FLEET-DOGFOODED (TDD brief + hidden holdout o
 - ✅ T5 DONE — scenario0015_test.go: SCENARIO-0015 integration evidence (resume-on-branch CONTINUES prior thread
   with reconstructed context; different thread must supersede-with-reason → StumbleDuplicateWork). Committed 59b6a3c.
   Corpus + scenario card updated to passing (`go test . -run TestScenario0015`).
-- ⏳ **T6 NEXT (CLUSTER seam)** — STORY-0018 AC-1/2/3: wire ctx_agent diary (write/recall) + share/receive_knowledge
-  + ctx_handoff create|export|import|pull into runner.sh/daemon per docs/plans/2026-06-21-handoff-bundle-schema.md;
-  evidence SCENARIO-0030 on a REAL worker (resolve explicit saved session id per STORY-0034 spike note). This is the
-  genuine cluster-integration task — needs a fleet worker with lean-ctx, not CI.
-- ⏳ T7 — STORY-0018 AC-4 (CI: daemon-loop, fake backend, handoff absent/corrupt → passed() still grades from
-  Result.ExternalGradingResult = SCENARIO-0031 CI-primary) + AC-5 (guard/code-review: daemon claims only via
-  queue.Queue). Authorable as CI evidence (like T5).
+- ⏳ **T6 NEXT (CLUSTER seam)** — STORY-0018 AC-1/2/3 **behind a `ContextProvider` interface (ARCH DECISION
+  2026-06-21: context abstraction, no hard lean-ctx coupling — commercial-license upsell, must be swappable; mirrors
+  queue.Queue).** Build `LeanCtxProvider` (default adapter: ctx_agent diary + share/receive_knowledge + ctx_handoff,
+  explicit saved session id per spike note) + `NoopProvider` double. Daemon/runner depend on the interface, never
+  lean-ctx directly. Evidence SCENARIO-0030 on a REAL worker. Interface spec: docs/plans/2026-06-21-handoff-bundle-
+  schema.md (Provider abstraction §). YAGNI: only lean-ctx + noop adapters.
+- ⏳ T7 — STORY-0018 AC-4 (CI: daemon-loop with NoopProvider [handoff lost] → passed() still grades from
+  Result.ExternalGradingResult = SCENARIO-0031 CI-primary; noop adapter IS the anti-reward-hack lever) + AC-5
+  (guard: daemon claims only via queue.Queue; ContextProvider can never be the work queue). Authorable as CI evidence.
 - ⏳ T8 — STORY-0058 AC-25: daemon emits a FRESH handoff bundle on requeue (ladder path); assert at SCENARIO-0054
   daemon seam (fake backend, no Temporal). Needs a Go HandoffBundle representation per the T0 schema; sequence after T6.
 **Grade false-negative (non-blocking):** cluster grade.json reports patch_applied:false for BOTH data-model & T3,

@@ -77,6 +77,43 @@ A handoff bundle is a directory on the shared `handoff-store` volume, referenced
 | `import` | worker | hydrate from an incoming `Directive.HandoffIn` bundle (resolve explicit session id) |
 | `pull`   | daemon | on requeue, assemble a FRESH bundle from the thread store for the retry (STORY-0058 AC-25) |
 
+## Provider abstraction (no hard lean-ctx coupling) — DECISION 2026-06-21
+
+The context/continuity layer sits behind a **Go interface**, not a direct lean-ctx dependency.
+lean-ctx is *one adapter*, the default — never a hard dependency. Rationale: avoid vendor lock-in;
+lean-ctx carries a commercial-license upsell for teams/distributed operation, so swappability is a
+requirement, not a nicety. This mirrors how **coordination** is already abstracted behind
+`queue.Queue` (ITER-0006 swaps the substrate) — the same discipline now applies to **context**.
+
+```go
+// ContextProvider is the seam between the coordinator/runner and whatever carries SOFT state
+// between one-shot runs. It is intentionally small and bundle-centric: the durable, authoritative
+// state (diff + oracle grade) never flows through here (STORY-0018 AC-4).
+type ContextProvider interface {
+    // diary — STORY-0018 AC-1
+    WriteDiary(threadID string, d DiaryEntry) error
+    RecallDiary(threadID string) ([]DiaryEntry, error)
+    // knowledge — STORY-0018 AC-2
+    ShareKnowledge(threadID string, facts []Fact) error
+    ReceiveKnowledge(threadID string) ([]Fact, error)
+    // handoff bundle (this schema) — STORY-0018 AC-3
+    CreateHandoff(threadID, runID string, st WorkflowState) (bundlePath string, err error)
+    ImportHandoff(bundlePath string) (HandoffManifest, error)
+}
+```
+
+Adapters built now (YAGNI — only what we need):
+- **`LeanCtxProvider`** — the default; shells out to `lean-ctx session`/`ctx_agent`/`ctx_handoff`,
+  resolving the explicit saved session id (NOT `latest`) per the STORY-0034 spike note. The session
+  snapshot it writes is the only lean-ctx-specific artifact, and it is opaque to everyone else.
+- **`NoopProvider`** — a test/fallback double that drops all soft state. It is also the mechanism
+  that PROVES STORY-0018 AC-4: with the noop provider (handoff effectively lost), the daemon still
+  grades correctly from `Result.ExternalGradingResult`. So the abstraction and the anti-reward-hack
+  proof are the same lever.
+
+Do NOT build speculative alternative adapters (Redis/S3/etc.) until a second backend is actually
+needed — the interface is the insurance; extra adapters are not.
+
 ## Compatibility contract (boxing-in mitigation)
 
 - ITER-0006 reads only `Directive.HandoffIn` (a path) — it never parses the manifest, so substrate
