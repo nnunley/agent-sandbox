@@ -49,7 +49,9 @@ prepare_worktree() {
 }
 
 # Library-only mode: let tests source the functions above without running a worker.
-[ "${RUNNER_LIB_ONLY:-}" = 1 ] && return 0
+# `return` works when sourced (the intended path); fall back to `exit` if this
+# guard is ever hit in an executed context so bash doesn't error on a bare return.
+[ "${RUNNER_LIB_ONLY:-}" = 1 ] && { return 0 2>/dev/null || exit 0; }
 
 # Positional WALL_CLOCK may appear with or without a mode flag.
 MODE="$(parse_mode "$@")"
