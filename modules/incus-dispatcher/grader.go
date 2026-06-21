@@ -121,12 +121,26 @@ func defaultGradeGates() []GateSpec {
 	}
 }
 
+// defaultGeneratedExcludes are paths the grader must NOT patch in from the
+// worker diff: they are build artifacts (a binary core image + its checksum
+// manifest) that `make generate` reproduces from the patched source. Patching
+// them directly fails (binary patch without a full index) and would also defeat
+// the check-generated gate, which exists to prove the worker's sources
+// regenerate byte-identical artifacts. "Source files wholesale" (STORY-0068
+// AC-1) means: apply the source hunks, regenerate the rest.
+func defaultGeneratedExcludes() []string {
+	return []string{
+		"pkg/rt/generated.sums",
+		"**/*.lgb",
+	}
+}
+
 // RunGrade clones the clean checkout, applies the worker's diff wholesale, runs
 // each gate in order, and returns the structured report plus the raw outcomes.
 // When checkout is empty the gates run directly in a fresh temp dir (used by the
 // CI synthetic-fixture tests, which need no source tree). The grader — never the
 // worker — owns the verdict (STORY-0072 AC-2).
-func RunGrade(ctx context.Context, checkout string, workerDiff []byte, gates []GateSpec) (GradeReport, []GateOutcome, error) {
+func RunGrade(ctx context.Context, checkout string, workerDiff []byte, gates []GateSpec, excludeGlobs ...string) (GradeReport, []GateOutcome, error) {
 	tempDir, err := os.MkdirTemp("/tmp", "grade-")
 	if err != nil {
 		return GradeReport{}, nil, fmt.Errorf("create temp grading dir: %w", err)
@@ -141,7 +155,7 @@ func RunGrade(ctx context.Context, checkout string, workerDiff []byte, gates []G
 			return GradeReport{}, nil, fmt.Errorf("clone clean checkout: %s", out)
 		}
 		if len(workerDiff) > 0 {
-			if err := applyWorkerDiff(ctx, workDir, workerDiff); err != nil {
+			if err := applyWorkerDiff(ctx, workDir, workerDiff, excludeGlobs); err != nil {
 				return GradeReport{}, nil, err
 			}
 		}
@@ -155,18 +169,25 @@ func RunGrade(ctx context.Context, checkout string, workerDiff []byte, gates []G
 	return BuildGradeReport(outcomes), outcomes, nil
 }
 
-// applyWorkerDiff applies the worker's unified diff to the checkout. It checks
-// first, then applies for real; a non-applying patch is a hard grading error.
-func applyWorkerDiff(ctx context.Context, dir string, diff []byte) error {
+// applyWorkerDiff applies the worker's unified diff to the checkout, excluding
+// any excludeGlobs (generated artifacts the make-generate gate reproduces). It
+// checks first, then applies for real; a non-applying patch is a hard grading
+// error. --3way lets the apply fall back to a merge when context drifted.
+func applyWorkerDiff(ctx context.Context, dir string, diff []byte, excludeGlobs []string) error {
 	patchFile := filepath.Join(dir, ".worker.patch")
 	if err := os.WriteFile(patchFile, diff, 0644); err != nil {
 		return fmt.Errorf("write patch file: %w", err)
 	}
 	defer os.Remove(patchFile)
-	if out, err := newCmdContext(ctx, "git", "-C", dir, "apply", "--check", patchFile).CombinedOutput(); err != nil {
-		return fmt.Errorf("worker diff does not apply cleanly: %s", out)
+
+	args := []string{"-C", dir, "apply"}
+	for _, g := range excludeGlobs {
+		args = append(args, "--exclude="+g)
 	}
-	if out, err := newCmdContext(ctx, "git", "-C", dir, "apply", patchFile).CombinedOutput(); err != nil {
+	if out, err := newCmdContext(ctx, "git", append(append([]string{}, args...), "--check", patchFile)...).CombinedOutput(); err != nil {
+		return fmt.Errorf("worker diff does not apply cleanly (after excluding generated artifacts): %s", out)
+	}
+	if out, err := newCmdContext(ctx, "git", append(append([]string{}, args...), "--3way", patchFile)...).CombinedOutput(); err != nil {
 		return fmt.Errorf("apply worker diff: %s", out)
 	}
 	return nil

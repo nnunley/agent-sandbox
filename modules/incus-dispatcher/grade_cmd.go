@@ -40,7 +40,7 @@ func runGradeCommand(args []string) int {
 		diff = b
 	}
 
-	report, _, err := RunGrade(context.Background(), *checkout, diff, defaultGradeGates())
+	report, _, err := RunGrade(context.Background(), *checkout, diff, defaultGradeGates(), defaultGeneratedExcludes()...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "grade: %v\n", err)
 		return 1
