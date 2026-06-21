@@ -64,7 +64,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0051 | Directive template is validated against daemon allowlist | integration | iteration | TBD | STORY-0064 |
 | SCENARIO-0052 | Agents may only propose changes to directive importance/deadline; huma | integration | iteration | TBD | STORY-0064 |
 | SCENARIO-0053 | Pass grading leads to done state | process-level | iteration | TBD | STORY-0058 |
-| SCENARIO-0054 | Fail grading triggers retry with same worker | process-level | iteration | TBD | STORY-0058 |
+| SCENARIO-0054 | Fail grading triggers retry with same worker | process-level | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_RequeueEmitsFreshHandoff` | STORY-0058 |
 | SCENARIO-0055 | Template validation rejects unauthorized template | integration | iteration | TBD | STORY-0050 |
 | SCENARIO-0056 | Q2 item promoted to Q1 as deadline nears | integration | iteration | TBD | STORY-0043, STORY-0041 |
 | SCENARIO-0057 | Agent rescore beyond bound is rejected; human rescore succeeds | integration | iteration | TBD | STORY-0042 |

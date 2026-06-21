@@ -71,6 +71,23 @@ func (dm *Daemon) record(directiveID, grade, rule, action string, reason ...stri
 	}
 }
 
+// emitRetryHandoff produces a FRESH handoff bundle for the upcoming retry (STORY-0058 AC-25),
+// capturing the just-failed run's soft workflow state. Each retry gets a distinct bundle (keyed by
+// the attempt count). It is best-effort: a provider error is swallowed because handoff loss must
+// never affect a run's correctness — the diff + oracle grade remain authoritative (STORY-0018 AC-4).
+func (dm *Daemon) emitRetryHandoff(d queue.Directive, _ *Result) {
+	runID := fmt.Sprintf("%s-r%d", d.ID, d.Attempts)
+	st := WorkflowState{
+		CurrentBranch:    d.Ref,
+		CurrentWorkspace: d.Repo,
+		ResumeSummary: ResumeSummary{
+			PriorWork: fmt.Sprintf("attempt %d failed grading", d.Attempts),
+			NextStep:  "retry with the prior attempt's context",
+		},
+	}
+	_, _ = dm.ctxProvider().CreateHandoff(d.ID, runID, st)
+}
+
 // setStatus records a thread-status transition (no-op when no tracker is configured).
 func (dm *Daemon) setStatus(id string, s ThreadStatus) {
 	if dm.Threads != nil {
@@ -129,6 +146,10 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 	rung := nextRung(d.Attempts)
 	if rung.Autonomous() {
 		// Pre-approved rungs (retry-same / stronger-worker / hard-tier) requeue autonomously.
+		// STORY-0058 AC-25: emit a FRESH handoff bundle reflecting the just-failed run so the
+		// retry is provided with current soft state (consumed by the successor via its
+		// ContextProvider — proven on a real worker in SCENARIO-0030).
+		dm.emitRetryHandoff(d, result)
 		_ = dm.Q.Requeue(lease, time.Time{})
 		dm.setStatus(d.ID, StatusQueued)
 		dm.record(d.ID, "fail", rung.String(), "requeue")

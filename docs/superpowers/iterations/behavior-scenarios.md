@@ -1937,8 +1937,8 @@ gating evidence.
 - Temporal backoff is scheduled
 - Fresh handoff bundle is enqueued with retry
 
-**Automation status:** pending
-**Execution command:** TBD (ITER-0004 will wire the AC-25 portion at the daemon seam)
+**Automation status:** automated (AC-25 portion — daemon seam, fake backend; AC-24 Temporal portion → ITER-0007)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestRunOnce_RequeueEmitsFreshHandoff`
 
 **ITER-0004 scope note (PAR round-2):** this scenario is the home for **STORY-0058 AC-25** ("a fresh handoff
 bundle accompanies each retry"). ITER-0004 proves the *fresh-bundle-on-requeue* observables ("Fresh handoff bundle
