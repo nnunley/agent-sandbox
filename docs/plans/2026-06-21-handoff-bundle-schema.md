@@ -114,6 +114,18 @@ Adapters built now (YAGNI — only what we need):
 Do NOT build speculative alternative adapters (Redis/S3/etc.) until a second backend is actually
 needed — the interface is the insurance; extra adapters are not.
 
+**Candidate second adapter (noted, not built): `CxdbProvider`.** strongdm/cxdb
+(https://github.com/strongdm/cxdb) is an **Apache-2.0** AI context store — a Rust server + Go client
+(`github.com/strongdm/cxdb/clients/go`, msgpack on :9009) backed by an immutable **turn-DAG + BLAKE3
+content-addressed blobs** with O(1) fork-from-any-turn and dedup. The op mapping is direct:
+`APPEND_TURN`→WriteDiary, `CTX_FORK`→CreateHandoff (branch a snapshot), `PUT/GET_BLOB`→opaque session
+snapshots + knowledge, `ATTACH_FS`→bundle artifacts. Because it's networked + Apache-2.0 + branch/merge-
+native, it's a strong fit precisely for the **distributed / Mac-off** mode where lean-ctx wants its
+commercial license — i.e. it could become the DEFAULT there, with lean-ctx kept for zero-ops in-process
+local runs. Trade-off: a separate service (~1ms TCP, ops upkeep) vs lean-ctx in-process. Build a
+`CxdbProvider` only when distributed operation is actually on — the `ContextProvider` interface is what
+makes that a drop-in later. (Assessed 2026-06-21; 485★, active, no formal releases yet.)
+
 ## Compatibility contract (boxing-in mitigation)
 
 - ITER-0006 reads only `Directive.HandoffIn` (a path) — it never parses the manifest, so substrate
