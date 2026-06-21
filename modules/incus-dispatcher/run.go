@@ -32,11 +32,11 @@ type Run struct {
 	RunID          string          `json:"run_id"`
 	ThreadID       string          `json:"thread_id"`
 	ParentRunID    string          `json:"parent_run_id,omitempty"`
-	StumbleSignals []StumbleSignal `json:"stumble_signals"`
+	StumbleSignals []StumbleSignal `json:"stumble_signals,omitempty"`
 }
 
 // AddStumble appends a stumble signal to the run (STORY-0031 AC-1). It stamps the signal's RunID
-// with r.RunID and, if ts is the zero time, leaves Ts as caller-provided (caller controls the clock).
+// with r.RunID; the caller provides Ts (the caller controls the clock — Ts is used as-is).
 func (r *Run) AddStumble(s StumbleSignal) {
 	s.RunID = r.RunID
 	r.StumbleSignals = append(r.StumbleSignals, s)

@@ -20,10 +20,10 @@ type Thread struct {
 	CurrentBranch     string        `json:"current_branch"`
 	CurrentWorkspace  string        `json:"current_workspace"`
 	ResumeSummary     ResumeSummary `json:"resume_summary"`
-	LastVerifiedState string        `json:"last_verified_state"`           // STORY-0029 AC-2
-	Supersedes        string        `json:"supersedes,omitempty"`          // STORY-0030 AC-1
-	SupersededBy      string        `json:"superseded_by,omitempty"`       // STORY-0030 AC-1
-	Deadline          *time.Time    `json:"deadline,omitempty"`            // preemptive ITER-0007; nil = none
+	LastVerifiedState string        `json:"last_verified_state"`     // STORY-0029 AC-2
+	Supersedes        string        `json:"supersedes,omitempty"`    // STORY-0030 AC-1
+	SupersededBy      string        `json:"superseded_by,omitempty"` // STORY-0030 AC-1
+	Deadline          *time.Time    `json:"deadline,omitempty"`      // preemptive ITER-0007; nil = none
 }
 
 // ThreadStore is a daemon-local, concurrency-safe registry of Threads keyed by Thread.ID.
