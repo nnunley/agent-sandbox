@@ -201,3 +201,57 @@ the fleet itself: 3 code tasks dogfooded with independent holdout grading; lease
 `main` was sidestepped with an isolated `iter-0002` worktree per user direction. Two PAR scope
 rounds (REVISE→APPROVE) split heterogeneous/greenfield work to ITER-0005/0008; a PAR impl review
 drove the ParseDirective-boundary documentation and the fail-closed credential hardening.
+
+## ITER-0003 — Worker reliability & robust result contract (DONE — closed 2026-06-20)
+
+**Completed:** 2026-06-20 (fresh lean session, resuming the scope-locked checkpoint)
+
+**Stories delivered:** STORY-0069 (lean-ctx bridge+proxy — both ACs, smoke), STORY-0070 (canonical runner
+--fresh/--continue — AC-1), STORY-0071 (heartbeat tracks ctx_* — AC-1 projector + AC-2 renderer),
+STORY-0072 (robust result contract — AC-1 fallback + AC-2 grader-is-truth), STORY-0068 **AC-1** (external
+multi-gate grader + grade-JSON contract). **STORY-0068 AC-2 (let-go 13→0) carried** as a cluster-evidence
+item (see finding). STORY-0015 stayed deferred → ITER-0008 (Run-object collision, per prior PAR).
+
+**Prior-session commits (checkpointed):** f2e847e (STORY-0071 AC-1 projector, dogfooded+holdout),
+e6b847e (STORY-0069 lean-ctx + STORY-0072 AC-1 fallback, smoke-validated).
+
+**Tasks executed:** (this session — local TDD, CI-provable cores)
+- STORY-0068 AC-1 — `grader.go`: `GradeReport{passed,clusterA,check_generated,untagged_fails,e2e}` +
+  `BuildGradeReport` (pure reducer; `countLeafFailures` maps 13 cluster-A subtest fails → clusterA=13
+  without double-counting the parent) + `RunGrade` executor (clone clean checkout, wholesale source-only
+  apply excluding generated artifacts via `git apply --exclude`, run ordered gates). `grade_cmd.go`:
+  `incus-dispatcher grade --checkout --diff [--out]` subcommand. Proven in CI vs a synthetic in-repo
+  fixture (testdata/grade/gogen_ir.fail13.txt) — no let-go toolchain needed.
+- STORY-0070 AC-1 — `runner.sh` `parse_mode`/`prepare_worktree` behind a `RUNNER_LIB_ONLY` guard; local CI
+  shell test `fleet-worker/tests/runner-modes.test.sh` (fresh wipes the applied change, continue preserves
+  it). Backward compatible with the positional wall-clock the smoke harness passes.
+- STORY-0071 AC-2 — `heartbeat.go` `RenderHeartbeat` surfaces the last ctx_shell cmd + activity age;
+  '(no shell yet)' only when no shell command has run (CI: heartbeat_test.go).
+- STORY-0072 AC-2 — `TestGraderIgnoresWorkerSelfReport`: a lying worker result.json claiming success still
+  grades Passed=false; RunGrade structurally cannot read the worker self-report (anti-reward-hack, CI-locked).
+
+**Scenarios:** SCENARIO-0061 (smoke, cluster — bridge ON + savings, seam unit→integration),
+SCENARIO-0062 (CI — projector + heartbeat renderer), SCENARIO-0063 (CI — fallback + grader-is-truth),
+JOURNEY-0003 (AC-1 CI-automated; AC-2 cluster-pending with refs pinned). Corpus commands wired off TBD.
+
+**STORY-0068 AC-2 finding (durable):** refs PINNED — fix #249 = `23bfd87f1`, pre-fix target = its parent
+`d4c36cf2d` (recorded in testdata/journey0003/README.md). Attempted local reproduction (go1.26.4):
+applying the captured FOCUSED `lvl1-focused.diff` to the parent + `make generate` regenerates a lowered
+`core_go_lowered/test/test.go` that fails to compile. Attribution (bare-vs-patched regen): the bare parent
+has MANY lowering fallbacks (g-idoms/g-postorder/distinct-imports — what #249 fixes); the focused diff fixes
+the cluster-A divergence but LEAVES the test-package lowering (register-test!/use-fixtures), so the
+whole-package `gogen_ir` build gate fails. **The captured focused diff is a subset of #249, not a complete
+reproduction** — AC-2's `{passed:true}` needs either a cluster-A-isolating gate (count divergence without
+gating on the full lowered-package build) or a complete #249-equivalent diff, run on the nix-pinned cluster
+worker (AC-2's declared e2e seam). The grader mechanism itself is ready and CI-proven.
+
+**Sentinel corpus results:** JOURNEY-0001 sentinel GREEN (baseline and post-iteration). incus-dispatcher
+suite 118 tests green under `go test -race`; vet clean. No `TODO(ITER-0003)` markers remained.
+
+**Summary:** Promoted the skeleton's worker/grading reliability to the productization contract: the external
+grader is now a structured, multi-gate, anti-reward-hack source of truth (CI-proven, with a `grade`
+subcommand and generated-artifact-aware apply); the runner has canonical fresh/continue modes; the heartbeat
+surfaces real ctx_* activity instead of falsely reading idle; truncation always yields a structured fallback
+result. The one carried item, the let-go 13→0 e2e, is set up end-to-end (refs pinned, grader ready) and its
+remaining work is precisely characterized — a cluster run on the pinned toolchain with a divergence-isolating
+gate. PAR scope review was completed in the prior checkpoint (REVISE→revised→approved).

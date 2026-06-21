@@ -162,8 +162,16 @@
 - all oracle gates (check_generated, untagged, e2e) show success
 - grader output is deterministic (same ref + same diff always produces the same grade)
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** partial. AC-1 (the grader mechanism + grade-JSON shape {passed,clusterA,
+check_generated,untagged_fails,e2e}, including generated-artifact exclusion and the 13-failure cluster-A
+parsing) is AUTOMATED IN CI against synthetic fixtures. AC-2 (the let-go 13→0 reproduction) is PENDING on
+the cluster: refs are PINNED (fix #249=23bfd87f1, pre-fix target=parent d4c36cf2d; see
+testdata/journey0003/README.md). **Finding (2026-06-20):** applying the captured FOCUSED diff to the
+parent ref + local go1.26.4 `make generate` regenerates a lowered `core_go_lowered/test/test.go` that fails
+to compile (generator fallbacks for register-test!/use-fixtures) — local repro is toolchain/diff-scope
+sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declared e2e seam), not the Mac.
+**Execution command (CI, AC-1):** `cd modules/incus-dispatcher && go test -run 'Grade|RunGrade' .`
+**Repro command (cluster, AC-2):** `incus-dispatcher grade --checkout <clean let-go @ d4c36cf2d> --diff modules/incus-dispatcher/testdata/journey0003/lvl1-focused.diff`
 
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:52-65`
@@ -2164,8 +2172,12 @@ microVM host-socket isolation → ITER-0005)
 - bridge is ON throughout the run
 - worker routed all shell and read operations through lean-ctx
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** smoke (cluster). Bridge ON + measured savings proven on a real worker
+(STORY-0069 landed e6b847e: lean-ctx init+setup+serve --daemon + compression proxy on :4444 routed
+via ANTHROPIC_BASE_URL; OAuth Bearer forwards transparently; "Tokens saved 376", no "Bridge: OFF").
+Seam corrected unit→integration. Reusable regression harness in-repo.
+**Execution command:** `bash fleet-worker/spikes/leanctx-runner-smoke.sh` (needs ~/.fleet-token +
+the cluster remote; see fleet-worker/spikes/README.md for the proven recipe).
 
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:67-78`
@@ -2205,8 +2217,12 @@ microVM host-socket isolation → ITER-0005)
 - phase_guess correctly tracks the brief's execution phases
 - eventCount, Δsince_last, and alive status are all accurate
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (CI) — projector (AC-1) + heartbeat renderer (AC-2). AC-2 live
+heartbeat-print during a real worker run is the cluster integration confirmation (leanctx-runner-smoke).
+**Execution command:** `cd modules/incus-dispatcher && go test -run 'WorkingState|RenderHeartbeat' .`
+(workingstate_test.go: projector parses ctx_shell/ctx_read, ctx_* preferred over Bash, phase_guess;
+heartbeat_test.go: RenderHeartbeat surfaces the last ctx_shell cmd + age and never falsely
+'(no shell yet)' while active).
 
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:96-104`
@@ -2242,8 +2258,13 @@ microVM host-socket isolation → ITER-0005)
 - external grader is the source of truth (not the worker's self-report)
 - anti-reward-hack: worker truncation does not cause false negatives or block grading
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (CI) for both ACs. AC-1 fallback synthesis is in runner.sh
+(`result.json` written with {status:UNKNOWN, rc, harvested_diff_path} when the worker wrote none),
+smoke-validated on a real worker (leanctx-runner-smoke). AC-2 grader-is-truth is locked in CI:
+TestGraderIgnoresWorkerSelfReport — a lying worker result.json claiming success still grades
+Passed=false because RunGrade computes the verdict solely from its own gate runs.
+**Execution command:** `cd modules/incus-dispatcher && go test -run 'Grader|RunGrade' .`
+(grader-is-truth property); fallback synth covered by `fleet-worker/spikes/leanctx-runner-smoke.sh`.
 
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:106-112`

@@ -6,7 +6,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 |---|---|---|---|---|---|
 | JOURNEY-0001 | Complete one-shot lifecycle: directive to completion (walking skeleton | e2e | sentinel | `cd modules/incus-dispatcher && go test . -run TestJourney0001` | STORY-0057, STORY-0050, STORY-0051, STORY-0052, STORY-0019, STORY-0065, STORY-0066, STORY-0058, STORY-0063 |
 | JOURNEY-0002 | Live steering: high-priority directive preempts current work | e2e | sentinel | TBD | STORY-0057 |
-| JOURNEY-0003 | External grading reproduces 13→0 result | e2e | sentinel | TBD | STORY-0068 |
+| JOURNEY-0003 | External grading reproduces 13→0 result | e2e | sentinel | AC-1 CI: `cd modules/incus-dispatcher && go test -run 'Grade\|RunGrade' .`; AC-2 cluster (refs pinned, pending): `incus-dispatcher grade --checkout <let-go@d4c36cf2d> --diff testdata/journey0003/lvl1-focused.diff` | STORY-0068 |
 | JOURNEY-0004 | Mac-off: daemon claims and runs task offline | e2e | sentinel | TBD | STORY-0074 |
 | JOURNEY-0005 | Mac-off: autonomous grading without human feedback | e2e | sentinel | TBD | STORY-0074 |
 | JOURNEY-0006 | Mac-off: low-cost escalations proceed autonomously, privileged in esca | e2e | sentinel | TBD | STORY-0074 |
@@ -71,9 +71,9 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0058 | No-deadline low-importance item never runs while higher-tier work exis | process-level | iteration | TBD | STORY-0043, STORY-0041 |
 | SCENARIO-0059 | Rescore operation is the unified gateway for all priority changes | integration | iteration | TBD | STORY-0041, STORY-0042 |
 | SCENARIO-0060 | Worker PATH resolution via Go client exec | app-level | iteration | TBD | STORY-0067 |
-| SCENARIO-0061 | lean-ctx bridge daemon enables shell-hook compression | integration | iteration | TBD | STORY-0069 |
-| SCENARIO-0062 | Heartbeat projects ctx_shell as the active command, not Bash | app-level | iteration | TBD | STORY-0071 |
-| SCENARIO-0063 | Worker truncation is handled by fallback result and external grader | process-level | iteration | TBD | STORY-0072 |
+| SCENARIO-0061 | lean-ctx bridge daemon enables shell-hook compression | integration | iteration | `bash fleet-worker/spikes/leanctx-runner-smoke.sh` (cluster smoke; needs ~/.fleet-token) | STORY-0069 |
+| SCENARIO-0062 | Heartbeat projects ctx_shell as the active command, not Bash | app-level | iteration | `cd modules/incus-dispatcher && go test -run 'WorkingState|RenderHeartbeat' .` | STORY-0071 |
+| SCENARIO-0063 | Worker truncation is handled by fallback result and external grader | process-level | iteration | `cd modules/incus-dispatcher && go test -run 'Grader|RunGrade' .` | STORY-0072 |
 | SCENARIO-0064 | Orchestrator steers worker mid-run via file-feed | process-level | iteration | TBD | STORY-0073 |
 | SCENARIO-0065 | NixOS golden is built once and reused for all tasks | integration | iteration | TBD | STORY-0075 |
 | SCENARIO-0066 | NixOS golden maintains clean-room integrity (byte-identical regen) | e2e | iteration | TBD | STORY-0075 |

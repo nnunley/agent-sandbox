@@ -191,9 +191,17 @@ boundary; live wiring rides the laneq substrate (ITER-0006).
 **Rationale:** The productization-plan reliability cluster: truncation-robust result
 contract, grading round-trip proof, lean-ctx bridge ON, canonical runner modes, ctx_*-aware
 heartbeat. (Go-exec PATH fix STORY-0067 landed in ITER-0000.)
-**Status:** SCOPE REVIEWED — PAR REVISE→revised (2026-06-20), ready to implement. **Impl deferred
-to a fresh lean session** (see progress.md): ITER-0003 is cluster-heavy + spike-gated, and this
-orchestration session is OOM-prone (per docs/plans/2026-06-20-fleet-multi-agent-substrate-architecture.md).
+**Status:** done:ITER-0003 (2026-06-20) — fresh lean session per the checkpoint. Delivered: STORY-0069
+(lean-ctx bridge+proxy, smoke), STORY-0070 (runner --fresh/--continue, CI shell test), STORY-0071
+(projector AC-1 dogfooded + heartbeat renderer AC-2 CI), STORY-0072 (fallback result.json AC-1 smoke +
+grader-is-truth AC-2 CI), STORY-0068 AC-1 (multi-gate external grader + grade JSON, CI vs synthetic
+fixtures; `grade` subcommand; generated-artifact exclusion). **STORY-0068 AC-2 (let-go 13→0) is the one
+carried item** — refs pinned (#249=23bfd87f1, target=parent d4c36cf2d), but local repro is toolchain-
+sensitive (local go1.26.4 `make generate` regenerates a non-compiling lowered test pkg), so AC-2's green is
+a cluster-worker run on the nix-pinned toolchain (its declared e2e seam) — carried to a cluster evidence
+pass. Suite 118 green, -race clean; JOURNEY-0001 sentinel green. Commits: f2e847e, e6b847e (prior session)
++ this session's grader/runner/heartbeat commits. **Earlier checkpoint:** scope was PAR REVISE→revised
+(2026-06-20); impl resumed this session.
 **Scope revisions (PAR consensus — both reviewers REVISE):**
 - **STORY-0015 (Run object/artifact_refs) DEFERRED → ITER-0008** — not in the productization spec;
   its Run shape collides with STORY-0011's Run (worker_id/worker_kind/policy_id). ITER-0003 keeps

@@ -3,7 +3,7 @@
 **Summary:** Worker reliability & comms
 **Stories:** STORY-0067, STORY-0068, STORY-0069, STORY-0070, STORY-0071, STORY-0072, STORY-0073, STORY-0074
 **Primary sources:** `docs/plans/2026-06-17-dispatcher-productization.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 1/8 done
+**Status:** 5/8 done (0067:ITER-0000; 0069/0070/0071/0072:ITER-0003; 0068 partial — AC-1 done:ITER-0003, AC-2 cluster e2e pending)
 ## STORY-0067
 
 **Epic:** EPIC-012 — Worker reliability & comms
@@ -37,7 +37,19 @@
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:52-65`
 
-**Status:** pending
+**Status:** AC-1 done:ITER-0003 (multi-gate grader + grade JSON {passed,clusterA,check_generated,untagged_fails,e2e},
+CI-proven vs synthetic fixtures incl. the 13-failure cluster-A fixture; `grade` subcommand; generated-artifact
+exclusion). AC-2 PENDING (cluster e2e) — refs PINNED (fix #249 = 23bfd87f1, pre-fix target = parent d4c36cf2d,
+recorded in testdata/journey0003/README.md). **Finding (attributed locally, 2026-06-20):** the BARE parent
+ref regenerates with many lowering fallbacks (g-idoms, g-postorder, distinct-imports, emit-assignments-for-
+target — the broken gogen lowering #249 fixes). The captured FOCUSED diff applied to the parent fixes most
+of those (the cluster-A divergence) but LEAVES the `test`-package lowering (register-test!/use-fixtures
+fallbacks), so `make generate` emits a `core_go_lowered/test/test.go` that fails to compile (`declared and
+not used: v73`, `missing return`) → the whole-package `go test -tags gogen_ir ./pkg/ir/` build gate fails.
+**So the captured FOCUSED diff is a subset of #249, not a complete reproduction:** AC-2's `{passed:true}` is
+not directly satisfiable with this diff + the whole-package gate. The follow-up (cluster, nix-pinned
+toolchain) needs EITHER a cluster-A-isolating gate that counts the divergence without gating on the full
+lowered-package build, OR a complete #249-equivalent diff. Grader mechanism (AC-1) is ready and CI-proven.
 
 ## STORY-0069
 
@@ -55,7 +67,10 @@
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:67-78`
 
-**Status:** pending
+**Status:** done:ITER-0003 — AC-1+AC-2 landed in runner.sh (e6b847e): lean-ctx init+setup+serve --daemon
+(ctx_* MCP tools + bridge) + compression proxy on :4444 via ANTHROPIC_BASE_URL; OAuth Bearer forwards
+transparently; smoke-validated on a real worker ("Tokens saved 376", no "Bridge: OFF"). SCENARIO-0061 seam
+corrected unit→integration; reusable smoke regression at fleet-worker/spikes/leanctx-runner-smoke.sh.
 
 ## STORY-0070
 
@@ -72,7 +87,10 @@
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:85-90`
 
-**Status:** pending
+**Status:** done:ITER-0003 — AC-1: runner.sh accepts --fresh/--continue; prepare_worktree gates the
+reset/clean on mode (fresh=reset+clean, continue=preserve applied diff); shared PATH/lean-ctx/harvest/
+gain flow. Factored behind a RUNNER_LIB_ONLY guard + local CI shell test
+fleet-worker/tests/runner-modes.test.sh (no cluster). Composes STORY-0069+0072. Backward compatible.
 
 ## STORY-0071
 
@@ -90,7 +108,11 @@
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:96-104`
 
-**Status:** pending
+**Status:** done:ITER-0003 — AC-1: working-state projector (workingstate.go) reads events.jsonl, prefers
+ctx_shell/ctx_read over Bash/Read, emits phase_guess — fleet-dogfooded + holdout-graded (f2e847e). AC-2:
+RenderHeartbeat (heartbeat.go) surfaces the last ctx_shell cmd + activity age and emits '(no shell yet)'
+ONLY when no shell command has run — CI-proven (heartbeat_test.go). Live heartbeat-print during a real
+worker run is the cluster integration confirmation (rides the deferred JOURNEY-0003 cluster evidence).
 
 ## STORY-0072
 
@@ -108,7 +130,11 @@
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:106-112`
 
-**Status:** pending
+**Status:** done:ITER-0003 — AC-1: runner.sh synthesizes a fallback result.json {status:UNKNOWN, rc,
+harvested_diff_path} when the worker wrote none (truncation), smoke-validated (e6b847e). AC-2: the external
+grader is the source of truth — TestGraderIgnoresWorkerSelfReport proves a lying worker result.json claiming
+success still grades Passed=false; RunGrade computes the verdict solely from its own gate runs and never
+reads the worker self-report (CI-locked).
 
 ## STORY-0073
 
