@@ -354,6 +354,10 @@ microVM for sensitive/untrusted lanes. (NB: nspawn can NOT run in the unprivileg
 with `security.nesting=true` — proc-mount/idmap restriction, verified 2026-06-18 & 2026-06-21 and
 codified in `host/configuration.nix`; the fast tier lives in the VM guest, per the design's nested
 topology.) ITER-0005 is the next eligible iteration (ITER-0006 stays blocked on the Patrick sync).
+**ITER-0005 task (noted):** measure `nspawn --ephemeral` spin-up INSIDE an actual Firecracker micro-VM
+guest with a btrfs template — the faithful in-guest fast-tier number. The 76 ms figure was a
+privileged-Incus-container proxy; a real-kernel VM was confirmed to run nspawn natively without privilege
+(`fleet-worker/spikes/STORY-0025-vm-vs-lxc-comparison.md`), but the in-guest run itself is deferred here.
 **Impacted scenarios:** tier-selection; immutable-image; VM-boot-readiness; backend-parity;
 immutable-root-scratch (STORY-0049 AC-5); SCENARIO-0008/0009 (benchmark, done)
 **Look-ahead check:** STORY-0025 gate (ITER-0000) **CLEARED**; reuses ITER-0000 backend interface.
