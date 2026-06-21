@@ -23,18 +23,32 @@ fresh-handoff-on-retry). Executing FLEET-DOGFOODED (TDD brief + hidden holdout o
   04b8687, then PAR code-quality cleanup committed 8663fe4 (stumble_signals omitempty + AddStumble comment + gofmt).
   Suite 131 -race green, vet clean, holdout oracle passes on clean checkout. Covers STORY-0029/0030/0031 AC-1/AC-2.
   (Note: a redundant re-dispatch this turn reproduced the data model identically — confirms reproducibility.)
-- 🟡 T3 DISPATCHED (this turn) — workspace-lease registry (WorkspaceKey/Claim/Registry, ReuseDecision,
-  Claim/ActiveClaim/Release/DecideReuse/Supersede). Fleet dogfood running (name=iter0004-workspace; brief+oracle
-  .iter-scratch/iter0004-workspace-*; brief HARDENED to forbid lean-ctx init/stray files). Covers STORY-0033
-  AC-1/2/3 + STORY-0030 AC-2/3. Awaiting oracle grade.
-- ⏳ T4 NEXT — ReconstructResumeAudit (STORY-0029 AC-3/AC-4a). T5 SCENARIO-0015 harness. T6 lean-ctx wiring (FLEET).
-  T7 AC-4/AC-5 CI. T8 AC-25 fresh-handoff-on-retry (SCENARIO-0054).
-**Gotcha logged (brain):** fleet worker's `lean-ctx init` writes stray AGENTS.md/LEAN-CTX.md → breaks grader git apply
-(grade.json patch_applied:false false-negative). Briefs now forbid it. Also: `tee` makes bg dispatch exit 0 — read
-grade.json, not shell exit. dogfood-out/ now gitignored.
+- ✅ T3 DONE — workspace-lease registry (WorkspaceKey/Claim/Registry, ReuseDecision,
+  Claim/ActiveClaim/Release/DecideReuse/Supersede; independent of queue.Lease). Fleet-dogfooded on the golden path;
+  holdout passed on a clean checkout (authoritative). PAR quality (2 reviewers) → both APPROVE. Committed 4e2b2e7.
+  Suite 145 -race green, vet clean. Covers STORY-0033 AC-1/2/3 + STORY-0030 AC-2/3.
+- 🟡 T4 DISPATCHED (this turn) — ReconstructResumeAudit + ResumeAudit + Thread.OpenQuestions + ContinueRun
+  (STORY-0029 AC-3/AC-4a). Fleet dogfood running (name=iter0004-resume). Awaiting grade.
+- ⏳ T5 SCENARIO-0015 harness. T6 lean-ctx wiring (FLEET cluster seam). T7 AC-4/AC-5 CI (handoff-loss anti-reward-hack
+  + discipline). T8 AC-25 fresh-handoff-on-retry (SCENARIO-0054).
+**Grade false-negative (non-blocking):** cluster grade.json reports patch_applied:false for BOTH data-model & T3,
+but the full worker.diff applies clean locally AND the holdout passes on a clean checkout (verified 2 ways). Root
+cause not the stray files (new-file hunks apply fine) — a cluster-grade-env flake. Authoritative grade = local
+clean-checkout holdout (worker never saw it). dogfood-out/ gitignored; `tee` makes bg dispatch exit 0 → read grade.json.
 **Sequencing:** Each dogfood grades on a clean HEAD checkout; graded diffs applied+committed before next dispatch.
-**On resume:** harvest dogfood-out/iter0004-workspace/grade.json (+ verify holdout locally) → PAR quality → apply
-(exclude stray files) → commit → dispatch T4.
+**FLEET BLOCKER (this turn) + RECOVERY:** T3 fresh-launch failed 2× at spin-up — `nix-env`/`nixos-rebuild` in the
+freshly-launched worker races the nix-daemon socket (`cannot connect to socket .../daemon-socket/socket`); the golden
+`pristine` snapshot that sidesteps the rebuild was gone (`.mode` empty → fresh fallback). Diagnosis: base
+`fleet-dogfood-base` is a bare NixOS container (toolchain via `nix develop` at runtime); the dogfood fresh path
+doesn't wait for systemd before rebuild (prep DOES — that's why prep works). User chose: REBUILD GOLDEN. Running
+`fleet-dogfood-prep.sh --threshold 1` (forces golden snapshot regardless of cache speed). Commit checkpoint: T0/T1/T2
+done (04b8687, 8663fe4, docs d67823a).
+**RECOVERY DONE:** root-caused the nix-daemon-socket race; patched fleet-dogfood.sh + fleet-dogfood-prep.sh to
+poll `nix store ping --store daemon` (nudging the socket) BEFORE any nix op in a fresh launch (committed b4806c8).
+Re-ran prep → golden `pristine` snapshot restored (.mode=golden), validated end-to-end. **T3 re-dispatched from the
+golden path** (clones pre-built worker, no rebuild race) — awaiting grade.
+**On resume:** harvest dogfood-out/iter0004-workspace/grade.json (read JSON not shell exit) → verify holdout locally
+→ PAR quality → apply (exclude stray files) → commit → dispatch T4 (ReconstructResumeAudit).
 
 ---
 
