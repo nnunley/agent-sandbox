@@ -1,8 +1,12 @@
 # Progress
 
-**Phase:** ITER-0003 DONE (2026-06-20) — Worker reliability & robust result contract. Closed this
-fresh lean session, resuming the scope-locked checkpoint. Next: ITER-0004 (State passthrough &
-continuity, post-spike) — gated on the STORY-0034 handoff spike (still OFF critical path / pending).
+**Phase:** ITER-0003 DONE + AUDIT CLEAN (2026-06-21) — Worker reliability & robust result contract.
+Closed this fresh lean session, resuming the scope-locked checkpoint. **PAR audit (2 adversarial auditors,
+3 tiers) → CLEAN:** every ITER-0003 AC met at the correct seam; STORY-0068 AC-2 confirmed honestly carried
+(not falsely done); JOURNEY-0001 sentinel green; one MINOR (runner lib-only guard return-vs-exit) fixed.
+**Next: ITER-0004 (State passthrough & continuity)** — GATED on the STORY-0034 ctx_handoff round-trip spike
+(ITER-0000 off-critical-path spike, still UNVALIDATED). ITER-0004 cannot faithfully start until the handoff
+round-trip is proven on the cluster. The spike + ITER-0004 are cluster-heavy.
 **Sentinel baseline (this session):** JOURNEY-0001 green; incus-dispatcher 118 -race, vet clean.
 **ITER-0003 delivered:** STORY-0069 (lean-ctx bridge+proxy, smoke), STORY-0070 (runner
 --fresh/--continue, CI shell test), STORY-0071 (projector AC-1 dogfooded + heartbeat renderer AC-2 CI),
