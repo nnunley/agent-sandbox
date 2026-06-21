@@ -87,7 +87,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0074 | Template allowlist: worker-origin privileged template denied | integration | iteration | `cd modules/incus-dispatcher && go test -race -run TestScenario0074` | STORY-0053 |
 | SCENARIO-0075 | Graceful container teardown: stop-timeout routes to reaper | process-level | iteration | TBD | STORY-0060 |
 | SCENARIO-0076 | Container backend interface: passes existing contract tests | integration | iteration | TBD | STORY-0020 |
-| SCENARIO-0077 | Context handoff round-trip: validate spike unblocks feature | integration | iteration | TBD | STORY-0034 |
+| SCENARIO-0077 | Context handoff round-trip: validate spike unblocks feature | integration | cluster-gated (manual) | `bash fleet-worker/spikes/leanctx-handoff-spike.sh` (PASS 2026-06-21: nonce round-trips across two claude -p invocations, no data loss) | STORY-0034 |
 | SCENARIO-0078 | Prioritization: deadline approaching promotes Q2 to Q1 | unit | iteration | TBD | STORY-0045 |
 | SCENARIO-0079 | Prioritization: no-deadline low-importance stays Q4 (idle-only) | unit | iteration | TBD | STORY-0045 |
 | SCENARIO-0080 | Laneq next: returns highest-importance eligible item only | unit | iteration | TBD | STORY-0045 |

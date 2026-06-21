@@ -3,7 +3,7 @@
 **Summary:** State passthrough & continuity
 **Stories:** STORY-0029, STORY-0030, STORY-0031, STORY-0032, STORY-0033, STORY-0034
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/6 done
+**Status:** 1/6 done (STORY-0034 spike validated:ITER-0000; STORY-0029/0030/0031/0032/0033 → ITER-0004)
 
 ## STORY-0029
 
@@ -120,4 +120,6 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:402-404`
 
-**Status:** pending
+**Status:** done:ITER-0000 (spike validated 2026-06-21). AC-1/AC-2/AC-3 met — cluster spike PASS
+(airtight nonce round-trip across two `claude -p` invocations, no data loss; evidence in SCENARIO-0077).
+This was the ITER-0000 off-critical-path spike gating ITER-0004; the gate is now cleared.

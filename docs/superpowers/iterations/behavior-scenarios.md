@@ -2705,8 +2705,19 @@ Passed=false because RunGrade computes the verdict solely from its own gate runs
 - no data loss in compression/decompression cycle
 - spike result gates feature for dogfood rollout
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** passing (cluster spike, 2026-06-21) — manual/cluster-gated, not a CI sentinel
+**Execution command:** `bash fleet-worker/spikes/leanctx-handoff-spike.sh` (clones golden, runs two
+real `claude -p` invocations on a worker; probe: `fleet-worker/spikes/leanctx-handoff-probe.sh`)
+
+**Evidence (2026-06-21):** VERDICT=PASS airtight. A 48-bit random nonce `HANDOFF_NONCE=cd3fbfee57b0`
+injected into iteration-1 only was recorded via `lean-ctx session decision` + `session save`,
+serialized to disk (`~/.local/share/lean-ctx/sessions/<id>.json`, independently confirmed to contain
+the nonce), and recovered EXACTLY by iteration-2 — a separate `claude -p` process whose prompt never
+contained the nonce. Guess probability ~2⁻⁴⁸. Compression+bridge enabled (proxy on :4444 forwarding the
+OAuth Bearer transparently); large-payload compression itself is proven by the STORY-0069 chain spike.
+**Implementation note for ITER-0004:** bare `lean-ctx session load` (id=`latest`) returns "starting
+fresh"; recovery must resolve the explicit saved session id (or rely on auto-context injection), not
+`load latest`. The decision persists on disk regardless.
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:402-404`

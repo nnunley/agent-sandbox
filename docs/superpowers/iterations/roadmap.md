@@ -120,7 +120,8 @@ The Task 0 E2E harness is JOURNEY-0001 evidence, not a separate backlog story.)
 
 **Status:** done (both exit criteria met: (a) JOURNEY-0001 automated harness green;
 (b) real dogfood — graded `queue.Peek()` 10/10. Off-critical-path follow-ups deferred:
-real-Runner→fleet-worker wiring → ITER-0003; spikes STORY-0034/STORY-0025 → audit.)
+real-Runner→fleet-worker wiring → ITER-0003 (done); STORY-0034 spike → **PASS 2026-06-21** (cleared
+the ITER-0004 gate; SCENARIO-0077); STORY-0025 benchmark spike → still pending (gates ITER-0005).)
 
 ## Iteration list
 
@@ -237,9 +238,14 @@ the round-trip: context preservation across thread boundaries, anti-reinvention,
 branch/workspace claim checks, soft-state-not-authoritative discipline, stumble
 signals. Gated on the ITER-0000 spike outcome. Also lands STORY-0058 AC-25 (a fresh
 handoff bundle accompanies each retry — needs the handoff machinery built here).
-**Status:** pending
-**Impacted scenarios:** handoff-round-trip; continuity; claim-before-reuse
-**Look-ahead check:** gated by STORY-0034 (ITER-0000); independent of substrate.
+**GATE CLEARED (2026-06-21):** STORY-0034 ctx_handoff round-trip spike → **PASS** (airtight nonce
+round-trip across two `claude -p` invocations on a cluster worker, no data loss; SCENARIO-0077).
+ITER-0004 may now start, and STORY-0052 AC-10/11 (handoff import, gated in ITER-0000) are unblocked.
+**Implementation note from the spike:** the handoff machinery must resolve the explicit saved session id
+(or rely on lean-ctx auto-context); bare `lean-ctx session load` (id=`latest`) returns "starting fresh".
+**Status:** pending (gate cleared — ready to start)
+**Impacted scenarios:** handoff-round-trip (SCENARIO-0077, spike PASS); continuity; claim-before-reuse
+**Look-ahead check:** gate STORY-0034 (ITER-0000) **CLEARED**; independent of substrate.
 
 ### ITER-0005 — Micro-VM backend, NixOS golden & isolation tiers (post-benchmark)
 
