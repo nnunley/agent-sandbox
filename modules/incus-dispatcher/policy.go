@@ -14,6 +14,11 @@ import (
 // pushing a child directive that proposes them.
 type TemplateRule struct {
 	AllowWorkerOrigin bool
+
+	// Tier is the isolation tier this template runs at (STORY-0023 AC-1: the template
+	// declares the tier via the D1 mechanism). An empty Tier resolves to TierHard
+	// (fail-safe: most isolated) — see Policy.TierFor.
+	Tier IsolationTier
 }
 
 // Policy is the allowlist of launchable templates + origin rules.
@@ -39,6 +44,18 @@ func (p *Policy) ValidateTemplate(d queue.Directive) error {
 		return fmt.Errorf("policy: worker-origin not allowed for privileged templates: origin %q template %q", d.Origin, d.Template)
 	}
 	return nil
+}
+
+// TierFor resolves the isolation tier a (validated) template runs at — the D1 mechanism
+// for STORY-0023 AC-1. The tier is read from the vetted TemplateRule, never from the
+// directive, so a worker-origin directive cannot downgrade isolation. An unset rule tier
+// or an unknown template both resolve to TierHard (fail-safe: most isolated).
+func (p *Policy) TierFor(template string) IsolationTier {
+	rule, ok := p.Templates[template]
+	if !ok || rule.Tier == "" {
+		return TierHard
+	}
+	return rule.Tier
 }
 
 // isWorkerOrigin reports whether an origin denotes a worker-authored directive.
