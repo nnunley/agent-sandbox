@@ -82,4 +82,8 @@ integrity gate: byte-identical regen of generated artifacts), AC-3 with the lean
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:349-350`
 
-**Status:** pending
+**Status:** pending — **ITER-0005c, GATES STORY-0077 (PAR 2026-06-21, A):** this is pre-work
+DISCOVERY — confirm the upstream agent-skills-nix subdir/idPrefix layout + `filter.maxDepth` BEFORE
+building the bundle (STORY-0077). AC-5/AC-6 proof = a validated layout doc + the resolved bundle
+exhibiting the expected discovery paths (folded into SCENARIO-0068/0069 evidence; no separate
+scenario). Run FIRST in ITER-0005c so a broken/changed upstream layout surfaces before bundle config.

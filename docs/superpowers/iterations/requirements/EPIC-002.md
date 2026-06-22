@@ -36,7 +36,7 @@ STORY-0021/0022/0024 → ITER-0005b)
 
 **Acceptance criteria:**
 - AC-1: Hard tier: per-task Firecracker microVM (optionally wrapped in NixOS container) with hardware isolation · impact:`local` · seam:`process-level` · scenario:`SCENARIO-0006`
-- AC-2: Hard tier spin-up is hundreds of milliseconds (amortized cost over task lifetime) · impact:`local` · seam:`integration` · scenario:`SCENARIO-0006`
+- AC-2: Hard tier spin-up is a bounded amortized cost over task lifetime — measured ~1.8 s mean / 2.1 s p99 per-task Firecracker boot (STORY-0025 benchmark), <0.7% of a 5–10 min task (original "hundreds of ms" wording tightened to the measured figure per PAR) · impact:`local` · seam:`integration` · scenario:`SCENARIO-0006`
 - AC-3: Hard tier used for sensitive/untrusted lanes (e.g., trading-platform domain) · impact:`local` · seam:`integration` · scenario:`SCENARIO-0006`
 
 **Sources:**
@@ -82,7 +82,13 @@ Design: `docs/plans/2026-06-21-iter0005-backend-tier-design.md`.
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:88-89`
 
-**Status:** pending
+**Status:** pending — **RESCOPED for ITER-0005b (PAR 2026-06-21, both reviewers):** IN = AC-1 (a single
+durable VM is a hardware trust boundary) + the single-domain reading of AC-2 (disposable units run
+inside that one VM). DEFER → ITER-0006+ = dynamic multi-domain VM provisioning + cross-domain routing /
+operationalization (full multi-tenancy of AC-2/AC-3) — it needs a domain-routing owner and the queue
+substrate. Topology note: multi-tenancy "falls out" structurally from the per-domain-VM model but is
+NOT operationalized in ITER-0005b (avoids an incomplete "one VM per trust domain" claim with no
+domain-assignment mechanism).
 
 ## STORY-0025
 

@@ -381,42 +381,88 @@ design note (CRITICAL ×2); worker_kind orthogonality documented (CRITICAL); SCE
 (SERIOUS); new-work made explicit (SERIOUS). One B finding ("container_runner_test.go missing") was a
 false positive — the file exists (326 lines; a nested-go.mod search miss).
 
-### ITER-0005b — NixOS golden, Firecracker micro-VM & nspawn isolation tiers (cluster, post-spike)
+### ITER-0005b — Firecracker micro-VM substrate & isolation tiers (cluster, post-spike)
 
-**Stories:** STORY-0005, STORY-0007, STORY-0008, STORY-0021, STORY-0022, STORY-0024, STORY-0075 (FULL golden), STORY-0076, STORY-0077, STORY-0078
-**Rationale:** The declarative-worker + execution-substrate track (split out of ITER-0005): the FULL
-NixOS golden (retire-Ubuntu) image, the durable Firecracker micro-VM per trust domain hosting the
-coordinator + warm /nix store, disposable units inside the VM, the `nspawn --ephemeral` fast tier
-(real-kernel guest), per-task Firecracker hard tier, trust-domain VMs, provider routing
-(llm-agents.nix), and curated skills via agent-skills-nix. **Cluster-resident — runs on `agent-host`;
-no CI seam on the Mac (no local Nix).** Grafts the microVM/nspawn backends onto ITER-0005's factory seam.
+**Stories:** STORY-0007, STORY-0008, STORY-0021, STORY-0022, STORY-0024, STORY-0005
+**SCOPE DECISION (2026-06-21, PAR round 1 — both reviewers):** the original ITER-0005b (10 stories)
+was split into two decoupled tracks with no cross-dependency. This is the **substrate track**:
+durable Firecracker micro-VM, disposable units, the `nspawn --ephemeral` fast tier (real-kernel guest),
+per-task Firecracker hard tier, the trust-boundary VM, and immutable golden copies. The **image track**
+(FULL golden / provider routing / skills) moved to **ITER-0005c**. Rationale: orthogonal failure modes
+(Firecracker boot vs skills-flake resolution) — a stall in one must not block the other.
+**Cluster-resident — runs on `agent-host`; no CI seam on the Mac (no local Nix).** Grafts the
+microVM/nspawn backends onto ITER-0005's `BackendFactory.SelectRunner(tier)` seam (`backend.go`).
+**Task 0 (PAR-required, BLOCKING — both reviewers, CRITICAL):** define the **cluster verification
+harness** BEFORE any substrate code. For a cluster-only iteration with no Mac CI, every AC is e2e and
+currently every scenario is TBD — so the harness is the gate, not an afterthought. Deliverables:
+(a) a boot-readiness sentinel definition per scenario (what "ready" means — e.g. `systemctl
+is-system-running`, an llm-proxy reachability curl, an in-guest `nix develop` invocation); (b) a
+measurement script producing `{mean,p50,p99,stddev}` for spin-up (extends `fleet-worker/spikes/
+bench-spinup.sh`); (c) explicit ACCEPTANCE GATES (durable-VM boot-to-ready, sub-second nspawn fast-tier
+in-guest, per-task hard-tier ~1.8s amortized per the STORY-0025 benchmark, clean teardown without
+`incus delete`); (d) wire SCENARIO-0003/0004/0005/0006/0007/0029 corpus commands to the harness.
+**Sequencing (PAR — both reviewers):** STORY-0007 (durable Firecracker micro-VM) is a HARD
+PRECONDITION — build it FIRST; STORY-0008 (disposable units), STORY-0021 (in-guest nspawn fast tier),
+STORY-0022 (per-task Firecracker hard tier) follow; STORY-0024 last. STORY-0005 (golden copies, image
+definition + `incus copy`) can proceed in parallel (independent of the VM).
+**STORY-0024 RESCOPE (PAR — both reviewers):** IN: a single durable VM as a hardware trust boundary
+with disposable units inside (AC-1 + the single-domain reading of AC-2). DEFER: dynamic multi-domain
+VM provisioning + cross-domain routing/operationalization (the full multi-tenancy of AC-2/AC-3) →
+ITER-0006+ (needs the substrate + a domain-routing owner). Add a topology note: multi-tenancy "falls
+out" structurally but is not operationalized here.
 **Split-in (from ITER-0002 PAR):** STORY-0049 AC-5 (immutable root + writable /workspace,/tmp scratch)
-lands here as part of the golden image (STORY-0075); plus SCENARIO-0020's microVM host
+lands here as part of the disposable-unit/golden substrate; plus SCENARIO-0020's microVM host
 credential-socket isolation (the broker proof itself shipped in ITER-0002 at the container/proxy seam).
-**Precondition:** stand up a durable Firecracker micro-VM guest first — the benchmark spike confirmed
-nspawn can't run in the unprivileged `agent-host` LXC even with `security.nesting`; the fast tier lives
-in the VM guest. Also lands the deferred microVM ACs from ITER-0005 (STORY-0004 AC-3, STORY-0017
-AC-3/AC-4, STORY-0020 AC-2).
-**ITER-0005b task (noted):** measure `nspawn --ephemeral` spin-up INSIDE an actual Firecracker micro-VM
-guest with a btrfs template — the faithful in-guest fast-tier number. The 76 ms figure was a
-privileged-Incus-container proxy; a real-kernel VM was confirmed to run nspawn natively without privilege
-(`fleet-worker/spikes/STORY-0025-vm-vs-lxc-comparison.md`), but the in-guest run itself is deferred here.
-**Impacted scenarios:** SCENARIO-0003 (golden launch), SCENARIO-0004 (durable microVM), SCENARIO-0005
-(fast tier), SCENARIO-0006 (hard tier), SCENARIO-0007 (trust-domain VM), SCENARIO-0029 (microVM ≤5s),
-SCENARIO-0065/0066 (golden), SCENARIO-0067 (provider routing), SCENARIO-0068/0069 (skills);
-SCENARIO-0008/0009 (benchmark, done).
-**Status:** pending (cluster) — **GATE CLEARED 2026-06-21** (STORY-0025 benchmark done): the substrate decision
-is evidence-backed. nspawn Fast tier **76 ms** mean/97 ms p99 (N=100) vs Firecracker Hard tier **1861 ms**
-mean/2134 ms p99 (N=20) — nspawn is 24.5× faster and is the substrate-selection signal; microVM boot is a
-one-time amortized cost (<0.7% of a 5–10 min task). Decision: **two-tier model** — `nspawn --ephemeral`
-**inside the durable Firecracker micro-VM guest** (real kernel) for trusted lanes, per-task Firecracker
-microVM for sensitive/untrusted lanes. (NB: nspawn can NOT run in the unprivileged agent-host LXC even
-with `security.nesting=true` — proc-mount/idmap restriction, verified 2026-06-18 & 2026-06-21 and
-codified in `host/configuration.nix`; the fast tier lives in the VM guest, per the design's nested
-topology.) ITER-0005b becomes eligible once ITER-0005 (interface slice) lands (ITER-0006 stays blocked
-on the Patrick sync).
-**Look-ahead check:** STORY-0025 gate (ITER-0000) **CLEARED**; reuses ITER-0000 backend interface and
-grafts onto ITER-0005's tier→backend factory seam.
+**Also lands the deferred microVM ACs from ITER-0005:** STORY-0004 AC-3, STORY-0017 AC-3/AC-4,
+STORY-0020 AC-2 (and SCENARIO-0029 microVM ≤5s — owned by STORY-0017 AC-3, measured by Task 0's harness).
+**In-guest benchmark (Task 0 priority):** measure `nspawn --ephemeral` spin-up INSIDE an actual
+Firecracker micro-VM guest with a btrfs template — the faithful in-guest fast-tier number (the 76 ms
+figure was a privileged-Incus-container proxy; a real-kernel VM was confirmed to run nspawn natively
+without privilege — `fleet-worker/spikes/STORY-0025-vm-vs-lxc-comparison.md`).
+**Impacted scenarios:** SCENARIO-0004 (durable microVM), SCENARIO-0005 (fast tier), SCENARIO-0006
+(hard tier), SCENARIO-0007 (trust-domain VM, single-domain v1), SCENARIO-0029 (microVM ≤5s),
+SCENARIO-0003 (golden launch / STORY-0005); SCENARIO-0008/0009 (benchmark, done).
+**Boxing-in (PAR — both PASS):** grafts onto ITER-0005's factory; STORY-0007's "hosts coordinator +
+queue client" is resource topology (where the one-shot loop runs), NOT scheduling semantics — it does
+NOT commit ITER-0006's queue substrate (still Patrick-blocked) or ITER-0007's Temporal; tier ⊥
+worker_kind (ITER-0008).
+**Status:** pending (cluster) — **GATE CLEARED 2026-06-21** (STORY-0025 benchmark done): the substrate
+decision is evidence-backed (nspawn Fast tier 76 ms vs Firecracker Hard tier 1861 ms; two-tier model:
+`nspawn --ephemeral` inside the durable Firecracker guest for trusted lanes, per-task Firecracker for
+sensitive lanes). nspawn can NOT run in the unprivileged agent-host LXC even with `security.nesting`
+(proc-mount/idmap, codified in `host/configuration.nix`) — the fast tier lives in the VM guest.
+ITER-0005b is eligible now that ITER-0005 landed; ITER-0006 stays blocked on the Patrick sync.
+**Scope review:** 2 PAR reviewers (2026-06-21) → both REVISE/conditional-APPROVE. Conditions applied:
+(1) split substrate/image → ITER-0005b + ITER-0005c (CRITICAL, both); (2) Task 0 cluster verification
+harness made the BLOCKING first deliverable (CRITICAL, both); (3) STORY-0024 rescoped to single-domain
+v1 (SERIOUS, both); (4) STORY-0022 AC-2 wording aligned to the ~1.8s benchmark; SCENARIO-0029 ownership
+pinned to STORY-0017 AC-3. A's "STORY-0021/0022/0024 missing from EPIC-001" was a false positive — they
+are in EPIC-002 (citation check passes; all 78 cited stories exist).
+**Look-ahead check:** STORY-0025 gate CLEARED; grafts onto ITER-0005's factory seam; ITER-0005c (image)
+runs in parallel.
+
+### ITER-0005c — NixOS golden image, provider routing & curated skills (cluster, parallel to ITER-0005b)
+
+**Stories:** STORY-0078 (skills-layout discovery — GATES 0077), STORY-0077 (vendor skills via
+agent-skills-nix), STORY-0075 (FULL golden), STORY-0076 (provider routing via llm-agents.nix)
+**SCOPE DECISION (2026-06-21, PAR round 1):** the **image track**, split out of ITER-0005b. Independent
+of the substrate track — the golden image + skills + provider routing run identically on a container or
+a microVM, so this can proceed in parallel with (and does not block) ITER-0005b.
+**Sequencing (PAR — A):** STORY-0078 (confirm upstream agent-skills-nix subdir/idPrefix layout +
+`filter.maxDepth`) is **pre-work discovery that GATES STORY-0077** (the bundle config) — run it FIRST;
+its AC-5/AC-6 are a validated layout doc (proof: the resolved bundle exists with the expected paths,
+folded into SCENARIO-0068/0069). Then STORY-0075 (FULL golden: snapshot + `incus copy` AC-1,
+clean-room byte-identical-regen integrity gate AC-2, bridge-ON graded run AC-3) → STORY-0076 (provider
+routing, needs llm-agents.nix in the golden). STORY-0077 (skills bundle baked into the golden) composes
+with STORY-0075.
+**Cluster-resident — runs on `agent-host`; no CI seam on the Mac.** Reuses ITER-0005b's Task 0 cluster
+verification harness for golden launch + graded-run proofs.
+**Impacted scenarios:** SCENARIO-0065/0066 (golden built once + clean-room integrity), SCENARIO-0067
+(provider routing), SCENARIO-0068/0069 (skills bundle + discovery path).
+**Status:** pending (cluster) — eligible in parallel with ITER-0005b (both gated only on the STORY-0025
+benchmark, CLEARED). STORY-0075 is PARTIAL (minimal worker-image slice done:ITER-0000; FULL golden here).
+**Look-ahead check:** independent of the substrate track; reuses ITER-0005b Task 0 harness; STORY-0049
+AC-5 immutable-root scratch is shared substrate (tracked in ITER-0005b).
 
 ### ITER-0006 — Queue substrate (POST-PATRICK; substrate-coupled)
 
