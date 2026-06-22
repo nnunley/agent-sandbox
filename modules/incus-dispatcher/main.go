@@ -134,6 +134,13 @@ Flags:
 		ExternalGradingCheckout: *externalGrading,
 	}
 
+	// Route the implementer to the chosen provider/model (STORY-0076 AC-1): forward
+	// --provider/--model into the worker env (FLEET_PROVIDER/FLEET_MODEL). The grader stays
+	// deterministic (git-based, no model).
+	if err := applyProviderRouting(&task); err != nil {
+		log.Fatalf("provider routing: %v", err)
+	}
+
 	// Run task
 	ctx := context.Background()
 	result, err := taskRunner.Run(ctx, task)

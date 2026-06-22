@@ -104,7 +104,12 @@
           agents.claude-code-router  # `ccr` — Anthropic↔OpenAI translator so claude-code can
                                 #   drive a local OpenAI-compatible model (Ollama qwen3.6 via the
                                 #   llm-proxy /ollama route). Cheap-local-implementer tier (#22).
-          # agents.codex agents.gemini-cli agents.qwen-code  # alt-provider CLIs for cheap workers (#22)
+          # Alt-provider CLIs for cheap implementers (STORY-0076 AC-1): codex (OpenAI),
+          # gemini-cli (Google), qwen-code (Qwen/Ollama). The grader/oracle stays deterministic
+          # (git-based, no model) — these only route the IMPLEMENTER to a cheaper provider.
+          agents.codex
+          agents.gemini-cli
+          agents.qwen-code
           goPkg                 # Go 1.26 for the let-go build
           pkgs.gnumake          # `make generate` / `make check-generated`
           pkgs.git              # bundle clone + `git diff` harvest

@@ -35,7 +35,8 @@
 
   # Immutable root intent: the Nix store is read-only (golden is the source); a disposable
   # copy must not mutate the system profile. Writes belong in /workspace or /tmp.
-  boot.readOnlyNixStore = true;
+  # (nixos-25.11 retired boot.readOnlyNixStore → boot.nixStoreMountOpts; ITER-0005c T3.)
+  boot.nixStoreMountOpts = [ "ro" ];
 
   # Marker so a launched copy can be proven to be a fleet-golden clone (not a freshly built
   # stock image) without a live build — read by the golden-launch cluster probe (AC-2).

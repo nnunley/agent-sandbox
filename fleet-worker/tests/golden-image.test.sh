@@ -28,7 +28,8 @@ have "$GOLDEN" '/workspace".*|/workspace"[[:space:]]*=[[:space:]]*\{' "/workspac
 have "$GOLDEN" 'fsType[[:space:]]*=[[:space:]]*"tmpfs"'        "scratch is tmpfs (no residue across copies)"
 
 # IMMUTABLE ROOT — read-only nix store; golden image is the immutable source.
-have "$GOLDEN" 'boot\.readOnlyNixStore[[:space:]]*=[[:space:]]*true' "immutable root: read-only nix store"
+# (nixos-25.11 retired boot.readOnlyNixStore → boot.nixStoreMountOpts = [ "ro" ].)
+have "$GOLDEN" 'boot\.nixStoreMountOpts[[:space:]]*=[[:space:]]*\[[[:space:]]*"ro"' "immutable root: read-only nix store"
 
 # Golden marker so a launched copy is provably a fleet-golden clone (no live build, AC-2).
 have "$GOLDEN" 'fleet-golden-version'                          "golden carries a version marker for copy-launch proof"
