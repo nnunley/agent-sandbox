@@ -560,17 +560,97 @@ STORY-0049 AC-5 immutable-root scratch is shared substrate (tracked in ITER-0005
 ITER-0006/0007/0008 (both reviewers PASS check 3 — skills+provider are image-layer config, additive
 flake inputs, orthogonal to queue/Temporal/worker_kind).
 
-### ITER-0006 — Queue substrate (POST-PATRICK; substrate-coupled)
+### ITER-0006 — Queue substrate: laneq gRPC binding + Go adapter + directive contract (CI-provable)
 
-**Stories:** STORY-0010, STORY-0044, STORY-0002, STORY-0064
-**Rationale:** Replace the stub queue with the chosen substrate (extend laneq +
-`not-before`), cluster-resident, passing the Mac-off acceptance
-test; finalize the directive contract fields. **SUBSTRATE CONFIRMED (2026-06-22):
-Patrick confirmed open to extending LaneQ and added Norman as a LaneQ contributor —
-the substrate is LaneQ. Unblocked.**
+**Stories:** STORY-0010 (partial), STORY-0044 (partial), STORY-0002 (partial), STORY-0064 (partial)
+**Rationale:** Replace the stub `MemoryQueue` with the chosen substrate — **laneq**
+(`selamy-labs/laneq`, Python: SQLite core + CLI + MCP server) — wired to the Go
+dispatcher through a **gRPC binding**. **SUBSTRATE CONFIRMED (2026-06-22): Patrick
+open to extending laneq + added Norman as contributor; the substrate is laneq.**
+
+**Discovery (2026-06-22):** laneq already ships upstream (v0.4.0 + #18) `not_before` +
+`blocked_by` TIME-plane deferral, lease-based `take`/`touch`/`reap`, `peek`, `defer`,
+`set_status`, threading. States pending/taken/deferred/done/dropped. A laneq directive is an
+**opaque `body` string** + scheduling columns (priority P0/P1/P2, lane, parent, not_before,
+blocked_by, taken_by, lease_until, requeue_count). So STORY-0044's not-before is largely DONE
+upstream; ITER-0006 *validates + integrates* it.
+
+**Architecture (PAR-revised 2026-06-22, both reviewers REVISE→addressed):**
+- **gRPC binding:** a `laneq.proto` + a Python gRPC server over `core.py` ops, developed on a
+  **laneq branch we control, pinned by commit hash** (upstream PR best-effort/non-blocking).
+  pytest-covered in the laneq repo. Adds a clean **`parked` status** to laneq core (Park must be a
+  durable, non-auto-promoting hold — do NOT overload `deferred`, which auto-promotes).
+- **Storage schema (resolves A-critical "schema undefined"):** scheduling fields are **laneq
+  columns** (Importance↔priority, NotBefore↔not_before via `Defer`, Lane↔lane,
+  Attempts↔requeue_count) = single source for scheduling; semantic fields
+  (intent/template/origin/repo/ref/task/grade/handoff_in/deadline) live in laneq's opaque **`body`
+  JSON**, parsed by the Go `ParseDirective`. No field duplication.
+- **Lease mapping (resolves B-critical "token lost on restart"):** `Lease.Token ↔ (id, consumer)`
+  — both are durable SQLite columns, recoverable after daemon restart; no synthesized in-memory
+  token, no upstream token field needed.
+- **Go gRPC client `LaneqQueue`** implements the existing `queue.Queue` interface (drop-in for
+  `MemoryQueue`), wired in `serve_cmd.go` behind a `--queue=laneq|memory` flag (default `memory`
+  until the ITER-0006b cluster deploy).
+- **Temporal-sole-writer seam (resolves boxing-in):** not_before/priority are written ONLY via gRPC
+  `Defer`/`Reprioritize`; in ITER-0007 Temporal becomes the sole caller of those. The daemon claim
+  path only READS. Documented at the seam so ITER-0007 grafts on without rework.
+
+**laneq fork handling (PAR re-review 2026-06-22, A+B serious — resolved):** the gRPC server + `parked`
+status are developed on a **laneq branch we control** (Norman is a `selamy-labs/laneq` contributor →
+push a `grpc-binding` branch there, or fork to `nnunley/laneq`), **pinned by commit hash** in
+`fleet-worker/flake.lock`-style fashion (same hash-pin discipline as agent-skills in ITER-0005c). The
+ITER-0006b Nix package builds laneq from that pinned hash. An upstream PR to selamy-labs is
+**best-effort / non-blocking**; until merged we build from the pinned branch (acceptable maintenance
+cost, single small feature). This removes any external-merge block on ITER-0006/0007.
+
+**Task decomposition:**
+- **T0** `laneq.proto` contract (Push/Take/Peek/Defer/SetStatus/Touch/Reap/Stats/Show/List/Reprioritize/ThreadStatus + Park/Unpark). **PAR-gate T0 in a mini-review** so the proto doesn't box in ITER-0007 (blocking-dependency / lane / thread semantics must be expressible).
+- **T1** laneq-side gRPC server (Python, our branch) over core.py + add `parked` status (**careful SQL: `parked` MUST be excluded from `take`/`peek`/`reap`/`reclaim_deferred` and MUST NOT auto-promote — B-serious T1 impl-review item**); pytest. Pin by hash.
+- **T2** Go generated stubs + `LaneqQueue` adapter (full contract mapping above).
+- **T3 (evidence)** SCENARIO-0091 (integration, **CI-native**): Go adapter drives a faithful
+  in-process **fake** laneq gRPC server through the full lifecycle — claim/lease/requeue/defer/reap/park
+  PLUS **lane-FIFO + lane isolation** and **`blocked_by` dependency-chain + thread_status** (B-critical
+  coverage fix) → proves STORY-0002 AC-1 (priority/**lanes/threading**/leasing), STORY-0044 AC-1/AC-2,
+  STORY-0010 AC-4.
+- **T4** directive contract: activate `ParseDirective` at the laneq `body` JSON boundary +
+  SCENARIO-0045 unit tests for STORY-0064 AC-1..AC-14 **field-presence/schema** (incl. access_cmd/root
+  rejection). AC-2's *template-vs-allowlist+origin validation* half is ALREADY proven by the ITER-0002
+  D1 `ValidateTemplate` (policy.go:35, `policy_test.go`/`scenario_d1_test.go`) — cited, not re-proven.
+- **T5** wire `serve_cmd.go` `--queue=laneq|memory` flag + document the Temporal-sole-writer seam.
+- **T6 (evidence, this iteration — A-critical de-boxing)** SCENARIO-0092 (e2e, **real Python laneq**
+  via `uvx --from git+https://github.com/<our-fork>/laneq@<hash>`): run the SCENARIO-0091 lifecycle
+  against the REAL laneq gRPC server (runnable on the dev Mac / cluster — Python present; NOT in Go CI).
+  This proves the gRPC binding is wire-compatible **before** ITER-0007 builds Temporal on the seam, so
+  the seam is not merely fake-proven. (The CI sentinel stays SCENARIO-0091; SCENARIO-0092 is a
+  this-iteration real-wire proof, re-run productionized in ITER-0006b after Nix packaging.)
+
+**Story outcomes this iteration (PARTIAL where dependency-gated):**
+- STORY-0002: AC-1 done (durable cluster-resident queue: priority/**lanes/threading**/leasing — all exercised in SCENARIO-0091 + real-wire SCENARIO-0092); **AC-2 → ITER-0007** (deferred work lives in Temporal until eligible).
+- STORY-0044: AC-1/AC-2 done (not_before field + `next` filters eligible-then-importance); **AC-3 → ITER-0007** (Temporal sole writer).
+- STORY-0064: AC-1..AC-14 done (contract schema via SCENARIO-0045 unit; AC-2 validation half cites D1 `ValidateTemplate`); **AC-15/AC-16 → ITER-0007** (importance/deadline as Temporal inputs; agents-propose-vs-humans-set authority — cross-surface, need Temporal).
+- STORY-0010: AC-4 done (not-before eligibility gate); decision RESOLVED (laneq); AC-2/AC-3/AC-5 = **not-chosen decision outcomes** (closed by decision, not unmet); **AC-1 (Mac-off cluster e2e) → ITER-0006b**.
+
 **Status:** pending
-**Impacted scenarios:** queue-substrate Mac-off; not-before eligibility; directive schema
-**Look-ahead check:** dependency resolved (substrate confirmed); unblocks ITER-0007.
+**Impacted scenarios:** SCENARIO-0091 (NEW, CI integration — gRPC adapter lifecycle incl. lanes/threading); SCENARIO-0092 (NEW, real-wire e2e via uvx, **this iteration**); SCENARIO-0045 (directive contract, unit); SCENARIO-0012 (Mac-off → ITER-0006b)
+**Look-ahead check:** substrate confirmed; the gRPC `Defer`/`Reprioritize` seam is built AND real-wire-proven (SCENARIO-0092) so ITER-0007 Temporal becomes the sole writer without rework. Unblocks ITER-0006b + ITER-0007.
+
+### ITER-0006b — laneq Nix package + cluster deploy + Mac-off acceptance (cluster)
+
+**Stories:** STORY-0010 (closeout AC-1)
+**Rationale:** Package laneq + its gRPC server (pinned-hash fork) as a **Nix package** for the NixOS
+cluster; deploy on `ndn-desktop` with the SQLite DB on a host volume; run the **Mac-off acceptance
+test**. The Go↔real-laneq wire is already proven in ITER-0006 (SCENARIO-0092 via uvx); this iteration
+*productionizes* it (Nix-packaged service) and proves the cluster Mac-off property — the
+cluster/deploy half that cannot run in Go-only CI (mirrors the ITER-0005/0005b/0005c CI-vs-cluster
+split).
+**Task sketch:** Nix derivation for laneq (pinned hash) + gRPC server entrypoint; deploy unit on
+ndn-desktop (DB host volume); re-run SCENARIO-0092 against the Nix-packaged service; SCENARIO-0012
+(Mac-off: close Mac → workers keep claiming/processing via laneq on ndn-desktop; DB survives;
+reconnect with no loss).
+**Status:** pending
+**Impacted scenarios:** SCENARIO-0012 (Mac-off acceptance); SCENARIO-0092 (re-run productionized)
+**Look-ahead check:** depends on ITER-0006 binding (real-wire already proven); closes STORY-0010 AC-1;
+carry-allowance applies if the cluster Mac-off e2e hits a deploy wall (precedent: ITER-0005c).
 
 ### ITER-0007 — Time plane & Eisenhower prioritization (Temporal)
 
@@ -583,7 +663,12 @@ ACs split in from ITER-0001 (per PAR): STORY-0055 AC-7 (re-surface stale human-p
 STORY-0058 AC-24 (retry re-pushed by Temporal with backoff), STORY-0061 AC-3 (urgency-driven
 resurfacing in priority order; carries SCENARIO-0087).** These graft onto ITER-0001's escalations
 lane + decision log without reworking them — the lane was built as a plain durable FIFO precisely so
-Temporal aging layers on top.
+Temporal aging layers on top. **Also lands the substrate ACs deferred from ITER-0006 (PAR 2026-06-22):
+STORY-0044 AC-3 (Temporal sole writer of not_before — becomes the sole caller of the laneq gRPC
+`Defer`/`Reprioritize` seam built in ITER-0006), STORY-0002 AC-2 (deferred/future work lives in
+Temporal until eligible, not in laneq), STORY-0064 AC-15/AC-16 (importance/deadline are Temporal
+projection inputs; agents may only PROPOSE, humans set freely — cross-surface enforcement). These
+graft onto ITER-0006's gRPC seam without rework.**
 **Status:** pending
 **Impacted scenarios:** single-writer-projection; rescore-authority; deadline-aging; budget;
 escalation-resurface (SCENARIO-0087)

@@ -3180,3 +3180,82 @@ fresh"; recovery must resolve the explicit saved session id (or rely on auto-con
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:117-162`
 - `fleet-worker/flake.nix`, `fleet-worker/worker-container.nix`, `fleet-worker/runner.sh`
+
+## SCENARIO-0091 — Go gRPC adapter drives laneq through the full directive lifecycle
+
+**Kind:** contract
+**Proof seam:** integration
+**Owning stories:** STORY-0002, STORY-0044, STORY-0010
+**Role:** the **CI contract gate** — the per-iteration regression sentinel for the queue contract
+(STORY-0002 AC-1 / STORY-0044 AC-1,AC-2 / STORY-0010 AC-4). Pairs with SCENARIO-0092, which confirms
+the same contract holds over the REAL laneq wire (supporting proof, not the CI gate).
+
+**Preconditions:**
+- a laneq gRPC server is reachable (CI: a faithful in-process **fake** implementing the `laneq.proto`
+  contract with laneq's documented semantics; cluster real-wire variant = SCENARIO-0092)
+- the Go `LaneqQueue` adapter (implements `queue.Queue`) is configured against that server
+- the directive `body` carries a STORY-0064 directive JSON
+
+**Action:**
+- Push N directives at mixed importances; Claim drains them
+- Claim/Touch/Done/Requeue a directive (lease identified by `(id, consumer)`)
+- Defer a directive with a future `not_before`; assert it is not claimable until eligible
+- Defer with a `blocked_by` dependency chain (A blocks B blocks C); assert promotion only after ALL deps terminal
+- Park a claimed directive; assert it is excluded from Claim/Peek/Reap and does not auto-promote
+- Expire a lease; Reap reclaims it (Attempts/requeue_count increments)
+- **Lanes:** Push to lane1 and lane2; Claim per-lane; assert lane isolation + FIFO-within-priority per lane
+- **Threading:** Push parent + child directives; assert thread_status reflects open/closed thread state
+
+**Expected observables:**
+- Claim returns highest-importance ELIGIBLE directive (priority P0<P1<P2; FIFO within priority)
+- not_before in the future → directive skipped by Claim/Peek (STORY-0044 AC-2; STORY-0010 AC-4)
+- deferred directive promotes to pending only after not_before passes AND every blocked_by dep terminal
+- Park holds durably with NO auto-promotion (distinct from laneq `deferred`)
+- Lease.Token ↔ (id, consumer) survives a simulated adapter restart (re-derived from laneq state)
+- Importance↔priority, NotBefore↔not_before, Attempts↔requeue_count contract mapping holds round-trip
+- the semantic Directive fields survive round-trip in the opaque `body` JSON
+- **lane isolation:** a Claim on lane1 never returns a lane2 directive; FIFO order holds within each lane
+- **threading:** thread_status reports open while any thread member is non-terminal, closed when all terminal
+- durable cluster-resident queue with priority + **lanes + threading** + leasing (STORY-0002 AC-1, fully exercised)
+
+**Automation status:** planned (ITER-0006 T3) — CI-native via the in-process fake gRPC server. NOTE:
+SCENARIO-0091 proves the **contract** against a faithful fake; wire-compat against the real Python
+laneq is SCENARIO-0092 (also ITER-0006, via uvx).
+**Execution command:** `cd modules/incus-dispatcher && go test ./queue/... -run TestScenario0091` (planned)
+
+**Sources:**
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
+- `selamy-labs/laneq` `src/laneq/core.py` (queue semantics mirrored by `laneq.proto`)
+
+## SCENARIO-0092 — Go adapter ↔ real Python laneq gRPC server over the wire
+
+**Kind:** contract
+**Proof seam:** e2e
+**Owning stories:** STORY-0002, STORY-0044, STORY-0010
+**Role:** **supporting real-wire proof** (wire-compat confirmation over the REAL laneq gRPC server) —
+NOT the CI gate. The CI regression sentinel for these ACs is SCENARIO-0091 (in-process fake); this
+scenario additionally proves the binding is wire-compatible with real laneq before ITER-0007 builds on
+the `Defer`/`Reprioritize` seam.
+
+**Preconditions:**
+- the real Python laneq gRPC server (our pinned-hash branch) is launched via
+  `uvx --from git+https://github.com/<our-fork>/laneq@<hash> laneq-grpc` (dev Mac or cluster — Python
+  present; NOT in the Go-only CI). ITER-0006b re-runs this against the Nix-packaged service.
+- the Go `LaneqQueue` adapter connects over the gRPC protocol to that real server
+
+**Action:**
+- run the full SCENARIO-0091 lifecycle (claim/lease/requeue/defer/blocked_by/park/reap + lanes + threading)
+  against the REAL laneq gRPC server (not the fake)
+
+**Expected observables:**
+- the full lifecycle behaves identically to the fake (SCENARIO-0091)
+- proves the Python gRPC binding + Go client are wire-compatible end to end (no stub fallback)
+- the gRPC `Defer`/`Reprioritize` seam works against real laneq → ITER-0007 Temporal can build on it
+
+**Automation status:** planned (ITER-0006 T6, real-wire via uvx — A-critical de-boxing: proves the
+seam against real laneq THIS iteration, not only the fake; re-run productionized in ITER-0006b).
+Cluster/Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
+**Execution command:** `cd modules/incus-dispatcher && LANEQ_GRPC_REAL=1 go test ./queue/... -run TestScenario0092` (planned; requires a reachable real laneq gRPC server)
+
+**Sources:**
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
