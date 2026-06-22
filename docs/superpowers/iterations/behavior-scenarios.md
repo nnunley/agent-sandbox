@@ -426,8 +426,8 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - No incus delete calls in hot path (D5 hang resolved)
 - Spin-up time for second and subsequent tasks is sub-second
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (cluster) — PASS 2026-06-22: durable fleet-coord VM 0 restarts across 10 task cycles (boot_id stable) + in-guest unit spin-up 17ms mean / 20ms p99 (gate <=1000ms)
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh durable-vm`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:65-79`

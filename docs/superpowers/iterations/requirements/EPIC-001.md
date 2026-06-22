@@ -3,8 +3,9 @@
 **Summary:** Execution backend & topology
 **Stories:** STORY-0001, STORY-0002, STORY-0003, STORY-0004, STORY-0005, STORY-0006, STORY-0007, STORY-0008, STORY-0009, STORY-0010, STORY-0011, STORY-0012, STORY-0013, STORY-0014, STORY-0015, STORY-0016, STORY-0017, STORY-0018, STORY-0019, STORY-0020
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 4/20 done (STORY-0018 done:ITER-0004; STORY-0004/0017/0020 done:ITER-0005 —
-in-scope interface ACs; their microVM ACs carry to ITER-0005b)
+**Status:** 5/20 done (STORY-0018 done:ITER-0004; STORY-0004/0017/0020 done:ITER-0005 — in-scope
+interface ACs; STORY-0007 done:ITER-0005b — durable coordinator VM, SCENARIO-0004 PASS; remaining
+microVM ACs continue in ITER-0005b)
 
 ## STORY-0001
 
@@ -135,7 +136,14 @@ ITER-0005b** (Firecracker, cluster-only; the factory graft point is documented `
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:65-79`
 
-**Status:** pending
+**Status:** done:ITER-0005b — AC-1 (durable micro-VM stays up + warm /nix store): `guests/coordinator-vm.nix`
+(`microvm.vms.fleet-coord`, static 10.88.0.2, `writableStoreOverlay` warm store, nspawn-capable real
+kernel) deployed to agent-host; **SCENARIO-0004 MEASURED PASS** — 0 restarts across 10 task cycles
+(boot_id stable) + in-guest unit spin-up 17ms mean / 20ms p99 (gate ≤1000ms). AC-2 (coordinator is a
+daemon, not per-agent): `Serve()` loop + `dispatcher serve` entrypoint (serve.go/serve_cmd.go),
+TDD-tested. **Follow-up (noted, not blocking AC-1/AC-2):** baking the `dispatcher` binary into the VM
+as a LIVE systemd service is deferred — it needs the incus-client-heavy binary Nix-packaged (vendorHash)
+AND a real queue to drain (laneq, ITER-0006); the daemon loop + entrypoint are proven at the Go seam now.
 
 ## STORY-0008
 
