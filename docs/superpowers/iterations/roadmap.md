@@ -690,6 +690,12 @@ exercise it end-to-end. Capstone integration.
 **Status:** pending
 **Impacted scenarios:** bidirectional-steer; operator-TUI; recursive-delegation; Mac-off-client
 **Look-ahead check:** depends on ITER-0007 + the coordination plane; final integration.
+**Substrate constraint (from ITER-0006 T6 real-wire, 2026-06-22):** real laneq leases are NOT
+consumer-exclusive — the server keys leases by directive id and does NOT enforce per-consumer token
+ownership on Touch/Done (verified in SCENARIO-0092; the in-process fake is stricter). Recursive
+delegation / multi-consumer / work-stealing here MUST NOT assume lease exclusivity; if it's required,
+add an opaque per-claim token to laneq upstream (nnunley/laneq) first. See `queue/laneq.go`
+`directiveFromProto` divergence note.
 
 ## Deferred / cross-cutting
 

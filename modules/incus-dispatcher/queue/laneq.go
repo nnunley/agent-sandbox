@@ -180,6 +180,12 @@ func (q *LaneqQueue) directiveFromProto(pb *laneqpb.Directive, consumer string) 
 	var lease Lease
 	lease.DirectiveID = pb.Id
 	lease.Token = pb.TakenBy // Use consumer ID as the token (no separate opaque token in laneq).
+	// DIVERGENCE (real-wire, SCENARIO-0092): the real laneq server does NOT enforce
+	// per-consumer token ownership on Touch/Done — leases are keyed by directive id, so a
+	// different consumer can operate on a held directive (the in-process fake is stricter).
+	// Leases are therefore NOT consumer-exclusive on the real substrate. ITER-0008
+	// (multi-consumer / recursive delegation / work-stealing) MUST NOT assume exclusivity;
+	// add an opaque per-claim token upstream in laneq if exclusivity is required.
 
 	if pb.LeaseUntilUnix != nil {
 		lease.Expiry = time.Unix(*pb.LeaseUntilUnix, 0)
