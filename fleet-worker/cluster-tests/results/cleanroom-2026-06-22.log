@@ -1,0 +1,198 @@
+=== launch cleanroom-1782108475 from fleet-golden ===
+=== deliver let-go bundle + worker fix ===
+=== clone + checkout pre-fix ref + apply source-only ===
+warning: remote HEAD refers to nonexistent ref, unable to checkout
+HEAD: d4c36cf fix(lang): def/declare forward-declaration promise semantics (#251)
+apply: source-only OK
+=== oracle gates on golden toolchain (make generate -> check-generated -> cluster-A) ===
++ make generate
+go run -tags bootstrap ./cmd/lgbgen
+go: downloading github.com/zeebo/bencode v1.0.0
+go: downloading github.com/zeebo/xxh3 v1.1.0
+go: downloading golang.org/x/sys v0.44.0
+go: downloading golang.org/x/term v0.41.0
+go: downloading github.com/klauspost/cpuid/v2 v2.2.10
+  compiled core       (14652 bytes bytecode)
+  compiled walk       (196 bytes bytecode)
+  compiled string     (772 bytes bytecode)
+  compiled set        (376 bytes bytecode)
+  compiled pprint     (204 bytes bytecode)
+  compiled edn        (268 bytes bytecode)
+  compiled io         (76 bytes bytecode)
+  compiled async      (52 bytes bytecode)
+  compiled hash       (280 bytes bytecode)
+  compiled test       (832 bytes bytecode)
+  compiled let-go.semver (1560 bytes bytecode)
+  compiled ir.data.generated (1012 bytes bytecode)
+  compiled ir.zipper  (392 bytes bytecode)
+  compiled ir.passes  (484 bytes bytecode)
+  compiled ir.dominance (368 bytes bytecode)
+  compiled ir.lattice (1728 bytes bytecode)
+  compiled ir.structurize (972 bytes bytecode)
+  compiled ir.lower   (1412 bytes bytecode)
+  compiled ir.lower-go (6484 bytes bytecode)
+  compiled ir.validate (476 bytes bytecode)
+  compiled ir.passes.dce (372 bytes bytecode)
+  compiled ir.passes.constfold (796 bytes bytecode)
+  compiled ir.passes.mutability (224 bytes bytecode)
+  compiled ir.passes.cse (476 bytes bytecode)
+  compiled ir.passes.typeinfer (1680 bytes bytecode)
+  compiled ir.passes.licm (1024 bytes bytecode)
+  compiled ir.passes.infer-arg-types (528 bytes bytecode)
+  compiled graph      (396 bytes bytecode)
+  compiled ir.build   (2200 bytes bytecode)
+  compiled ir.passes.pipeline (2468 bytes bytecode)
+  compiled ir.dump    (848 bytes bytecode)
+  compiled ir.passes.trace (1156 bytes bytecode)
+wrote pkg/rt/core_compiled.lgb (638000 bytes, 4899 consts, 32 namespaces)
+wrote pkg/rt/generated.sums (f11d1fc234bf)
+which go
+/nix/store/vc6cdp1w79bc5c9b6650g22zcwh9317b-go-1.26.4/bin/go
+go build -ldflags="-s -w -X main.commit=d4c36cf" -o lg .
+go: downloading github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
+go: downloading github.com/hashicorp/go-uuid v1.0.3
+./lg scripts/generate.lg --go "$(command -v go)" --lg ./lg --source-paths examples/go-gen
+generate.lg: go = /nix/store/vc6cdp1w79bc5c9b6650g22zcwh9317b-go-1.26.4/bin/go | lg = ./lg | source-paths = examples/go-gen
+provenance: first generation; lg = dev
+>> gen pkg/ir/op_generated.go
+>> gen pkg/rt/ir_bridge_generated.go
+>> gen pkg/rt/core/ir/data/generated.lg
+>> /nix/store/vc6cdp1w79bc5c9b6650g22zcwh9317b-go-1.26.4/bin/go run -tags bootstrap ./cmd/lgbgen --target=both
+  compiled core                 (14652 bytecode + lowering to Go)
+  compiled walk                 (196 bytecode + lowering to Go)
+  compiled string               (772 bytecode + lowering to Go)
+  compiled set                  (376 bytecode + lowering to Go)
+  compiled pprint               (204 bytecode + lowering to Go)
+  compiled edn                  (268 bytecode + lowering to Go)
+  compiled io                   (76 bytecode + lowering to Go)
+  compiled async                (52 bytecode + lowering to Go)
+  compiled hash                 (280 bytecode + lowering to Go)
+  compiled test                 (832 bytecode + lowering to Go)
+  compiled let-go.semver        (1560 bytecode + lowering to Go)
+  compiled ir.data.generated    (1012 bytecode + lowering to Go)
+  compiled ir.zipper            (392 bytecode + lowering to Go)
+  compiled ir.passes            (484 bytecode + lowering to Go)
+  compiled ir.dominance         (368 bytecode + lowering to Go)
+  compiled ir.lattice           (1728 bytecode + lowering to Go)
+  compiled ir.structurize       (972 bytecode + lowering to Go)
+  compiled ir.lower             (1412 bytecode + lowering to Go)
+  compiled ir.lower-go          (6484 bytecode + lowering to Go)
+  compiled ir.validate          (476 bytecode + lowering to Go)
+  compiled ir.passes.dce        (372 bytecode + lowering to Go)
+  compiled ir.passes.constfold  (796 bytecode + lowering to Go)
+  compiled ir.passes.mutability (224 bytecode + lowering to Go)
+  compiled ir.passes.cse        (476 bytecode + lowering to Go)
+  compiled ir.passes.typeinfer  (1680 bytecode + lowering to Go)
+  compiled ir.passes.licm       (1024 bytecode + lowering to Go)
+  compiled ir.passes.infer-arg-types (528 bytecode + lowering to Go)
+  compiled graph                (396 bytecode + lowering to Go)
+  compiled ir.build             (2200 bytecode + lowering to Go)
+  compiled ir.passes.pipeline   (2468 bytecode + lowering to Go)
+  compiled ir.dump              (848 bytecode + lowering to Go)
+  compiled ir.passes.trace      (1156 bytecode + lowering to Go)
+wrote pkg/rt/core_compiled.lgb (638000 bytes, 4899 consts, 32 namespaces)
+wrote pkg/rt/generated.sums (f11d1fc234bf)
+  skip-go core                 (lgbgen:skip-go)
+  skip async                (no defn forms)
+  wrote pkg/rt/core_go_lowered/pprint/pprint.go (57053 bytes, 3 defns)
+  wrote pkg/rt/core_go_lowered/edn/edn.go (6597 bytes, 3 defns)
+WARNING: not lowered (nil) for hasher-map
+WARNING: not lowered (nil) for hasher-map
+  wrote pkg/rt/core_go_lowered/hash/hash.go (2041 bytes, 3 defns)
+  wrote pkg/rt/core_go_lowered/io/io.go (1211 bytes, 1 defns)
+WARNING: not lowered (:fallback) for expand-fn-args: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for expand-vector-pattern: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for expand-fn-args: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for expand-vector-pattern: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+  wrote pkg/rt/core_go_lowered/ir_build/ir_build.go (380261 bytes, 50 defns)
+  wrote pkg/rt/core_go_lowered/ir_data_generated/ir_data_generated.go (35911 bytes, 35 defns)
+WARNING: not lowered (:fallback) for dfs-postorder: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for dominators: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for dfs-postorder: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for dominators: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+  wrote pkg/rt/core_go_lowered/ir_dominance/ir_dominance.go (12209 bytes, 7 defns)
+  skip-go string               (lgbgen:skip-go)
+  wrote pkg/rt/core_go_lowered/ir_dump/ir_dump.go (53954 bytes, 10 defns)
+  wrote pkg/rt/core_go_lowered/ir_lattice/ir_lattice.go (123843 bytes, 29 defns)
+  wrote pkg/rt/core_go_lowered/ir_lower/ir_lower.go (125619 bytes, 40 defns)
+WARNING: not lowered (:fallback) for g-idoms: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for g-postorder: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for g-idoms: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for g-postorder: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+  wrote pkg/rt/core_go_lowered/ir_structurize/ir_structurize.go (42760 bytes, 17 defns)
+WARNING: not lowered (:fallback) for distinct-imports: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for emit-assignments-for-target: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for lower-fn-lit: unsupported function body shape
+WARNING: not lowered (nil) for lower-method
+WARNING: not lowered (nil) for oos-sequence-copies
+WARNING: not lowered (:fallback) for distinct-imports: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for emit-assignments-for-target: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for lower-fn-lit: unsupported function body shape
+WARNING: not lowered (nil) for lower-method
+WARNING: not lowered (nil) for oos-sequence-copies
+  wrote pkg/rt/core_go_lowered/ir_lower_go/ir_lower_go.go (661060 bytes, 121 defns)
+  skip-go ir.zipper            (lgbgen:skip-go)
+  wrote pkg/rt/core_go_lowered/ir_passes/ir_passes.go (2820 bytes, 3 defns)
+WARNING: not lowered (nil) for try-primitive
+WARNING: not lowered (nil) for try-primitive
+  wrote pkg/rt/core_go_lowered/ir_passes_constfold/ir_passes_constfold.go (18719 bytes, 6 defns)
+  wrote pkg/rt/core_go_lowered/ir_passes_mutability/ir_passes_mutability.go (12285 bytes, 3 defns)
+WARNING: not lowered (:fallback) for cse: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for cse: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+  wrote pkg/rt/core_go_lowered/ir_passes_cse/ir_passes_cse.go (3473 bytes, 3 defns)
+WARNING: not lowered (:fallback) for one-pass: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for one-pass: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+  wrote pkg/rt/core_go_lowered/ir_passes_dce/ir_passes_dce.go (3187 bytes, 3 defns)
+  wrote pkg/rt/core_go_lowered/ir_passes_infer_arg_types/ir_passes_infer_arg_types.go (5394 bytes, 3 defns)
+WARNING: not lowered (:fallback) for thread-hoisted-through-header!: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for thread-hoisted-through-header!: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+  wrote pkg/rt/core_go_lowered/ir_passes_licm/ir_passes_licm.go (71071 bytes, 12 defns)
+  wrote pkg/rt/core_go_lowered/ir_passes_typeinfer/ir_passes_typeinfer.go (120234 bytes, 23 defns)
+WARNING: not lowered (:fallback) for check-no-cross-block-refs!: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+WARNING: not lowered (:fallback) for check-no-cross-block-refs!: #error {:message "gogen/func-decl: body: gogen: expected seq, got let-go.lang.ExceptionInfo", :data {:trace ("lower-fn* (<embedded:ir.lower-go>:2625:7)" "func-decl (<embedded:ir.lower-go>:2447:43)")}}
+  wrote pkg/rt/core_go_lowered/ir_validate/ir_validate.go (28327 bytes, 8 defns)
+WARNING: not lowered (:fallback) for compile-form: unsupported function body shape
+WARNING: not lowered (nil) for lower-ns-to-go
+WARNING: not lowered (:fallback) for protocol-method-sigs: unsupported function body shape
+WARNING: not lowered (:fallback) for compile-form: unsupported function body shape
+WARNING: not lowered (nil) for lower-ns-to-go
+WARNING: not lowered (:fallback) for protocol-method-sigs: unsupported function body shape
+  wrote pkg/rt/core_go_lowered/ir_passes_pipeline/ir_passes_pipeline.go (193989 bytes, 24 defns)
+  wrote pkg/rt/core_go_lowered/ir_passes_trace/ir_passes_trace.go (25046 bytes, 5 defns)
+  skip-go let-go.semver        (lgbgen:skip-go)
+  skip-go set                  (lgbgen:skip-go)
+  wrote pkg/rt/core_go_lowered/walk/walk.go (23467 bytes, 7 defns)
+WARNING: not lowered (:fallback) for clear-registered-tests!: unsupported function body shape
+WARNING: not lowered (:fallback) for register-test!: unsupported function body shape
+WARNING: not lowered (:fallback) for use-fixtures: unsupported function body shape
+WARNING: not lowered (:fallback) for clear-registered-tests!: unsupported function body shape
+WARNING: not lowered (:fallback) for register-test!: unsupported function body shape
+WARNING: not lowered (:fallback) for use-fixtures: unsupported function body shape
+  wrote pkg/rt/core_go_lowered/test/test.go (23385 bytes, 6 defns)
+  wrote lg_gogen_ir.go (25 pkgs)
+  wrote cmd/lgbgen/main_gogen_ir.go (25 pkgs)
+  wrote pkg/ir/zz_gogen_ir_wire_test.go (25 pkgs)
+generate.lg: all artifacts regenerated; provenance -> pkg/rt/generated.provenance
++ echo GEN_OK
+GEN_OK
++ make check-generated
+check-generated: OK — bundle + lowered tree are in sync with sources.
+>> regenerate bundle + lowered tree from a SINGLE core compile (--target=both)
+>> bundle: verify lockstep (content-based, VCS-agnostic)
+OK: core_compiled.lgb in lockstep with the .lg sources.
+>> lowered tree: compile + dispatch natively under -tags gogen_ir
+go: downloading golang.org/x/perf v0.0.0-20260512194132-3cf34090a3db
+go: downloading github.com/aclements/go-moremath v0.0.0-20210112150236-f10218a38794
+# github.com/nooga/let-go/pkg/rt/core_go_lowered/test
+pkg/rt/core_go_lowered/test/test.go:39:6: declared and not used: v73
+pkg/rt/core_go_lowered/test/test.go:517:1: missing return
+make: *** [Makefile:235: check-generated] Error 1
++ go test -tags gogen_ir ./pkg/ir/
++ tail -5
+# github.com/nooga/let-go/pkg/rt/core_go_lowered/test
+pkg/rt/core_go_lowered/test/test.go:39:6: declared and not used: v73
+pkg/rt/core_go_lowered/test/test.go:517:1: missing return
+FAIL	github.com/nooga/let-go/pkg/ir [build failed]
+FAIL
+=== reap cleanroom-1782108475 ===
+done (marker rc=0)
