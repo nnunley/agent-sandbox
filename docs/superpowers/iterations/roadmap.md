@@ -479,7 +479,9 @@ STORY-0075 AC-2/AC-3 CARRIED:** the clean-room regen was run on the golden's nix
 package does not compile — an UPSTREAM let-go codegen bug, reproduced on the pinned toolchain (refutes
 ITER-0003's Mac-artifact hypothesis; same blocker as STORY-0068 AC-2 / JOURNEY-0003). Golden + grader
 are correct. Suite green (`go test -race ./...`, vet clean); JOURNEY-0001/0003 AC-1 sentinels green;
-zero `TODO(ITER-0005c)`.
+zero `TODO(ITER-0005c)`. **AUDIT (PAR 2-auditor 3-tier, 2026-06-22): CLEAN** — both auditors returned
+zero critical/serious/minor; Tier 1 all ACs PASS (AC-2/AC-3 carry authorized + durably evidenced),
+Tier 2 impacted scenarios PASS, Tier 3 sentinels green. Iteration confirmed done.
 **PAR scope review (2026-06-22) — 2 adversarial reviewers → both REVISE; revisions applied (below),
 re-review to APPROVE.** Aggregated findings + resolutions (same-issue-from-both = high confidence;
 severity disagreement = worst):
