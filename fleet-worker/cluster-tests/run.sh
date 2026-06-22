@@ -82,14 +82,57 @@ case "$SCEN" in
     exit $rc ;;
 
   hardtier|0006)       # STORY-0022 / SCENARIO-0006: per-task Firecracker hard-tier spin-up ≤ 2.5s p99.
-    pending STORY-0022 "per-task Firecracker hard-tier runner not built (probe: per-task boot over N, gate p99 ≤ ${GATE_HARDTIER_SPINUP_P99_MS}ms)" ;;
+    WORKER_UNIT="${FLEET_WORKER_UNIT:-microvm@worker-vm.service}"
+    guest_exec "systemctl cat ${WORKER_UNIT}" >/dev/null 2>&1 || pending STORY-0022 "no ${WORKER_UNIT} (per-task hard-tier microVM not provisioned)"
+    # Per-task boot: stop → start → ready (same readiness sentinel as microvm-boot 0029:
+    # firecracker process up + guest MainPID present). N stop/start cycles model per-task spin-up.
+    raw=""; for i in $(seq 1 "${N_HARDTIER}"); do
+      guest_exec "systemctl stop ${WORKER_UNIT}" >/dev/null 2>&1 || true; sleep 1
+      t0=$(now_ms); guest_exec "systemctl start ${WORKER_UNIT}" >/dev/null 2>&1
+      [ "$(wait_microvm_ready "${WORKER_UNIT}")" = "1" ] || { echo "FAIL ${SCEN}: boot $i never reached ready"; exit 1; }
+      raw+="$(( $(now_ms) - t0 ))"$'\n'
+    done
+    s="$(compute_stats <<<"$raw")"; echo "$SCEN stats: $s"
+    assert_le "$(stat_field "$s" p99)" "${GATE_HARDTIER_SPINUP_P99_MS}" "per-task Firecracker hard-tier boot p99"; exit $? ;;
 
   trust-boundary|0007) # STORY-0024 / SCENARIO-0007: guest owns its kernel (hardware boundary), single-domain v1.
     guest_exec "systemctl is-active ${MICROVM_UNIT}" >/dev/null 2>&1 || pending STORY-0007 "durable VM not running"
     pending STORY-0024 "own-kernel + unit-inside assertion lands with the trust-boundary story (guest uname-r ≠ host)" ;;
 
   golden-launch|0003)  # STORY-0005 / SCENARIO-0003: incus copy from golden boots ready with NO live build.
-    incus image alias list "${REMOTE}:" 2>/dev/null | grep -q 'fleet-golden' || pending STORY-0005 "no fleet-golden image (build-once + snapshot not done)" ;;
+    # Capture before grep: `... | grep -q` + pipefail SIGPIPEs incus (141) → false negative.
+    aliases="$(incus image alias list "${REMOTE}:" 2>/dev/null)"
+    grep -q 'fleet-golden' <<<"$aliases" || pending STORY-0005 "no fleet-golden image (build-once + snapshot not done)"
+    inst="fleet-golden-copy-$(now_ms)"
+    rc=0
+    # Launch a FRESH disposable copy from the golden image (btrfs CoW; never built live).
+    t0=$(now_ms)
+    if ! incus launch "${REMOTE}:fleet-golden" "${inst}" >/dev/null 2>&1; then
+      echo "FAIL ${SCEN}: incus launch from fleet-golden failed"; exit 1
+    fi
+    # Readiness: poll until the container is exec-ready (the real signal; avoids the
+    # `incus list | grep -q` + pipefail SIGPIPE trap).
+    for _ in $(seq 1 60); do
+      if incus exec "${REMOTE}:${inst}" -- true >/dev/null 2>&1; then break; fi
+      sleep 0.5
+    done
+    launch_ms=$(( $(now_ms) - t0 ))
+    # Proof it is a GOLDEN clone (pre-baked), not a freshly built stock image: the marker is
+    # present immediately with NO nixos-rebuild / nix build run during launch (AC-2).
+    marker="$(incus exec "${REMOTE}:${inst}" -- cat /etc/fleet-golden-version 2>/dev/null | tr -d '\r')"
+    assert_true "$([ -n "$marker" ] && echo 1 || echo 0)" "golden marker present on launched copy (no live build): ${marker:-<absent>}" || rc=1
+    # Writable scratch: /workspace and /tmp accept writes (STORY-0049 AC-5).
+    ws="$(incus exec "${REMOTE}:${inst}" -- bash -lc 'touch /workspace/.probe 2>/dev/null && echo rw || echo ro' 2>/dev/null | tr -d '[:space:]')"
+    tm="$(incus exec "${REMOTE}:${inst}" -- bash -lc 'touch /tmp/.probe 2>/dev/null && echo rw || echo ro' 2>/dev/null | tr -d '[:space:]')"
+    assert_true "$([ "$ws" = rw ] && echo 1 || echo 0)" "/workspace writable on golden copy" || rc=1
+    assert_true "$([ "$tm" = rw ] && echo 1 || echo 0)" "/tmp writable on golden copy" || rc=1
+    echo "$SCEN: golden copy launched in ${launch_ms} ms (CoW from image, no live build)"
+    # Teardown the disposable copy (stop-then-delete). --force on the STOP (not a delete -f of a
+    # running instance) avoids the D5 delete-hang while still being deterministic; the per-task
+    # hot-path teardown lives on the microVM tiers (unit-kill), not here.
+    incus stop --force "${REMOTE}:${inst}" >/dev/null 2>&1 || true
+    incus delete "${REMOTE}:${inst}" >/dev/null 2>&1 || incus delete --force "${REMOTE}:${inst}" >/dev/null 2>&1 || true
+    exit $rc ;;
 
   teardown|0008ac2)    # STORY-0008 AC-2: teardown is unit-kill only — no `incus delete` in the hot path.
     COORD_UNIT="${FLEET_COORD_UNIT:-microvm@fleet-coord.service}"
