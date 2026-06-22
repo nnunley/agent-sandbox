@@ -164,7 +164,9 @@ func TestRunOnce_AutonomousRungDoesNotEscalate(t *testing.T) {
 	}
 }
 
-// D6: a passing run writes a reap decision (teardown, AC-28) then a done decision, in order.
+// D6: a passing run records the resolved tier at launch, then a reap decision (teardown,
+// AC-28), then a done decision, in chronological order. (testPolicy templates declare no
+// tier, so TierFor defaults to "hard" — see ITER-0005 STORY-0023.)
 func TestRunOnce_PassWritesReapThenDone(t *testing.T) {
 	r := &fakeRunner{result: &Result{ExitCode: 0}}
 	q := queue.NewMemoryQueue()
@@ -177,8 +179,8 @@ func TestRunOnce_PassWritesReapThenDone(t *testing.T) {
 	for _, d := range logmem.Records() {
 		actions = append(actions, d.Action)
 	}
-	if got := strings.Join(actions, ","); got != "reap,done" {
-		t.Fatalf("decision actions = %q, want \"reap,done\"", got)
+	if got := strings.Join(actions, ","); got != "hard,reap,done" {
+		t.Fatalf("decision actions = %q, want \"hard,reap,done\"", got)
 	}
 }
 

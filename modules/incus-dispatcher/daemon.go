@@ -36,6 +36,7 @@ type Daemon struct {
 	LeaseDur time.Duration
 
 	MapToTask   func(queue.Directive) Task // converts a directive to a Task; defaults to DefaultMapToTask
+	Backend     BackendFactory             // tier→Runner selection (optional; nil → always use Runner)
 	Log         DecisionLog                // D6 append-only decision log (optional)
 	Threads     *ThreadTracker             // thread-status tracking (optional)
 	Escalations EscalationLane             // non-blocking human escalations lane (optional)
@@ -129,10 +130,34 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 		_, _ = dm.ctxProvider().ImportHandoff(d.HandoffIn)
 	}
 
+	// Resolve the isolation tier from the VETTED template (D1 mechanism — STORY-0023 AC-1)
+	// and select the backend that implements it. Selection happens OUTSIDE Runner.Run so all
+	// backends share one interface; ITER-0005b's microVM/nspawn runners graft in by registering
+	// with the factory. With no factory configured, fall back to the single Runner.
+	runner := dm.Runner
+	tier := dm.Policy.TierFor(d.Template)
+	if dm.Backend != nil {
+		r, serr := dm.Backend.SelectRunner(tier)
+		if serr != nil {
+			// No backend implements this tier yet (e.g. Hard before ITER-0005b's Firecracker).
+			// Never run sensitive work on a substrate that doesn't provide its isolation: park
+			// the directive (durable, recoverable) and surface it for out-of-band attention.
+			_ = dm.Q.Park(lease)
+			if dm.Escalations != nil {
+				_ = dm.Escalations.Push(EscalationItem{DirectiveID: d.ID, Reason: "backend-unavailable", Origin: d.Origin})
+			}
+			dm.setStatus(d.ID, StatusBlocked)
+			dm.record(d.ID, "", "backend-unavailable", "escalate-human", serr.Error())
+			return OutcomeEscalated, d.ID, nil
+		}
+		runner = r
+	}
+	dm.record(d.ID, "", "tier-select", string(tier))
+
 	task := mapFn(d)
-	result, runErr := dm.Runner.Run(ctx, task)
+	result, runErr := runner.Run(ctx, task)
 	// Teardown always runs (stop-then-delete lives in the Runner's Cleanup); log the reap (D6).
-	_ = dm.Runner.Cleanup()
+	_ = runner.Cleanup()
 	dm.record(d.ID, "", "teardown", "reap")
 
 	if passed(result, runErr) {
