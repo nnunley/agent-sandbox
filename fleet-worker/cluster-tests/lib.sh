@@ -102,6 +102,12 @@ launch_golden_copy() {
     incus exec "${REMOTE}:${inst}" -- true >/dev/null 2>&1 && break
     sleep 0.5
   done
+  # The toolchain resolves via `nix develop`, which needs the nix-daemon socket — it comes up
+  # a few seconds after boot. Wait for it so the toolchain checks don't race the daemon.
+  for i in $(seq 1 60); do
+    incus exec "${REMOTE}:${inst}" -- test -S /nix/var/nix/daemon-socket/socket >/dev/null 2>&1 && break
+    sleep 0.5
+  done
   echo "$inst"
 }
 

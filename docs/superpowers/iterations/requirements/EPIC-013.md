@@ -3,8 +3,11 @@
 **Summary:** Worker image & skills
 **Stories:** STORY-0075, STORY-0076, STORY-0077, STORY-0078
 **Primary sources:** `docs/plans/2026-06-17-dispatcher-productization.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/4 fully done (STORY-0075 PARTIAL — minimal worker-image slice done:ITER-0000; FULL
-golden + STORY-0076/0077/0078 → ITER-0005c)
+**Status:** 3/4 fully done (ITER-0005c). STORY-0076/0077/0078 done:ITER-0005c. STORY-0075 PARTIAL:
+AC-1 (FULL golden build/snapshot/copy + realized toolchain + skills) done:ITER-0005c; AC-2/AC-3
+(clean-room byte-identical regen + bridge-ON graded run) CARRIED — blocked by an upstream let-go
+native-Go-lowering codegen bug (non-compiling regenerated test pkg), reproduced on the pinned
+toolchain (same blocker as STORY-0068 AC-2 / JOURNEY-0003).
 ## STORY-0075
 
 **Epic:** EPIC-013 — Worker image & skills
@@ -61,7 +64,9 @@ the whole image track. The skills/provider work (0077/0076/0078) does NOT depend
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:161-165`
 
-**Status:** pending — **ITER-0005c AC-1 scope clarification (PAR 2026-06-22, B-SERIOUS resolved):**
+**Status:** done:ITER-0005c (AC-1 — golden exports codex/gemini/qwen + dispatcher --provider/--model
+passthrough + deterministic grader; SCENARIO-0067 cluster PASS + TestScenario0067 CI). **AC-1 scope
+clarification (PAR 2026-06-22, B-SERIOUS resolved):**
 AC-1 decomposes into two already-distinct concerns, neither needing a new story: (a) the **golden
 exports** `codex`/`gemini-cli`/`qwen-code` from `llm-agents.nix` (nix-level: uncomment the commented
 line in `fleet-worker/flake.nix:55`), and (b) the **dispatcher routing** of `--provider`/`--model`
@@ -88,7 +93,7 @@ flag-passthrough/grader-determinism.
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:332-347`
 
-**Status:** pending
+**Status:** done:ITER-0005c (AC-1..AC-4 — agent-skills-nix flake input hash-pinned; selectSkills/mkBundle curate the 13-skill subset; baked at environment.etc."claude/skills" via copy-tree real files; SCENARIO-0068 cluster PASS: 13 SKILL.md, 0 symlinks).
 
 ## STORY-0078
 
@@ -106,7 +111,7 @@ flag-passthrough/grader-determinism.
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:349-350`
 
-**Status:** pending — **ITER-0005c, GATES STORY-0077 (PAR 2026-06-21, A):** this is pre-work
+**Status:** done:ITER-0005c (AC-5/AC-6 — layout validated + bundle builds with all 13 skills, SCENARIO-0069 cluster PASS). **GATES STORY-0077 (PAR 2026-06-21, A):** this is pre-work
 DISCOVERY — confirm the upstream agent-skills-nix subdir/idPrefix layout + `filter.maxDepth` BEFORE
 building the bundle (STORY-0077). AC-5/AC-6 proof = a validated layout doc + the resolved bundle
 exhibiting the expected discovery paths (folded into SCENARIO-0068/0069 evidence; no separate

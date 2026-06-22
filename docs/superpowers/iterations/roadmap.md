@@ -466,8 +466,20 @@ with STORY-0075.
 verification harness for golden launch + graded-run proofs.
 **Impacted scenarios:** SCENARIO-0065/0066 (golden built once + clean-room integrity), SCENARIO-0067
 (provider routing), SCENARIO-0068/0069 (skills bundle + discovery path).
-**Status:** in-progress (cluster, started 2026-06-22) — ITER-0005b done, so this image track is eligible.
-STORY-0075 is PARTIAL (minimal worker-image slice done:ITER-0000; FULL golden here).
+**Status:** done:ITER-0005c (cluster, 2026-06-22) — 3/4 stories fully done + STORY-0075 AC-1; AC-2/AC-3
+carried per the PAR carry-allowance. **Delivered, all cluster-verified on agent-host:** T0 harness
+(5 scenarios wired); T1 STORY-0078 (agent-skills-nix + agent-skills flake=false hash-pinned, curated
+bundle builds — SCENARIO-0069 PASS, layout doc); T2 STORY-0077 (13-skill copy-tree at
+/etc/claude/skills, 0 symlinks — SCENARIO-0068 PASS); T3 STORY-0075 AC-1 (FULL `fleet-golden` built
+once via build-golden.sh, realized toolchain + skills, copy-per-task zero rebuild — SCENARIO-0065
+PASS); T4 STORY-0076 (golden exports codex/gemini/qwen — SCENARIO-0067 PASS — + dispatcher
+`--provider`/`--model` passthrough now plumbed, grader-determinism — TestScenario0067 CI). **T5
+STORY-0075 AC-2/AC-3 CARRIED:** the clean-room regen was run on the golden's nix-pinned go1.26.4
+(cleanroom-attempt.sh): `make generate` succeeds but the regenerated let-go native-Go lowered TEST
+package does not compile — an UPSTREAM let-go codegen bug, reproduced on the pinned toolchain (refutes
+ITER-0003's Mac-artifact hypothesis; same blocker as STORY-0068 AC-2 / JOURNEY-0003). Golden + grader
+are correct. Suite green (`go test -race ./...`, vet clean); JOURNEY-0001/0003 AC-1 sentinels green;
+zero `TODO(ITER-0005c)`.
 **PAR scope review (2026-06-22) — 2 adversarial reviewers → both REVISE; revisions applied (below),
 re-review to APPROVE.** Aggregated findings + resolutions (same-issue-from-both = high confidence;
 severity disagreement = worst):

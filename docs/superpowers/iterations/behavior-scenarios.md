@@ -2417,8 +2417,20 @@ marker, and re-copy per task with zero rebuild.
 - no Ubuntu stopgap fallback is needed
 - NixOS golden is sufficient for end-to-end task execution and verification
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** CARRIED — **attempted on cluster 2026-06-22 (ITER-0005c T5), blocked by an
+upstream let-go codegen bug, carried per the ITER-0005c PAR carry-allowance.** The grade was run on
+the golden's nix-pinned go1.26.4 (the declared seam): the fixture `lvl1-focused.diff` applied
+source-only to let-go @ d4c36cf2d, then `make generate` → `make check-generated` → cluster-A.
+`make generate` SUCCEEDS, but the regenerated native-Go lowered TEST package does **not compile**
+(`pkg/rt/core_go_lowered/test/test.go`: "declared and not used: v73" / "missing return"), so
+`check-generated` (byte-identical regen, AC-2) and the cluster-A test build-fail. **This reproduces
+on the pinned toolchain → it is a genuine let-go native-Go-lowering codegen bug, NOT a Mac-toolchain
+artifact (refutes ITER-0003's hypothesis).** The golden + grader are correct (AC-1/SCENARIO-0065
+green); AC-2/AC-3 cannot pass until let-go's lowering of that package is fixed upstream. This is the
+same blocker as STORY-0068 AC-2 / JOURNEY-0003. Durable evidence:
+`fleet-worker/cluster-tests/results/cleanroom-2026-06-22.log`; re-attempt:
+`bash fleet-worker/cluster-tests/cleanroom-attempt.sh`.
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh cleanroom` (reports the carry) / `bash fleet-worker/cluster-tests/cleanroom-attempt.sh` (full attempt)
 
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:149-159`

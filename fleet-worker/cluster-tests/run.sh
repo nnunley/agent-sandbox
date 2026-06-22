@@ -197,9 +197,15 @@ case "$SCEN" in
                        # bridge-ON graded run on the let-go repo (ITER-0003 journey0003 fixture).
     aliases="$(incus image alias list "${REMOTE}:" 2>/dev/null)"
     grep -q "${FLEET_GOLDEN_IMAGE}" <<<"$aliases" || pending STORY-0075 "no ${FLEET_GOLDEN_IMAGE} image (AC-1 full golden first)"
-    # AC-2/AC-3 are the toolchain-sensitive e2e (let-go + bridge); measured in T5. Until the
-    # graded-run + regen harness lands, report PENDING (carry-allowed per ITER-0005c PAR R2).
-    pending STORY-0075 "clean-room regen + bridge-ON graded run (AC-2/AC-3) not yet wired — T5, carry-allowed (let-go toolchain)"
+    # ATTEMPTED on the golden's nix-pinned go1.26.4 (2026-06-22, cleanroom-attempt.sh +
+    # results/cleanroom-2026-06-22.log): `make generate` succeeds, but the regenerated native-Go
+    # lowered TEST package does NOT compile (pkg/rt/core_go_lowered/test/test.go: "declared and not
+    # used: v73" / "missing return"), so `make check-generated` + cluster-A build-fail. This is a
+    # let-go upstream lowering codegen bug (reproduces on the pinned toolchain → NOT a Mac artifact,
+    # refuting ITER-0003's hypothesis), not a golden/grader defect. AC-2/AC-3 CARRIED per the
+    # ITER-0005c PAR carry-allowance (trigger a: regen produces non-compiling artifacts). The golden
+    # itself (AC-1, SCENARIO-0065) is green. To re-attempt: bash cluster-tests/cleanroom-attempt.sh.
+    pending STORY-0075 "AC-2/AC-3 carried: let-go native-Go lowering emits a non-compiling test pkg on `make generate` (upstream codegen bug; see results/cleanroom-2026-06-22.log). Golden AC-1 is green."
     ;;
 
   provider-routing|0067) # STORY-0076 AC-1 / SCENARIO-0067: golden EXPORTS the cheap-implementer CLIs.

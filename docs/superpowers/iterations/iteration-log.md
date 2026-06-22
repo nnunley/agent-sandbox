@@ -460,3 +460,60 @@ the new runner/backend tests — no regression). Zero critical/serious/minor fin
 features; no leftover `fleet-golden-copy-*` instances; zero `TODO(ITER-0005b)` markers; exit-code
 mapping (task-fail vs infra-err) and incus-delete-free teardown both independently verified.
 **ITER-0005b CONFIRMED DONE.**
+
+## ITER-0005c — NixOS golden image, provider routing & curated skills (DONE — closed 2026-06-22)
+
+**Completed:** 2026-06-22 (cluster-resident on `agent-host`/`nix-server`; no Mac CI seam for the
+image track — proven by the reused Task-0 harness `fleet-worker/cluster-tests/run.sh` + the Go
+contract test on the Mac for provider passthrough).
+
+**Stories delivered:** STORY-0078 (skills-layout discovery + curated bundle build), STORY-0077
+(declaratively vendored 13-skill copy-tree at the discovery path), STORY-0076 (provider export +
+dispatcher routing). STORY-0075 PARTIAL: AC-1 (FULL golden) done; AC-2/AC-3 carried. EPIC-013 now 3/4.
+
+**Tasks executed:** T0 (cluster-harness wiring for SCENARIO-0065/0066/0067/0068/0069), T1 (STORY-0078
+skills bundle + layout doc), T2 (STORY-0077 copy-tree skills into golden), T3 (STORY-0075 AC-1 FULL
+golden build/publish via build-golden.sh), T4 (STORY-0076 provider export + dispatcher passthrough +
+CI contract), T5 (STORY-0075 AC-2/AC-3 clean-room regen attempt → carried).
+
+**Scope review (PAR):** 2 adversarial reviewers × 2 rounds. R1 → both REVISE (8 findings); revisions
+applied. R2 → both confirm 8/8 resolved + 5 clarifications codified → APPROVE. Key resolutions:
+STORY-0078 proof = standalone bundle build (no timing paradox); ITER-0005c Task-0 harness wiring;
+STORY-0075 AC ordering + carry-allowance; STORY-0076 export-vs-routing split; cluster-only
+preconditions; bridge-ON proof; EPIC header fix.
+
+**Scenarios:** added/updated (all wired off-TBD + measured):
+- SCENARIO-0069 (skills bundle builds, 13 skills) — **PASS** (`nix build .#agent-skills-bundle`, nix-server).
+- SCENARIO-0068 (skills at /etc/claude/skills, copy-tree real files, 0 symlinks) — **PASS** (golden copy).
+- SCENARIO-0065 (golden built once, realized toolchain, copy-per-task zero rebuild) — **PASS** (golden copy).
+- SCENARIO-0067 (provider export + routing passthrough + grader-determinism) — **PASS** (cluster export + CI TestScenario0067).
+- SCENARIO-0066 (clean-room byte-identical regen + bridge-ON graded run) — **CARRIED** (see below).
+
+**Key artifacts:** `fleet-worker/flake.nix` (+agent-skills-nix/agent-skills inputs, agent-skills-bundle{,-etc}
+packages, provider CLIs exported), `flake.lock` (hash-pinned), `fleet-worker/golden-full.nix` +
+`build-golden.sh` (build+publish FULL `fleet-golden`), `docs/plans/2026-06-22-skills-layout-validation.md`,
+`modules/incus-dispatcher/provider_routing.go` (+ TestScenario0067), harness cases 0065-0069 +
+`cleanroom-attempt.sh` + `results/cleanroom-2026-06-22.log`.
+
+**Carry (STORY-0075 AC-2/AC-3, per the PAR carry-allowance, trigger a):** the clean-room regen was run
+on the golden's nix-pinned go1.26.4 (the declared ITER-0003 seam) against let-go @ d4c36cf2d + the
+captured `lvl1-focused.diff`. `make generate` succeeds, but the regenerated native-Go lowered TEST
+package does not compile (`pkg/rt/core_go_lowered/test/test.go`: "declared and not used: v73" /
+"missing return"), failing `check-generated` (AC-2) and cluster-A. **This reproduces on the pinned
+toolchain → it is a genuine upstream let-go native-Go-lowering codegen bug, NOT a Mac-toolchain
+artifact — refuting ITER-0003's hypothesis. Same blocker as STORY-0068 AC-2 / JOURNEY-0003.** The
+golden + grader are correct (AC-1 green). AC-2/AC-3 unblock when let-go's lowering is fixed upstream.
+
+**Sentinel corpus results:** baseline clean (JOURNEY-0001 + JOURNEY-0003 AC-1 green). Post-iteration:
+the 4 new image-track scenarios PASS (0065/0067/0068/0069), 0066 carried; `go test -race ./...` green
+(provider_routing + TestScenario0067 added, no regression); `go vet` clean; golden-image +
+single-source + harness-lib structural tests PASS; zero `TODO(ITER-0005c)` markers.
+
+**Summary:** Retired the runtime-substitution stopgap with a FULL declarative golden: a one-time
+`build-golden.sh` realizes the agent toolchain (claude-code/lean-ctx/go/make) + the 13-skill curated
+copy-tree (vendored via agent-skills-nix from a hash-pinned non-flake upstream) + the cheap-implementer
+provider CLIs (codex/gemini/qwen) into an immutable `fleet-golden` image; per-task copies launch via
+btrfs CoW with zero rebuild. Provider routing is now actually plumbed (the `--provider`/`--model` flags
+were previously dead) while the grader stays deterministic. The only gap is the clean-room graded-run
+proof, blocked by a faithfully-reproduced upstream let-go codegen bug and carried per the approved
+allowance.
