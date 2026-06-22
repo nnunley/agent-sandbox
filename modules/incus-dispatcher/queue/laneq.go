@@ -202,7 +202,7 @@ func (q *LaneqQueue) Touch(lease Lease, leaseDur time.Duration) (Lease, error) {
 		LeaseDurationMs:   int64(leaseDur.Milliseconds()),
 	})
 	if err != nil {
-		if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition {
+		if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition || status.Code(err) == codes.InvalidArgument {
 			return Lease{}, ErrLeaseLost
 		}
 		return Lease{}, fmt.Errorf("touch: gRPC error: %w", err)
@@ -234,7 +234,7 @@ func (q *LaneqQueue) Done(lease Lease) error {
 		Status: laneqpb.Status_STATUS_DONE,
 	})
 	if err != nil {
-		if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition {
+		if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition || status.Code(err) == codes.InvalidArgument {
 			return ErrLeaseLost
 		}
 		return fmt.Errorf("done: gRPC error: %w", err)
@@ -263,7 +263,7 @@ func (q *LaneqQueue) Requeue(lease Lease, notBefore time.Time) error {
 			Status: laneqpb.Status_STATUS_PENDING,
 		})
 		if err != nil {
-			if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition {
+			if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition || status.Code(err) == codes.InvalidArgument {
 				return ErrLeaseLost
 			}
 			return fmt.Errorf("requeue: SetStatus error: %w", err)
@@ -275,7 +275,7 @@ func (q *LaneqQueue) Requeue(lease Lease, notBefore time.Time) error {
 			UntilUnix: ptrInt64(notBefore.Unix()),
 		})
 		if err != nil {
-			if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition {
+			if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition || status.Code(err) == codes.InvalidArgument {
 				return ErrLeaseLost
 			}
 			return fmt.Errorf("requeue: Defer error: %w", err)
