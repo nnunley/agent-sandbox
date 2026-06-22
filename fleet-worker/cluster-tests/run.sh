@@ -66,7 +66,20 @@ case "$SCEN" in
     exit $rc ;;
 
   nspawn-fast|0005)    # STORY-0021 / SCENARIO-0005: in-guest nspawn --ephemeral sub-second + namespace isolation.
-    pending STORY-0021 "in-guest nspawn fast-tier runner not built (probe: ephemeral spin-up over N + PID/mnt/net ns isolation)" ;;
+    COORD_UNIT="${FLEET_COORD_UNIT:-microvm@fleet-coord.service}"
+    vm_active "${COORD_UNIT}" || pending STORY-0007 "durable coordinator VM (${COORD_UNIT}) not active — not deployed"
+    coord_push_unit >/dev/null 2>&1 || { echo "FAIL ${SCEN}: could not push fleet-unit.sh into coord VM"; exit 1; }
+    coord_ssh "bash /root/fleet-unit.sh run warm 'echo READY'" >/dev/null 2>&1 || true  # warm template once
+    # N ephemeral spin-ups, measured IN-GUEST (launch → READY marker).
+    raw="$(coord_ssh "for i in \$(seq 1 ${N_NSPAWN}); do a=\$(date +%s%N); bash /root/fleet-unit.sh run fast-\$i 'echo READY' >/dev/null 2>&1; b=\$(date +%s%N); echo \$(( (b-a)/1000000 )); done" 2>/dev/null)"
+    s="$(compute_stats <<<"$raw")"; echo "$SCEN stats: $s"
+    rc=0
+    assert_le "$(stat_field "$s" mean)" "${GATE_NSPAWN_SPINUP_MS}" "nspawn fast-tier spin-up mean" || rc=1
+    # Namespace isolation: the unit's PID namespace inode differs from the VM host's.
+    unit_ns="$(coord_ssh "bash /root/fleet-unit.sh run nstest 'readlink /proc/self/ns/pid'" 2>/dev/null | tr -d '[:space:]')"
+    host_ns="$(coord_ssh "readlink /proc/self/ns/pid" 2>/dev/null | tr -d '[:space:]')"
+    assert_true "$([ -n "$unit_ns" ] && [ "$unit_ns" != "$host_ns" ] && echo 1 || echo 0)" "fast-tier PID namespace isolated from VM host" || rc=1
+    exit $rc ;;
 
   hardtier|0006)       # STORY-0022 / SCENARIO-0006: per-task Firecracker hard-tier spin-up ≤ 2.5s p99.
     pending STORY-0022 "per-task Firecracker hard-tier runner not built (probe: per-task boot over N, gate p99 ≤ ${GATE_HARDTIER_SPINUP_P99_MS}ms)" ;;
@@ -79,7 +92,22 @@ case "$SCEN" in
     incus image alias list "${REMOTE}:" 2>/dev/null | grep -q 'fleet-golden' || pending STORY-0005 "no fleet-golden image (build-once + snapshot not done)" ;;
 
   teardown|0008ac2)    # STORY-0008 AC-2: teardown is unit-kill only — no `incus delete` in the hot path.
-    pending STORY-0008 "unit-kill teardown path not built (assert no incus delete; bounded ≤ ${GATE_TEARDOWN_MS}ms)" ;;
+    COORD_UNIT="${FLEET_COORD_UNIT:-microvm@fleet-coord.service}"
+    vm_active "${COORD_UNIT}" || pending STORY-0007 "durable coordinator VM (${COORD_UNIT}) not active — not deployed"
+    coord_push_unit >/dev/null 2>&1 || { echo "FAIL ${SCEN}: could not push fleet-unit.sh into coord VM"; exit 1; }
+    rc=0
+    # Structural: the hot-path launcher invokes no `incus` command (only doc comments may mention it).
+    if grep -vE '^[[:space:]]*#' "$FLEET_UNIT_SRC" | grep -qw incus; then
+      echo "FAIL ${SCEN}: launcher invokes incus in the hot path"; rc=1
+    else
+      echo "PASS gate: teardown path is incus-free (unit-kill only, D5)"
+    fi
+    # Behavioral: spawn a background ephemeral unit, kill it, measure teardown IN-GUEST.
+    ms="$(coord_ssh 'pid=$(bash /root/fleet-unit.sh spawn-bg teardown-probe); a=$(date +%s%N); bash /root/fleet-unit.sh kill $pid >/dev/null 2>&1; b=$(date +%s%N); echo $(( (b-a)/1000000 ))' 2>/dev/null | tr -d '[:space:]')"
+    [[ "$ms" =~ ^[0-9]+$ ]] || { echo "FAIL ${SCEN}: could not measure unit teardown"; exit 1; }
+    echo "$SCEN teardown: ${ms} ms (unit-kill, no incus delete)"
+    assert_le "$ms" "${GATE_TEARDOWN_MS}" "teardown unit-kill bounded" || rc=1
+    exit $rc ;;
 
   *) echo "unknown scenario: $SCEN"; exit 64 ;;
 esac

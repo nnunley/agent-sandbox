@@ -11,6 +11,11 @@
 
 REMOTE="${FLEET_REMOTE:-ndn-desktop}"
 GUEST="${FLEET_GUEST:-agent-host}"   # the LXC container hosting the Firecracker microVM(s)
+LIBDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Repo artifact: the in-guest FAST-tier disposable-unit launcher (STORY-0021/0008),
+# pushed into the durable coord VM on demand by coord_push_unit.
+FLEET_UNIT_SRC="${FLEET_UNIT_SRC:-$LIBDIR/../unit/fleet-unit.sh}"
 
 # --- pure logic (Mac-runnable, tested) -------------------------------------------------
 
@@ -68,6 +73,16 @@ guest_exec() { incus exec "${REMOTE}:${GUEST}" -- bash -lc "$*"; }
 COORD_IP="${FLEET_COORD_IP:-10.88.0.2}"
 coord_ssh() {
   guest_exec "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes root@${COORD_IP} '$*'"
+}
+
+# coord_push_unit [src] [dst] — copy the in-guest launcher into the coord VM. The file
+# streams Mac → agent-host (incus exec stdin) → coord VM (ssh stdin → cat), avoiding scp
+# key juggling. Returns non-zero if the copy fails.
+coord_push_unit() {
+  local src="${1:-$FLEET_UNIT_SRC}" dst="${2:-/root/fleet-unit.sh}"
+  [ -f "$src" ] || { echo "coord_push_unit: missing $src" >&2; return 1; }
+  incus exec "${REMOTE}:${GUEST}" -- bash -lc \
+    "ssh -o StrictHostKeyChecking=no -o BatchMode=yes root@${COORD_IP} 'cat > ${dst} && chmod +x ${dst}'" < "$src"
 }
 
 # vm_active <unit> — rc 0 if the named microVM systemd unit is active on agent-host.
