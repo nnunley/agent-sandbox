@@ -5,3 +5,7 @@ breaking:
 lint:
   use:
     - STANDARD
+  except:
+    # This contract mirrors upstream nnunley/laneq naming and uses a flat directory layout
+    - PACKAGE_DIRECTORY_MATCH
+    - SERVICE_SUFFIX

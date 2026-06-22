@@ -2,7 +2,11 @@ module github.com/agent-sandbox/incus-dispatcher
 
 go 1.25.6
 
-require github.com/lxc/incus/v6 v6.23.0
+require (
+	github.com/lxc/incus/v6 v6.23.0
+	google.golang.org/grpc v1.81.1
+	google.golang.org/protobuf v1.36.11
+)
 
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6 // indirect
@@ -51,7 +55,5 @@ require (
 	golang.org/x/term v0.41.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260319201613-d00831a3d3e7 // indirect
-	google.golang.org/grpc v1.81.1 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

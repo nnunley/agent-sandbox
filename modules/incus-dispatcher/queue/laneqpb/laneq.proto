@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package laneq.v1;
 
-option go_package = "github.com/agent-sandbox/incus-dispatcher/queue/laneqpb";
+option go_package = "github.com/agent-sandbox/incus-dispatcher/queue/laneqpb;laneqpb";
 
 // Priority represents the priority level of a directive.
 // Lower values indicate higher priority (P0 before P1 before P2).
@@ -32,15 +32,17 @@ message Directive {
   string body = 3;           // Opaque JSON (intent, template, origin, repo, ref, task, grade, deadline, etc.)
   Status status = 4;
   string lane = 5;           // Queue lane (default: "default")
-  int64 created_at_unix = 6; // Unix timestamp
-  int64 taken_at_unix = 7;   // Unix timestamp; 0 if not yet taken
-  int64 done_at_unix = 8;    // Unix timestamp; 0 if not yet done
+  int64 created_at_unix = 6; // Unix timestamp (always set; non-optional)
+  optional int64 taken_at_unix = 7;   // Unix timestamp; absent if not yet taken
+  optional int64 done_at_unix = 8;    // Unix timestamp; absent if not yet done
   string taken_by = 9;       // Consumer ID that claimed this directive
-  int64 lease_until_unix = 10; // Unix timestamp; 0 if no active lease
+  optional int64 lease_until_unix = 10; // Unix timestamp; absent if no active lease
   int32 requeue_count = 11;  // Number of times requeued
   string parent_id = 12;     // Parent directive ID for threading; "" if root
-  int64 not_before_unix = 13; // Eligibility gate; 0 if always eligible
+  optional int64 not_before_unix = 13; // Eligibility gate; absent means always eligible
   repeated string blocked_by = 14; // List of blocking directive IDs (dependencies)
+
+  reserved 100 to 199;       // Reserved for future expansion
 }
 
 // Push request enqueues a new directive.
@@ -71,7 +73,7 @@ message TakeRequest {
 
 // Take response returns the claimed directive and lease.
 message TakeResponse {
-  Directive directive = 1;  // The claimed directive; omitted (zero) if none available
+  Directive directive = 1;  // The claimed directive; nil if none available
   string consumer = 2;       // Echo of the requesting consumer
   string lane = 3;
 }
@@ -83,7 +85,7 @@ message PeekRequest {
 
 // Peek response returns the directive (if any) without claiming.
 message PeekResponse {
-  Directive directive = 1;  // Zero if no eligible directive
+  Directive directive = 1;  // Nil if no eligible directive
 }
 
 // Show request retrieves full details of a directive by ID.
@@ -143,7 +145,7 @@ message SetStatusResponse {
 // Defer request defers a directive until a specified time.
 message DeferRequest {
   string id = 1;
-  int64 until_unix = 2;     // Unix timestamp; 0 = use delay
+  optional int64 until_unix = 2;     // Unix timestamp; absent = use delay
   int64 delay_ms = 3;       // Alternative to until_unix (milliseconds from now)
   repeated string blocked_by = 4; // Optional dependency list
 }
@@ -152,7 +154,7 @@ message DeferRequest {
 message DeferResponse {
   string id = 1;
   Status status = 2;          // Will be STATUS_DEFERRED
-  int64 not_before_unix = 3;
+  optional int64 not_before_unix = 3;  // Absence means always eligible
   repeated string blocked_by = 4;
 }
 
@@ -166,7 +168,7 @@ message TouchRequest {
 // Touch response returns the updated lease expiry.
 message TouchResponse {
   string id = 1;
-  int64 lease_until_unix = 2;
+  optional int64 lease_until_unix = 2;  // Absence means no active lease
 }
 
 // Reap request reclaims expired leases and stale deferred directives.

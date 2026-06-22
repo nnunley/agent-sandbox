@@ -1,8 +1,6 @@
 version: v1
 managed:
-  enabled: true
-  go_package_prefix:
-    default: github.com/agent-sandbox/incus-dispatcher/queue/laneqpb
+  enabled: false
 plugins:
   - plugin: go
     out: .

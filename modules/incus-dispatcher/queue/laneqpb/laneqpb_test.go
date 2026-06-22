@@ -11,6 +11,7 @@ import (
 // TestRoundTripDirective tests marshal/unmarshal fidelity of Directive messages.
 func TestRoundTripDirective(t *testing.T) {
 	now := time.Now().Unix()
+	notBefore := now + 3600
 	original := &Directive{
 		Id:               "dir-123",
 		Priority:         Priority_PRIORITY_P0,
@@ -18,13 +19,13 @@ func TestRoundTripDirective(t *testing.T) {
 		Status:           Status_STATUS_PENDING,
 		Lane:             "default",
 		CreatedAtUnix:    now,
-		TakenAtUnix:      0,
-		DoneAtUnix:       0,
+		TakenAtUnix:      nil, // Optional; not yet taken
+		DoneAtUnix:       nil, // Optional; not yet done
 		TakenBy:          "",
-		LeaseUntilUnix:   0,
+		LeaseUntilUnix:   nil, // Optional; no active lease
 		RequeueCount:     0,
 		ParentId:         "",
-		NotBeforeUnix:    now + 3600,
+		NotBeforeUnix:    &notBefore, // Optional; eligible after this time
 		BlockedBy:        []string{"dir-456", "dir-789"},
 	}
 
@@ -59,8 +60,11 @@ func TestRoundTripDirective(t *testing.T) {
 	if restored.CreatedAtUnix != original.CreatedAtUnix {
 		t.Errorf("CreatedAtUnix mismatch: got %d, want %d", restored.CreatedAtUnix, original.CreatedAtUnix)
 	}
-	if restored.NotBeforeUnix != original.NotBeforeUnix {
-		t.Errorf("NotBeforeUnix mismatch: got %d, want %d", restored.NotBeforeUnix, original.NotBeforeUnix)
+	if (restored.NotBeforeUnix == nil) != (original.NotBeforeUnix == nil) {
+		t.Errorf("NotBeforeUnix presence mismatch")
+	}
+	if restored.NotBeforeUnix != nil && original.NotBeforeUnix != nil && *restored.NotBeforeUnix != *original.NotBeforeUnix {
+		t.Errorf("NotBeforeUnix mismatch: got %d, want %d", *restored.NotBeforeUnix, *original.NotBeforeUnix)
 	}
 	if len(restored.BlockedBy) != len(original.BlockedBy) {
 		t.Errorf("BlockedBy length mismatch: got %d, want %d", len(restored.BlockedBy), len(original.BlockedBy))
@@ -134,9 +138,10 @@ func TestRoundTripTakeRequest(t *testing.T) {
 
 // TestRoundTripDeferRequest tests DeferRequest with dependencies.
 func TestRoundTripDeferRequest(t *testing.T) {
+	until := int64(1234567890)
 	original := &DeferRequest{
 		Id:        "dir-123",
-		UntilUnix: 1234567890,
+		UntilUnix: &until, // Optional; if absent, use delay_ms
 		DelayMs:   5000,
 		BlockedBy: []string{"dep-1", "dep-2", "dep-3"},
 	}
@@ -334,9 +339,10 @@ func TestMessageDescriptorsExist(t *testing.T) {
 
 // TestDeferRequestHasBlockedByField verifies dependencies are modeled.
 func TestDeferRequestHasBlockedByField(t *testing.T) {
+	until := int64(1234567890)
 	req := &DeferRequest{
 		Id:        "test-id",
-		UntilUnix: 1234567890,
+		UntilUnix: &until, // Optional
 		BlockedBy: []string{"dep-1", "dep-2"},
 	}
 
@@ -360,17 +366,19 @@ func TestDeferRequestHasBlockedByField(t *testing.T) {
 
 // TestDirectiveHasAllSchedulingColumns verifies scheduling columns are present.
 func TestDirectiveHasAllSchedulingColumns(t *testing.T) {
+	notBefore := int64(1234567890)
+	leaseUntil := int64(1234567999)
 	directive := &Directive{
 		Id:              "test",
 		Priority:        Priority_PRIORITY_P0,
 		Status:          Status_STATUS_DEFERRED,
 		Lane:            "custom-lane",
-		NotBeforeUnix:   1234567890,
+		NotBeforeUnix:   &notBefore,  // Optional: set
 		BlockedBy:       []string{"dep-1"},
 		RequeueCount:    3,
 		ParentId:        "parent-id",
 		TakenBy:         "consumer-1",
-		LeaseUntilUnix:  1234567999,
+		LeaseUntilUnix:  &leaseUntil,  // Optional: set
 	}
 
 	// Verify all fields are accessible
@@ -380,8 +388,8 @@ func TestDirectiveHasAllSchedulingColumns(t *testing.T) {
 	if directive.Lane != "custom-lane" {
 		t.Error("Lane not set")
 	}
-	if directive.NotBeforeUnix == 0 {
-		t.Error("NotBeforeUnix is zero")
+	if directive.NotBeforeUnix == nil {
+		t.Error("NotBeforeUnix is nil")
 	}
 	if len(directive.BlockedBy) == 0 {
 		t.Error("BlockedBy is empty")
@@ -395,8 +403,8 @@ func TestDirectiveHasAllSchedulingColumns(t *testing.T) {
 	if directive.TakenBy == "" {
 		t.Error("TakenBy is empty")
 	}
-	if directive.LeaseUntilUnix == 0 {
-		t.Error("LeaseUntilUnix is zero")
+	if directive.LeaseUntilUnix == nil {
+		t.Error("LeaseUntilUnix is nil")
 	}
 }
 
@@ -464,6 +472,46 @@ func TestGrpcServiceMethods(t *testing.T) {
 	} else {
 		if string(method.Input().Name()) != "UnparkRequest" {
 			t.Errorf("Unpark input should be UnparkRequest, got %s", method.Input().Name())
+		}
+	}
+}
+
+// TestProtoFieldNumbersPinned asserts that critical Directive field numbers are stable.
+// This catches accidental renumbering that round-trip tests miss.
+func TestProtoFieldNumbersPinned(t *testing.T) {
+	laneqFile := File_laneq_proto
+	directiveMsg := laneqFile.Messages().ByName("Directive")
+	if directiveMsg == nil {
+		t.Fatal("Directive message not found")
+	}
+
+	// Map of field names to their expected field numbers
+	expectedFieldNumbers := map[string]int32{
+		"id":                1,
+		"priority":          2,
+		"status":            4,
+		"body":              3,
+		"lane":              5,
+		"not_before_unix":   13,
+		"lease_until_unix":  10,
+		"taken_by":          9,
+		"requeue_count":     11,
+		"parent_id":         12,
+		"blocked_by":        14,
+		"created_at_unix":   6,
+		"taken_at_unix":     7,
+		"done_at_unix":      8,
+	}
+
+	for fieldName, expectedNumber := range expectedFieldNumbers {
+		field := directiveMsg.Fields().ByName(protoreflect.Name(fieldName))
+		if field == nil {
+			t.Errorf("field %q not found in Directive", fieldName)
+			continue
+		}
+		actualNumber := int32(field.Number())
+		if actualNumber != expectedNumber {
+			t.Errorf("field %q: expected number %d, got %d", fieldName, expectedNumber, actualNumber)
 		}
 	}
 }
