@@ -596,8 +596,8 @@ upstream; ITER-0006 *validates + integrates* it.
   path only READS. Documented at the seam so ITER-0007 grafts on without rework.
 
 **laneq fork handling (PAR re-review 2026-06-22, A+B serious — resolved):** the gRPC server + `parked`
-status are developed on a **laneq branch we control** (Norman is a `selamy-labs/laneq` contributor →
-push a `grpc-binding` branch there, or fork to `nnunley/laneq`), **pinned by commit hash** in
+status are developed on a **fork at `nnunley/laneq`** (DECIDED 2026-06-22; forked from
+`selamy-labs/laneq` @ f9c159a; Norman is also a contributor upstream), **pinned by commit hash** in
 `fleet-worker/flake.lock`-style fashion (same hash-pin discipline as agent-skills in ITER-0005c). The
 ITER-0006b Nix package builds laneq from that pinned hash. An upstream PR to selamy-labs is
 **best-effort / non-blocking**; until merged we build from the pinned branch (acceptable maintenance

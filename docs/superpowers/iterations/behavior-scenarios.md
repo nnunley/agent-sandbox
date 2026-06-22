@@ -3218,10 +3218,10 @@ the same contract holds over the REAL laneq wire (supporting proof, not the CI g
 - **threading:** thread_status reports open while any thread member is non-terminal, closed when all terminal
 - durable cluster-resident queue with priority + **lanes + threading** + leasing (STORY-0002 AC-1, fully exercised)
 
-**Automation status:** planned (ITER-0006 T3) — CI-native via the in-process fake gRPC server. NOTE:
+**Automation status:** automated — PASS (ITER-0006 T3, CI) — CI-native via the in-process fake gRPC server. NOTE:
 SCENARIO-0091 proves the **contract** against a faithful fake; wire-compat against the real Python
 laneq is SCENARIO-0092 (also ITER-0006, via uvx).
-**Execution command:** `cd modules/incus-dispatcher && go test ./queue/... -run TestScenario0091` (planned)
+**Execution command:** `cd modules/incus-dispatcher && go test ./queue/... -run TestScenario0091`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
