@@ -2372,8 +2372,12 @@ Passed=false because RunGrade computes the verdict solely from its own gate runs
 - all tasks reuse the golden via incus copy (zero rebuild per task)
 - no nix build-sandbox failures in unprivileged containers
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated — **PASS on cluster 2026-06-22 (ITER-0005c T3, STORY-0075 AC-1).**
+The FULL golden (`fleet-golden` image, built once by `fleet-worker/build-golden.sh`, realized
+toolchain + 13 curated skills) launches CoW copies that expose the realized toolchain
+(claude/lean-ctx/go/make/git via `nix develop /etc/fleet-worker`, no live build), carry the FULL
+marker, and re-copy per task with zero rebuild.
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh golden-full`
 
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:149-159`
@@ -2455,8 +2459,13 @@ copy); (b) **routing passthrough + grader determinism:** a dispatcher contract t
 calls (git-based oracle). Live provider traffic to `ndn.local:11434` is the aspirational end state, not
 the gate — the gate is export-presence + flag-passthrough + grader-determinism.
 
-**Automation status:** pending
-**Execution command:** TBD (wired in ITER-0005c Task 0: golden-provider export check + dispatcher passthrough contract test)
+**Automation status:** automated — **PASS 2026-06-22 (ITER-0005c T4, STORY-0076 AC-1).** Two halves:
+(a) **export** — golden copy exposes `codex`/`gemini`/`qwen` via `nix develop` (cluster, PASS);
+(b) **routing passthrough + grader-determinism** — `TestScenario0067` (CI): `--provider`/`--model`
+forward to the worker as `FLEET_PROVIDER`/`FLEET_MODEL` (cheap implementer), invalid providers
+rejected, and every default grade gate is a deterministic `make`/`go` command (no LLM on the
+grade path; `RunGrade` takes no provider).
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh provider-routing` (export) + `cd modules/incus-dispatcher && go test -run TestScenario0067 .` (passthrough/determinism)
 
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:161-165`
@@ -2489,8 +2498,12 @@ the gate — the gate is export-presence + flag-passthrough + grader-determinism
 - All 13 curated skills are accessible to Claude agents running in the worker container
 - Skills are offline-available (no network fetch required for discovery)
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated — **PASS on cluster 2026-06-22 (ITER-0005c T2, STORY-0077).**
+A `fleet-golden` copy exposes the curated bundle at `/etc/claude/skills` with all 13 SKILL.md
+present as **copy-tree real files (0 symlinked SKILL.md)** — STORY-0077 AC-3 (discovery path) +
+AC-4 (copy-tree, immutable/offline). Bundle baked via `golden-skills.nix`
+(`environment.etc."claude/skills".source = <agent-skills-bundle-etc>`).
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh skills-path`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:332-347`

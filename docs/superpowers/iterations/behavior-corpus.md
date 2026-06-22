@@ -75,10 +75,10 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0062 | Heartbeat projects ctx_shell as the active command, not Bash | app-level | iteration | `cd modules/incus-dispatcher && go test -run 'WorkingState|RenderHeartbeat' .` | STORY-0071 |
 | SCENARIO-0063 | Worker truncation is handled by fallback result and external grader | process-level | iteration | `cd modules/incus-dispatcher && go test -run 'Grader|RunGrade' .` | STORY-0072 |
 | SCENARIO-0064 | Orchestrator steers worker mid-run via file-feed | process-level | iteration | TBD | STORY-0073 |
-| SCENARIO-0065 | NixOS golden is built once and reused for all tasks | integration | iteration | TBD | STORY-0075 |
+| SCENARIO-0065 | NixOS golden is built once and reused for all tasks | integration | iteration | `bash fleet-worker/cluster-tests/run.sh golden-full` (PASS 2026-06-22; STORY-0075 AC-1) | STORY-0075 |
 | SCENARIO-0066 | NixOS golden maintains clean-room integrity (byte-identical regen) | e2e | iteration | TBD | STORY-0075 |
-| SCENARIO-0067 | Provider routing allows cheap implementers with deterministic grading | integration | iteration | TBD | STORY-0076 |
-| SCENARIO-0068 | Built worker image exposes the curated skill set at the discovery path | app-level | iteration | TBD | STORY-0077 |
+| SCENARIO-0067 | Provider routing allows cheap implementers with deterministic grading | integration | iteration | `bash fleet-worker/cluster-tests/run.sh provider-routing` + `cd modules/incus-dispatcher && go test -run TestScenario0067 .` (PASS 2026-06-22) | STORY-0076 |
+| SCENARIO-0068 | Built worker image exposes the curated skill set at the discovery path | app-level | iteration | `bash fleet-worker/cluster-tests/run.sh skills-path` (PASS 2026-06-22: 13 copy-tree skills; STORY-0077) | STORY-0077 |
 | SCENARIO-0069 | Worker image build captures skills bundle with correct layout and filt | process-level | iteration | `bash fleet-worker/cluster-tests/run.sh skills-discovery` (PASS 2026-06-22: bundle builds, 13 skills; STORY-0078) | STORY-0077, STORY-0078 |
 | SCENARIO-0070 | Daemon claim rule: task transitions from unowned to owned | unit | iteration | `cd modules/incus-dispatcher && go test ./queue/ -run TestPark` | STORY-0059 |
 | SCENARIO-0071 | Daemon lease rule: owned task extends ownership window | unit | iteration | TBD | STORY-0059 |
