@@ -64,4 +64,13 @@
   # security.nesting=true). The fast tier runs INSIDE the durable Firecracker
   # micro-VM (real kernel), per the design's nested topology — see
   # docs/plans/2026-06-18-fleet-orchestration-design.md.
+  #
+  # And making agent-host PRIVILEGED is not an escape hatch either (verified
+  # 2026-06-21): security.privileged=true changes the container idmap, so the
+  # SHARED nix-shared cache volume (idmap-shifted for the unprivileged container,
+  # and shared with fleet-dogfood-base) refuses to mount and the container fails
+  # to start ("Idmaps of container and storage volume nix-shared are not
+  # identical"). So privileged-direct-nspawn-in-agent-host is off the table while
+  # the binary cache is a shared unprivileged volume. The micro-VM guest path
+  # (real kernel) sidesteps BOTH the proc-mount limit and the volume-idmap clash.
 }

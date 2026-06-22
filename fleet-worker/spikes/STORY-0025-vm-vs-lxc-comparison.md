@@ -116,7 +116,16 @@ tier lives one layer down, in the guest, where nspawn is native.
 **Therefore: do NOT make `agent-host` privileged, and do NOT convert it to a VM.** Both were framings of
 the wrong question ("how do we run nspawn *in agent-host*") — the fast tier doesn't run there in any
 design. Privileged-LXC was only ever a throwaway-benchmark expedient for measuring spin-up; it is not the
-production model and contradicts the decision to keep `agent-host` unprivileged.
+production model.
+
+**Hard blocker, verified 2026-06-21 (even if privileged is acceptable):** flipping the live `agent-host`
+to `security.privileged=true` makes it **fail to start** — privileged changes the container idmap, so the
+SHARED `nix-shared` cache volume (idmap-shifted for the unprivileged container, shared with
+`fleet-dogfood-base`) can no longer mount: *"Idmaps of container and storage volume nix-shared are not
+identical."* So privileged-direct-nspawn-in-`agent-host` is not viable while the binary cache is a shared
+unprivileged volume — independent of whether privileged is philosophically acceptable. (agent-host was
+reverted to unprivileged and recovered cleanly.) The micro-VM guest path avoids BOTH the proc-mount limit
+and this volume-idmap clash.
 
 **Caveats on the numbers (don't over-read the spin-up gap):** the VM figure (291 ms raw → ~100–150 ms
 "pure") is NOT apples-to-apples with the 76 ms LXC figure — it carries ~200 ms per-run `incus exec`
