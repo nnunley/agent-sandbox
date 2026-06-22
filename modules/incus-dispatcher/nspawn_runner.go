@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-// nspawnExec runs a host command, returning combined output, the remote command's exit
+// hostExec runs a host command, returning combined output, the remote command's exit
 // code, and an error ONLY for transport/infra failures — NOT for a nonzero task exit
 // (a failed task is carried in the exit code so the daemon's escalation ladder handles it).
-type nspawnExec func(ctx context.Context, name string, args ...string) ([]byte, int, error)
+type hostExec func(ctx context.Context, name string, args ...string) ([]byte, int, error)
 
 // Fast-tier coord-VM defaults (match guests/coordinator-vm.nix + fleet-worker/unit/fleet-unit.sh).
 const (
@@ -35,7 +35,7 @@ type NspawnRunner struct {
 	guest    string // LXC container hosting the micro-VM (agent-host)
 	coordIP  string // durable coord VM IP on br-microvm
 	launcher string // in-guest launcher path (fleet-unit.sh)
-	exec     nspawnExec
+	exec     hostExec
 }
 
 // NewNspawnRunner builds a Fast-tier runner for the given incus remote using the production
@@ -46,13 +46,13 @@ func NewNspawnRunner(remote string) *NspawnRunner {
 		guest:    defaultCoordGuest,
 		coordIP:  defaultCoordIP,
 		launcher: defaultUnitLauncher,
-		exec:     realNspawnExec,
+		exec:     realHostExec,
 	}
 }
 
-// realNspawnExec runs the command via os/exec, mapping a nonzero remote exit to (out, code,
+// realHostExec runs the command via os/exec, mapping a nonzero remote exit to (out, code,
 // nil) and a true transport failure (binary missing, etc.) to (out, 0, err).
-func realNspawnExec(ctx context.Context, name string, args ...string) ([]byte, int, error) {
+func realHostExec(ctx context.Context, name string, args ...string) ([]byte, int, error) {
 	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
 	if err != nil {
 		var ee *exec.ExitError

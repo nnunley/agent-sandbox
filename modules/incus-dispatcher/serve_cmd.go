@@ -32,9 +32,18 @@ func runServeCommand(args []string) int {
 		log.Printf("serve: runner init failed: %v", err)
 		return 1
 	}
+	// Isolation-tier backends (ITER-0005b): Fast → in-guest nspawn --ephemeral disposable
+	// units (STORY-0021); Hard → per-task Firecracker microVM (STORY-0022). The daemon
+	// resolves the tier from the vetted template (Policy.TierFor) and selects here; an
+	// unregistered tier fails safe (park + escalate) rather than running on a weaker substrate.
+	backend := newStaticBackendFactory(map[IsolationTier]Runner{
+		TierFast: NewNspawnRunner(*remote),
+		TierHard: NewFirecrackerRunner(*remote),
+	})
 	dm := &Daemon{
 		Q:        queue.NewMemoryQueue(),
-		Runner:   runner,
+		Runner:   runner, // fallback for directives whose template declares no tier
+		Backend:  backend,
 		Policy:   &Policy{Templates: map[string]TemplateRule{}},
 		Consumer: *consumer,
 		LeaseDur: time.Minute,

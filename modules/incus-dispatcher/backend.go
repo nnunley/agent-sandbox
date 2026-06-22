@@ -16,9 +16,10 @@ type BackendFactory interface {
 
 // staticBackendFactory maps tiers to pre-constructed runners.
 //
-// ITER-0005 registers only the proven container backend (for the tier it legitimately
-// stands in for). TODO(ITER-0005b): register the Firecracker microVM runner under TierHard
-// and the nspawn --ephemeral runner under TierFast; no change to this type or the daemon.
+// ITER-0005b registers the real isolation-tier backends in the serve entrypoint:
+// TierFast → NspawnRunner (in-guest nspawn --ephemeral) and TierHard → FirecrackerRunner
+// (per-task microVM). New backends slot in by registering here — no change to this type
+// or the daemon.
 type staticBackendFactory struct {
 	byTier map[IsolationTier]Runner
 }
@@ -37,7 +38,7 @@ func newStaticBackendFactory(byTier map[IsolationTier]Runner) *staticBackendFact
 func (f *staticBackendFactory) SelectRunner(tier IsolationTier) (Runner, error) {
 	r, ok := f.byTier[tier]
 	if !ok || r == nil {
-		return nil, fmt.Errorf("no backend registered for isolation tier %q (TODO(ITER-0005b): register the microVM/nspawn runner)", tier)
+		return nil, fmt.Errorf("no backend registered for isolation tier %q", tier)
 	}
 	return r, nil
 }
