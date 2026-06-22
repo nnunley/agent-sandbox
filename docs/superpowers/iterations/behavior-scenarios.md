@@ -1678,33 +1678,37 @@ gating evidence.
 **Owning stories:** STORY-0064
 
 **Preconditions:**
-- directive JSON is well-formed
-- intent is a non-empty string
-- template is in daemon allowlist
-- origin is orchestrator or worker:<id>
-- importance is valid enum
-- lane, repo, ref, task are non-empty strings
-- max_attempts is a positive integer
+- Directive schema (queue.go) enforces strict ingestion boundary via ParseDirective
+- JSON payload is well-formed
 
 **Action:**
-- daemon receives directive JSON
-- daemon validates template against allowlist
-- daemon validates deadline (if present)
+- ParseDirective decodes directive JSON with DisallowUnknownFields
+- All required fields (AC-1 intent, AC-2 template, AC-3 origin, AC-4 importance, AC-6 lane, AC-7 repo, AC-8 ref, AC-9 task) are present
+- Optional fields (AC-5 deadline, AC-10 handoff_in, AC-11 grade with GradeSpec sub-fields, AC-12 max_attempts) may be present or absent
+- Unknown fields (access_cmd, root) are rejected
 
 **Expected observables:**
-- directive is parsed successfully
-- all required fields are present
-- template is found in allowlist
-- origin has permission to use this template
-- deadline is ISO 8601 timestamp or absent
-- directive is accepted and queued
-- no validation errors returned
+- Fully-populated directive with all required fields parses successfully
+- All fields are preserved in-memory (AC-1..AC-14 contract proven)
+- Optional fields parse correctly when present
+- access_cmd field rejected with error (AC-13)
+- root field rejected with error (AC-14)
+- max_attempts field parses (deprecated per AC-12, retained for wire compatibility; not read by coordinator)
+- Template validation half (allowlist + origin authority) proven by ITER-0002 D1 ValidateTemplate
+- Origin schema parsing proven; daemon-sets-it enforcement proven by D1
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated — PASS (ITER-0006 T4)
+**Execution command:** `cd modules/incus-dispatcher && go test ./queue/... -run TestScenario0045`
+
+**Notes on deferred ACs:**
+- AC-15 (temporal projection of effective priority) deferred to ITER-0007
+- AC-16 (propose-vs-set authority) deferred to ITER-0007
+- AC-2 validation half (template-vs-allowlist + origin authority) already proven by ITER-0002 D1
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:282-301`
+- `modules/incus-dispatcher/queue/scenario0045_test.go` — comprehensive AC-mapped unit test
+- `modules/incus-dispatcher/queue/parse.go` — strict ingestion boundary (ParseDirective)
 
 ## SCENARIO-0046 — Directive with access_cmd field rejected as malformed
 

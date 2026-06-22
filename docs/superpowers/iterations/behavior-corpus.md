@@ -55,7 +55,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0042 | D6: Decision log is append-only JSONL format | unit | iteration | `cd modules/incus-dispatcher && go test . -run "DecisionLog|TestRunOnce_PassWritesReapThenDone"` | STORY-0056 |
 | SCENARIO-0043 | D6: Decision log entries contain directive, grade, rule, action, times | integration | iteration | `cd modules/incus-dispatcher && go test . -run DecisionLog` | STORY-0056 |
 | SCENARIO-0044 | D6: Writer interface is swappable (JSONL → tamper-evident without rear | unit | iteration | `cd modules/incus-dispatcher && go test . -run DecisionLog` | STORY-0056 |
-| SCENARIO-0045 | Valid directive with all required fields accepted | unit | iteration | TBD | STORY-0064 |
+| SCENARIO-0045 | Valid directive with all required fields accepted | unit | iteration | `cd modules/incus-dispatcher && go test ./queue/... -run TestScenario0045` | STORY-0064 |
 | SCENARIO-0046 | Directive with access_cmd field rejected as malformed | unit | iteration | TBD | STORY-0064 |
 | SCENARIO-0047 | Directive with root field rejected as malformed | unit | iteration | TBD | STORY-0064 |
 | SCENARIO-0048 | Directive missing required field rejected | unit | iteration | TBD | STORY-0064 |
