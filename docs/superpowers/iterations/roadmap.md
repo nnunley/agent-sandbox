@@ -642,6 +642,12 @@ STORY-0010 AC-4 done; deferred AC-2/AC-3/AC-15/AC-16 → ITER-0007, STORY-0010 A
 AC-2/3/5 not-chosen. Default suite green (`go test -race ./...`), 0091 CI sentinel green, 0092 gated
 real-wire PASS, JOURNEY-0001/0003 AC-1 sentinels green, zero `TODO(ITER-0006)`. **Divergence logged
 for ITER-0008:** real laneq leases are NOT consumer-exclusive (no per-consumer token enforcement).
+**AUDIT (PAR 2-auditor 3-tier, 2026-06-22):** auditor B found a GAP (SCENARIO-0092 `TouchAndReap` was
+timing-flaky against the real server — intermittent FAIL despite the "PASS" claim; auditor A had not
+actually run the gated real-wire test). Verified directly (reproduced the flake), then FIXED: split
+touch-renew from the reap-increment proof and widened reap margins to a 1s lease + 2.5s wait → 4/4
+deterministic real-wire PASS; default `-race` suite green (0092 still gated). Tier 1 ACs sound, Tier
+2/3 sentinels green. Iteration confirmed done post-fix.
 **Impacted scenarios:** SCENARIO-0091 (NEW, CI integration — gRPC adapter lifecycle incl. lanes/threading); SCENARIO-0092 (NEW, real-wire e2e via uvx @2d1b59e); SCENARIO-0045 (directive contract, unit, 22 AC-mapped); SCENARIO-0012 (Mac-off → ITER-0006b)
 **Look-ahead check:** substrate confirmed; the gRPC `Defer`/`Reprioritize` seam is built AND real-wire-proven (SCENARIO-0092) so ITER-0007 Temporal becomes the sole writer without rework. Unblocks ITER-0006b + ITER-0007.
 
