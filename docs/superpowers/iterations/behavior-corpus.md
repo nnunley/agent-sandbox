@@ -100,3 +100,4 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0087 | Escalation: stale escalation resurfaced by rising urgency | integration | iteration | TBD | STORY-0061 |
 | SCENARIO-0088 | Mac-off: human-only escalations queue durably for Mac return | e2e | iteration | TBD | STORY-0074 |
 | SCENARIO-0089 | Isolation tier declared by template selects the backend (D1) | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0089` | STORY-0023 |
+| SCENARIO-0090 | Worker NixOS config is a single declarative source (patterns captured) | integration | iteration | `bash fleet-worker/tests/single-source.test.sh` | STORY-0017 |

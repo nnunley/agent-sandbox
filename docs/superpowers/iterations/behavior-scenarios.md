@@ -3095,3 +3095,34 @@ fresh"; recovery must resolve the explicit saved session id (or rely on auto-con
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:81-89`
 - `docs/plans/2026-06-21-iter0005-backend-tier-design.md`
+
+## SCENARIO-0090 — Worker NixOS config is a single declarative source (patterns captured)
+
+**Kind:** contract
+**Proof seam:** integration
+**Owning stories:** STORY-0017
+
+**Preconditions:**
+- fleet-worker/flake.nix (the toolchain devShell) and fleet-worker/worker-container.nix (the NixOS container config) are the single declarative source for the worker
+- the worker was validated running end-to-end on ndn-desktop (agent-host) 2026-06-18/19 (ITER-0000; runner.sh:3), delivered as an incus container, toolchain substituted from the shared cache
+
+**Action:**
+- assert the declarative source still expresses every pattern that makes a worker run (CI, no nix/cluster): `bash fleet-worker/tests/single-source.test.sh`
+
+**Expected observables:**
+- flake.nix exports the default devShell with claude-code + lean-ctx + Go + gnumake + git and trusts the numtide cache; llm-agents input pinned
+- worker-container.nix declares the non-root worker user, trusted-users, sandbox=false, flakes, declarative NIX_PATH
+- the local cache file:///srv/nix-shared is listed FIRST in substituters (offline-first / Mac-off ready)
+- a missing/drifted pattern fails the test (pins the single source against silent regression)
+
+**Automation status:** automated
+**Execution command:** `bash fleet-worker/tests/single-source.test.sh`
+
+**Notes:**
+- AC-2's "delivered as incus container" half is DONE + cluster-validated (ITER-0000, 2026-06-18/19).
+  The "delivered as Firecracker guest" half + golden-copy replication (incus copy from golden) +
+  immutable-root/writable-scratch (STORY-0005 AC-1 / STORY-0049 AC-5) are ITER-0005b.
+
+**Sources:**
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:117-162`
+- `fleet-worker/flake.nix`, `fleet-worker/worker-container.nix`, `fleet-worker/runner.sh`

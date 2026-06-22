@@ -341,9 +341,15 @@ only with recursive delegation (ITER-0008). Avoids premature abstraction.
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:117-162`
 
 **Status:** done:ITER-0005 — AC-1 (backend interface separates intent/template/queue from delivery
-— `Runner`/`BackendFactory`; daemon is substrate-agnostic, SCENARIO-0028) + AC-2 (worker NixOS
-config single declarative source = `fleet-worker`, delivered as the incus container backend).
-**AC-3 (microVM startup ≤5s measured) + AC-4 (microVM clean teardown) → ITER-0005b** (cluster/Firecracker, no CI seam).
+— `Runner`/`BackendFactory`; daemon is substrate-agnostic, SCENARIO-0028). AC-2 (worker NixOS config
+single declarative source = `fleet-worker`): the "delivered as incus container" half is DONE and was
+**cluster-validated end-to-end on ndn-desktop/agent-host 2026-06-18/19** (real dogfood ran via
+`nix develop ./fleet-worker`; `worker-container.nix` applied via `nixos-rebuild switch`; runner.sh:3,
+ITER-0000 log). ITER-0005 PINS the single-source patterns against drift with a CI test (SCENARIO-0090,
+`fleet-worker/tests/single-source.test.sh`) — resolving the audit finding that AC-2 was prose-only.
+**The "delivered as Firecracker guest" half + golden-copy replication (incus copy from golden) +
+immutable-root/writable-scratch (STORY-0005 AC-1 / STORY-0049 AC-5) → ITER-0005b.** AC-3 (microVM
+startup ≤5s measured) + AC-4 (microVM clean teardown) → ITER-0005b (cluster/Firecracker, no CI seam).
 
 ## STORY-0018
 

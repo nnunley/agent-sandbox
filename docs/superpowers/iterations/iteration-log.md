@@ -382,3 +382,19 @@ downgrade isolation and ITER-0006's substrate swap is untouched; tier→backend 
 OUTSIDE `Runner.Run`, keeping every backend on one interface. The daemon fails safe: a tier with no
 registered backend parks the directive rather than running it on a weaker substrate. All work was
 CI-provable on the Mac (no cluster needed); the Firecracker/nspawn/golden/skills stack is ITER-0005b.
+
+**Audit (PAR, 2026-06-21):** Two parallel adversarial auditors, three tiers. **Auditor A: CLEAN**
+(all ACs proven at declared seams; no correctness bugs; `-race` clean; D1 worker-cannot-downgrade
+proven; backward-compat preserved; `TODO(ITER-0005b)` graft point real; no Directive.Tier field, so
+ITER-0006's strict parser is untouched). **Auditor B: GAPS FOUND — 1:** STORY-0017 AC-2 ("worker
+NixOS config single declarative source") was claimed done but evidenced only in prose — no CI
+assertion. **Resolution (inline):** confirmed via episodic memory + the nix files that AC-2's
+substance RAN end-to-end on ndn-desktop/agent-host 2026-06-18/19 (real dogfood via
+`nix develop ./fleet-worker`; `worker-container.nix` applied via `nixos-rebuild switch`) — so the gap
+was missing *pinning*, not missing behavior. Added `fleet-worker/tests/single-source.test.sh`
+(SCENARIO-0090): a CI structural test pinning every required pattern in `flake.nix` +
+`worker-container.nix` (devShell toolchain, non-root worker, sandbox=false, flakes, declarative
+NIX_PATH, local-first `file:///srv/nix-shared` substituter ordering) against silent drift, so a golden
+COPY replicates a working worker. AC-2 status refined: "delivered as incus container" DONE+validated;
+"delivered as Firecracker guest" + golden-copy replication + immutable-root/writable-scratch
+(STORY-0005 AC-1 / STORY-0049 AC-5) → ITER-0005b. **ITER-0005 CONFIRMED DONE.**
