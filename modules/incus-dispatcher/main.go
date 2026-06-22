@@ -34,6 +34,12 @@ func main() {
 		os.Exit(runGradeCommand(os.Args[2:]))
 	}
 
+	// `serve` runs the coordinator as a long-running daemon (STORY-0007 AC-2): one
+	// persistent process drains the directive queue via the D4 loop until signaled.
+	if len(os.Args) > 1 && os.Args[1] == "serve" {
+		os.Exit(runServeCommand(os.Args[2:]))
+	}
+
 	// CLI flags
 	name := flag.String("name", "", "Task name (required)")
 	repo := flag.String("repo", "", "Git repository path (local) or URL to deliver (optional)")
