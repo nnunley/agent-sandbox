@@ -32,7 +32,9 @@ ensure_template() {
   printf 'NAME="NixOS"\nID=nixos\nVERSION_ID=25.11\n' > "$TMPL/etc/os-release"
 }
 
-# run <name> <cmd...> — synchronous ephemeral unit; warm /nix bound read-only.
+# run <name> <cmd...> — synchronous ephemeral unit; warm /nix bound read-only. The guest's
+# system profile (/run/current-system/sw) is bound read-only and put on PATH so the unit has
+# the full NixOS toolchain (coreutils, git, …), not just bash — a usable task environment.
 unit_run() {
   local name="$1"; shift
   ensure_template
@@ -42,6 +44,8 @@ unit_run() {
     --register=no \
     -M "$name" \
     --bind-ro=/nix:/nix \
+    --bind-ro=/run/current-system:/run/current-system \
+    --setenv=PATH=/run/current-system/sw/bin:/usr/bin:/bin \
     "$(guest_bash)" -lc "$*"
 }
 

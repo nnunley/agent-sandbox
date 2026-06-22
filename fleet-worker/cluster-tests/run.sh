@@ -96,8 +96,21 @@ case "$SCEN" in
     assert_le "$(stat_field "$s" p99)" "${GATE_HARDTIER_SPINUP_P99_MS}" "per-task Firecracker hard-tier boot p99"; exit $? ;;
 
   trust-boundary|0007) # STORY-0024 / SCENARIO-0007: guest owns its kernel (hardware boundary), single-domain v1.
-    guest_exec "systemctl is-active ${MICROVM_UNIT}" >/dev/null 2>&1 || pending STORY-0007 "durable VM not running"
-    pending STORY-0024 "own-kernel + unit-inside assertion lands with the trust-boundary story (guest uname-r ≠ host)" ;;
+    COORD_UNIT="${FLEET_COORD_UNIT:-microvm@fleet-coord.service}"
+    vm_active "${COORD_UNIT}" || pending STORY-0007 "durable coordinator VM (${COORD_UNIT}) not active — not deployed"
+    rc=0
+    # AC-1: the guest runs its OWN kernel (Firecracker = hardware trust boundary), distinct
+    # from the agent-host LXC's host kernel — a hardware boundary, not a shared-kernel namespace.
+    host_kern="$(guest_exec "uname -r" 2>/dev/null | tr -d '[:space:]')"
+    guest_kern="$(coord_ssh "uname -r" 2>/dev/null | tr -d '[:space:]')"
+    echo "$SCEN: host kernel=${host_kern} guest kernel=${guest_kern}"
+    assert_true "$([ -n "$guest_kern" ] && [ "$guest_kern" != "$host_kern" ] && echo 1 || echo 0)" "guest owns its kernel (hardware trust boundary): ${guest_kern} ≠ host ${host_kern}" || rc=1
+    # AC-2 (single-domain v1): disposable units run INSIDE that one VM (the trust domain).
+    coord_push_unit >/dev/null 2>&1 || { echo "FAIL ${SCEN}: could not push fleet-unit.sh into coord VM"; exit 1; }
+    unit_kern="$(coord_ssh "bash /root/fleet-unit.sh run domaincheck 'uname -r'" 2>/dev/null | tr -d '[:space:]')"
+    # The unit runs on the VM's kernel (not the host's) ⇒ it executes INSIDE the trust-domain VM.
+    assert_true "$([ -n "$unit_kern" ] && [ "$unit_kern" = "$guest_kern" ] && [ "$unit_kern" != "$host_kern" ] && echo 1 || echo 0)" "disposable unit runs inside the trust-domain VM (unit kernel ${unit_kern} = VM, ≠ host)" || rc=1
+    exit $rc ;;
 
   golden-launch|0003)  # STORY-0005 / SCENARIO-0003: incus copy from golden boots ready with NO live build.
     # Capture before grep: `... | grep -q` + pipefail SIGPIPEs incus (141) → false negative.
