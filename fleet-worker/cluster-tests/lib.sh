@@ -62,6 +62,17 @@ cluster_reachable() {
 # guest_exec <cmd...> — run a command inside the agent-host LXC.
 guest_exec() { incus exec "${REMOTE}:${GUEST}" -- bash -lc "$*"; }
 
+# coord_ssh <cmd...> — run a command INSIDE the durable coordinator micro-VM, SSH'd into
+# from agent-host (which holds the root@agent-host key). FLEET_COORD_IP defaults to the
+# static 10.88.0.2 from guests/coordinator-vm.nix.
+COORD_IP="${FLEET_COORD_IP:-10.88.0.2}"
+coord_ssh() {
+  guest_exec "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes root@${COORD_IP} '$*'"
+}
+
+# vm_active <unit> — rc 0 if the named microVM systemd unit is active on agent-host.
+vm_active() { guest_exec "systemctl is-active ${1}" 2>/dev/null | grep -q '^active'; }
+
 # now_ms — wall clock in milliseconds (python3 for portability).
 now_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
 

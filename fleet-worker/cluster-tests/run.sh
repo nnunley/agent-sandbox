@@ -46,9 +46,24 @@ case "$SCEN" in
     s=$(compute_stats <<<"$raw"); echo "$SCEN stats: $s"
     assert_le "$(stat_field "$s" mean)" "${GATE_MICROVM_BOOT_MS}" "microVM boot-to-ready mean"; exit $? ;;
 
-  durable-vm|0004)     # STORY-0007/0008 / SCENARIO-0004: VM stays up across task cycles; sub-second units.
-    guest_exec "systemctl is-active ${MICROVM_UNIT}" >/dev/null 2>&1 || pending STORY-0007 "durable VM not running"
-    pending STORY-0008 "in-guest disposable-unit runner not built (spin-up probe + 0-restart check land with STORY-0008)" ;;
+  durable-vm|0004)     # STORY-0007/0008 / SCENARIO-0004: durable VM stays up across task cycles
+                       # (0 restarts) while in-guest units spin up fast on the warm /nix store.
+    COORD_UNIT="${FLEET_COORD_UNIT:-microvm@fleet-coord.service}"
+    vm_active "${COORD_UNIT}" || pending STORY-0007 "durable coordinator VM (${COORD_UNIT}) not active — not deployed"
+    boot0="$(coord_ssh 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null | tr -d '[:space:]')"
+    [ -n "$boot0" ] || { echo "FAIL ${SCEN}: coordinator VM up but not SSH-reachable at ${COORD_IP}"; exit 1; }
+    raw=""; cycles="${N_DURABLE_CYCLES:-10}"
+    for i in $(seq 1 "$cycles"); do
+      # One task cycle: a transient in-guest unit (disposable). Time launch→exit in the guest.
+      ms="$(coord_ssh 'a=$(date +%s%N); systemd-run --wait --collect --quiet -- true; echo $(( ($(date +%s%N)-a)/1000000 ))' 2>/dev/null | tr -d '[:space:]')"
+      [[ "$ms" =~ ^[0-9]+$ ]] && raw+="${ms}"$'\n'
+    done
+    boot1="$(coord_ssh 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null | tr -d '[:space:]')"
+    s="$(compute_stats <<<"$raw")"; echo "$SCEN unit-spinup stats: $s"
+    rc=0
+    assert_true "$([ -n "$boot0" ] && [ "$boot0" = "$boot1" ] && echo 1 || echo 0)" "durable VM 0 restarts across ${cycles} task cycles (boot_id stable)" || rc=1
+    assert_le "$(stat_field "$s" p99)" "${GATE_UNIT_SPINUP_P99_MS}" "in-guest unit spin-up p99" || rc=1
+    exit $rc ;;
 
   nspawn-fast|0005)    # STORY-0021 / SCENARIO-0005: in-guest nspawn --ephemeral sub-second + namespace isolation.
     pending STORY-0021 "in-guest nspawn fast-tier runner not built (probe: ephemeral spin-up over N + PID/mnt/net ns isolation)" ;;

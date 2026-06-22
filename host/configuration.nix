@@ -58,6 +58,17 @@
     };
   };
 
+  # Durable COORDINATOR micro-VM (STORY-0007): stays up across tasks, warm /nix store,
+  # nspawn-capable real kernel (hosts the STORY-0021 fast tier + STORY-0008 disposable
+  # units). Reached at a static 10.88.0.2 over br-microvm. The coordinator daemon
+  # (`dispatcher serve`) entrypoint exists; baking it in as a live service is gated on
+  # Nix-packaging the binary + a real queue (ITER-0006).
+  microvm.vms.fleet-coord = {
+    config = {
+      imports = [ ../guests/coordinator-vm.nix ];
+    };
+  };
+
   # NOTE: the fast-tier nspawn unit does NOT belong here. systemd-nspawn cannot
   # mount /proc inside the unprivileged agent-host LXC container (verified
   # 2026-06-18: "Failed to mount proc ... Operation not permitted", even with
