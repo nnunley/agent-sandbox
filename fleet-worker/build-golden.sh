@@ -86,7 +86,7 @@ xc "echo marker: \$(cat /etc/fleet-golden-version)
 echo -n 'skills SKILL.md: '; find -L /etc/claude/skills -name SKILL.md 2>/dev/null | wc -l
 echo -n 'symlinked SKILL.md: '; find /etc/claude/skills -name SKILL.md -type l 2>/dev/null | wc -l
 for t in claude lean-ctx go make git; do
-  if command -v \$t >/dev/null 2>&1 || nix develop /etc/fleet-worker ${NIXFLAGS} -c command -v \$t >/dev/null 2>&1; then echo \"tool ok: \$t\"; else echo \"tool MISSING: \$t\"; fi
+  if command -v \$t >/dev/null 2>&1 || nix develop /etc/fleet-worker ${NIXFLAGS} -c bash -lc \"command -v \$t\" >/dev/null 2>&1; then echo \"tool ok: \$t\"; else echo \"tool MISSING: \$t\"; fi
 done"
 
 say "7/7 publish ${ALIAS} image"

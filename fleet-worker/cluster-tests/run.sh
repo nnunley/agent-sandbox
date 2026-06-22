@@ -178,8 +178,10 @@ case "$SCEN" in
     # only). If the core agent CLIs are absent the image is only the substrate (not the full
     # golden) → PENDING STORY-0075 (T3 not yet landed).
     GFP="${GOLDEN_FLAKE_PATH:-/etc/fleet-worker}"
+    # `command -v` is a shell builtin, so it must run INSIDE `bash -lc` under nix develop
+    # (nix develop -c needs an executable, not a builtin).
     resolve_tool() { incus exec "${REMOTE}:${inst}" -- bash -lc \
-      "command -v $1 >/dev/null 2>&1 || nix develop ${GFP} --accept-flake-config -c command -v $1 >/dev/null 2>&1"; }
+      "command -v $1 >/dev/null 2>&1 || nix develop ${GFP} --accept-flake-config --no-sandbox -c bash -lc 'command -v $1' >/dev/null 2>&1"; }
     resolve_tool claude && resolve_tool lean-ctx || { reap_copy "${inst}"; pending STORY-0075 "full golden toolchain not realized (claude/lean-ctx absent on copy) — T3 pending"; }
     miss=""; for t in ${GOLDEN_TOOLCHAIN}; do resolve_tool "$t" || miss+="$t "; done
     assert_true "$([ -z "$miss" ] && echo 1 || echo 0)" "golden copy exposes realized toolchain (${GOLDEN_TOOLCHAIN})${miss:+ — missing: $miss}" || rc=1
@@ -207,8 +209,10 @@ case "$SCEN" in
     grep -q "${FLEET_GOLDEN_IMAGE}" <<<"$aliases" || pending STORY-0076 "no ${FLEET_GOLDEN_IMAGE} image (golden not built)"
     inst="$(launch_golden_copy "${FLEET_GOLDEN_IMAGE}")" || { echo "FAIL ${SCEN}: launch from ${FLEET_GOLDEN_IMAGE} failed"; exit 1; }
     GFP="${GOLDEN_FLAKE_PATH:-/etc/fleet-worker}"
+    # `command -v` is a shell builtin, so it must run INSIDE `bash -lc` under nix develop
+    # (nix develop -c needs an executable, not a builtin).
     resolve_tool() { incus exec "${REMOTE}:${inst}" -- bash -lc \
-      "command -v $1 >/dev/null 2>&1 || nix develop ${GFP} --accept-flake-config -c command -v $1 >/dev/null 2>&1"; }
+      "command -v $1 >/dev/null 2>&1 || nix develop ${GFP} --accept-flake-config --no-sandbox -c bash -lc 'command -v $1' >/dev/null 2>&1"; }
     # If none of the provider CLIs resolve, the export line isn't enabled yet → PENDING STORY-0076.
     any=0; for c in ${GOLDEN_PROVIDER_CLIS}; do resolve_tool "$c" && any=1; done
     [ "$any" = 1 ] || { reap_copy "${inst}"; pending STORY-0076 "provider CLIs not exported in golden (flake export not enabled) — T4 pending"; }
