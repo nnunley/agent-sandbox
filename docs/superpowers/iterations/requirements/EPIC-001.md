@@ -3,9 +3,11 @@
 **Summary:** Execution backend & topology
 **Stories:** STORY-0001, STORY-0002, STORY-0003, STORY-0004, STORY-0005, STORY-0006, STORY-0007, STORY-0008, STORY-0009, STORY-0010, STORY-0011, STORY-0012, STORY-0013, STORY-0014, STORY-0015, STORY-0016, STORY-0017, STORY-0018, STORY-0019, STORY-0020
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 5/20 done (STORY-0018 done:ITER-0004; STORY-0004/0017/0020 done:ITER-0005 — in-scope
-interface ACs; STORY-0007 done:ITER-0005b — durable coordinator VM, SCENARIO-0004 PASS; remaining
-microVM ACs continue in ITER-0005b)
+**Status:** 7/20 done (STORY-0018 done:ITER-0004; STORY-0004/0017/0020 done:ITER-0005 — in-scope
+interface ACs; STORY-0007/0005/0008 done:ITER-0005b — durable coordinator VM (SCENARIO-0004),
+immutable golden + incus-copy launch (SCENARIO-0003), disposable units inside the VM (SCENARIO-0004).
+Deferred microVM ACs (STORY-0004 AC-3, STORY-0017 AC-3/4, STORY-0020 AC-2) proven by the ITER-0005b
+substrate harness — see iteration-log)
 
 ## STORY-0001
 
@@ -101,7 +103,13 @@ ITER-0005b** (Firecracker, cluster-only; the factory graft point is documented `
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:55-58`
 
-**Status:** pending
+**Status:** done:ITER-0005b — AC-1: golden image DEFINED declaratively (`fleet-worker/golden.nix`):
+read-only nix store (immutable root) + tmpfs /workspace,/tmp writable scratch (STORY-0049 AC-5),
+pinned by `fleet-worker/tests/golden-image.test.sh`. AC-2: a real `fleet-golden` incus image was
+published on the cluster; SCENARIO-0003 (golden-launch) MEASURED PASS — a fresh copy launches via
+btrfs CoW in ~2.9–3.3s with the golden marker present (proves NO live build), /workspace + /tmp
+writable, clean stop-then-delete teardown. FULL golden (skills/provider routing baked, byte-identical
+clean-room regen) is STORY-0075 / ITER-0005c.
 
 ## STORY-0006
 
@@ -162,7 +170,13 @@ AND a real queue to drain (laneq, ITER-0006); the daemon loop + entrypoint are p
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:65-79`
 
-**Status:** pending
+**Status:** done:ITER-0005b — AC-1: per-task disposable units run inside the live coord VM via
+`systemd-nspawn --ephemeral` (`fleet-worker/unit/fleet-unit.sh`) with an immutable read-only /nix
+root. AC-2: teardown is unit-kill + ephemeral COW discard — the hot path is structurally incus-free
+(incus is unreachable from inside the guest), SCENARIO-0008 AC-2 MEASURED PASS (111ms unit-kill, gate
+≤5000ms, asserted incus-free). AC-3: warm /nix store → sub-second spin-up, MEASURED 16ms mean / 19ms
+p99 in-guest unit spin-up (SCENARIO-0004 durable-vm). Evidence: cluster harness nspawn-fast + teardown
++ durable-vm.
 
 ## STORY-0009
 

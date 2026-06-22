@@ -392,8 +392,11 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - No live Nix builds during worker launch
 - Worker state is isolated from other tasks
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (cluster) — PASS 2026-06-22: fresh copy launched from the published
+`fleet-golden` image via btrfs CoW in ~2.9–3.3s with the golden marker present (proves no live build),
+/workspace + /tmp writable, clean stop-then-delete teardown. AC-1 definition pinned by
+`fleet-worker/tests/golden-image.test.sh` (structural, Mac-runnable).
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh golden-launch` (+ `bash fleet-worker/tests/golden-image.test.sh`)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:55-58`
@@ -459,8 +462,11 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - Isolation is sufficient for trusted code
 - Teardown is quick (kill container process)
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (cluster) — PASS 2026-06-22: in-guest `systemd-nspawn --ephemeral`
+fast-tier spin-up 64ms mean / 72ms p99 (N=20, gate ≤1000ms) over the warm /nix store; genuine PID
+namespace isolation from the VM host (distinct `/proc/self/ns/pid`). Tier selection proven in Go:
+`NspawnRunner` under `TierFast` (`nspawn_runner_test.go` + `daemon_tier_test.go`, incl. live e2e).
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh nspawn-fast` (+ `cd modules/incus-dispatcher && go test -run TestNspawnRunner ./...`)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:81-87`
@@ -492,8 +498,11 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - Spin-up cost (hundreds ms) is amortized over task lifetime
 - Trust domain (e.g., trading) is protected from other tasks
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (cluster) — PASS 2026-06-22: per-task Firecracker microVM (own kernel)
+boot-to-ready 737ms mean / 909ms p99 (gate ≤2500ms, derived from the STORY-0025 2134ms benchmark);
+bounded amortized cost. Tier selection proven in Go: `FirecrackerRunner` under `TierHard`, teardown via
+`systemctl stop` (never incus delete) — `firecracker_runner_test.go` + live e2e.
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh hardtier` (+ `cd modules/incus-dispatcher && go test -run TestFirecrackerRunner ./...`)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:81-87`
@@ -522,8 +531,12 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - Each domain has its own coordinator daemon (one per VM)
 - Multi-tenancy is enforced by VM isolation topology
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (cluster, single-domain v1) — PASS 2026-06-22: the durable Firecracker
+VM owns its kernel (guest 6.12.78 ≠ agent-host host 6.8.0-106-generic) = hardware trust boundary; a
+disposable unit runs INSIDE that VM (unit kernel = VM kernel ≠ host). Per STORY-0024 rescope, AC-1 +
+single-domain AC-2 are proven here; dynamic multi-domain provisioning + cross-domain routing (full
+AC-2/AC-3 multi-tenancy) are DEFERRED to ITER-0006+ (needs a domain-routing owner + the queue substrate).
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh trust-boundary`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:88-89`

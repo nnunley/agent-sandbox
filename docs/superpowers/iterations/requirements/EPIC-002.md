@@ -3,8 +3,8 @@
 **Summary:** Isolation tiers & micro-VM
 **Stories:** STORY-0021, STORY-0022, STORY-0023, STORY-0024, STORY-0025
 **Primary sources:** `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 2/5 done (STORY-0025 benchmark spike done:2026-06-21; STORY-0023 done:ITER-0005;
-STORY-0021/0022/0024 → ITER-0005b)
+**Status:** 5/5 done (STORY-0025 benchmark spike done:2026-06-21; STORY-0023 done:ITER-0005;
+STORY-0021/0022/0024 done:ITER-0005b)
 
 ## STORY-0021
 
@@ -23,7 +23,12 @@ STORY-0021/0022/0024 → ITER-0005b)
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:81-87`
 
-**Status:** pending
+**Status:** done:ITER-0005b — AC-1/AC-2: in-guest `systemd-nspawn --ephemeral` disposable units
+(`fleet-worker/unit/fleet-unit.sh`) over the warm read-only /nix store inside the durable coord
+VM; spin-up MEASURED 64ms mean / 72ms p99 (N=20, gate ≤1000ms), genuine PID-namespace isolation
+from the VM host (SCENARIO-0005). AC-3: template-driven selection — `NspawnRunner` registered
+under `TierFast` in the `BackendFactory`; the daemon routes a Fast-tier template here
+(`nspawn_runner_test.go` + `daemon_tier_test.go`). Live e2e integration green.
 
 ## STORY-0022
 
@@ -42,7 +47,12 @@ STORY-0021/0022/0024 → ITER-0005b)
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:81-87`
 
-**Status:** pending
+**Status:** done:ITER-0005b — AC-1/AC-2: per-task Firecracker microVM (own kernel = hardware
+isolation); per-task boot-to-ready MEASURED 737ms mean / 909ms p99 (gate ≤2500ms, derived from
+the STORY-0025 2134ms benchmark) via the worker microVM stop→start→ready cycle (SCENARIO-0006);
+bounded amortized cost (<0.7% of a 5–10 min task). AC-3: template-driven selection —
+`FirecrackerRunner` registered under `TierHard`; teardown via `systemctl stop` (never incus
+delete, D5). `firecracker_runner_test.go` + live e2e integration green.
 
 ## STORY-0023
 
@@ -82,12 +92,14 @@ Design: `docs/plans/2026-06-21-iter0005-backend-tier-design.md`.
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:88-89`
 
-**Status:** pending — **RESCOPED for ITER-0005b (PAR 2026-06-21, both reviewers):** IN = AC-1 (a single
-durable VM is a hardware trust boundary) + the single-domain reading of AC-2 (disposable units run
-inside that one VM). DEFER → ITER-0006+ = dynamic multi-domain VM provisioning + cross-domain routing /
-operationalization (full multi-tenancy of AC-2/AC-3) — it needs a domain-routing owner and the queue
-substrate. Topology note: multi-tenancy "falls out" structurally from the per-domain-VM model but is
-NOT operationalized in ITER-0005b (avoids an incomplete "one VM per trust domain" claim with no
+**Status:** done:ITER-0005b (single-domain v1) — **RESCOPED (PAR 2026-06-21, both reviewers).**
+IN (DONE): AC-1 — the durable Firecracker VM is a hardware trust boundary, MEASURED guest kernel
+6.12.78 ≠ agent-host host kernel 6.8.0-106-generic (own kernel, not a shared-kernel namespace);
+single-domain reading of AC-2 — disposable units run INSIDE that one VM (unit kernel = VM kernel ≠
+host), SCENARIO-0007 PASS. DEFER → ITER-0006+: dynamic multi-domain VM provisioning + cross-domain
+routing / operationalization (full multi-tenancy of AC-2/AC-3) — needs a domain-routing owner + the
+queue substrate. Topology note: multi-tenancy "falls out" structurally from the per-domain-VM model
+but is NOT operationalized here (avoids an incomplete "one VM per trust domain" claim with no
 domain-assignment mechanism).
 
 ## STORY-0025

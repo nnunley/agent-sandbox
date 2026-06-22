@@ -426,12 +426,19 @@ SCENARIO-0003 (golden launch / STORY-0005); SCENARIO-0008/0009 (benchmark, done)
 queue client" is resource topology (where the one-shot loop runs), NOT scheduling semantics — it does
 NOT commit ITER-0006's queue substrate (still Patrick-blocked) or ITER-0007's Temporal; tier ⊥
 worker_kind (ITER-0008).
-**Status:** pending (cluster) — **GATE CLEARED 2026-06-21** (STORY-0025 benchmark done): the substrate
-decision is evidence-backed (nspawn Fast tier 76 ms vs Firecracker Hard tier 1861 ms; two-tier model:
-`nspawn --ephemeral` inside the durable Firecracker guest for trusted lanes, per-task Firecracker for
-sensitive lanes). nspawn can NOT run in the unprivileged agent-host LXC even with `security.nesting`
-(proc-mount/idmap, codified in `host/configuration.nix`) — the fast tier lives in the VM guest.
-ITER-0005b is eligible now that ITER-0005 landed; ITER-0006 stays blocked on the Patrick sync.
+**Status:** done:ITER-0005b (cluster, 2026-06-22) — all 6 stories landed + MEASURED on agent-host.
+STORY-0007 (durable coord VM, SCENARIO-0004); STORY-0021 (fast-tier nspawn --ephemeral 64ms mean +
+PID-ns isolation, SCENARIO-0005) + NspawnRunner@TierFast; STORY-0022 (per-task Firecracker 737ms mean /
+909ms p99, SCENARIO-0006) + FirecrackerRunner@TierHard; STORY-0008 (disposable units + unit-kill
+teardown 111ms incus-free, SCENARIO-0004/0008ac2); STORY-0024 (trust boundary: guest kernel 6.12.78 ≠
+host 6.8.0, single-domain v1, SCENARIO-0007); STORY-0005 (immutable golden + incus-copy launch 2.9s
+CoW, no live build, SCENARIO-0003). Both TODO(ITER-0005b) graft markers resolved; the serve entrypoint
+wires the real tier factory. go vet + go test -race ./... green incl. live e2e. ITER-0006 stays
+Patrick-blocked; ITER-0005c (FULL golden / skills / provider routing) eligible next.
+Substrate decision (evidence-backed): two-tier — `nspawn --ephemeral` inside the durable Firecracker
+guest for trusted lanes (76ms spike → 64ms in-guest), per-task Firecracker for sensitive lanes; nspawn
+can NOT run in the unprivileged agent-host LXC even with `security.nesting` (proc-mount/idmap, codified
+in `host/configuration.nix`), so the fast tier lives in the VM guest.
 **Scope review:** 2 PAR reviewers (2026-06-21) → both REVISE/conditional-APPROVE. Conditions applied:
 (1) split substrate/image → ITER-0005b + ITER-0005c (CRITICAL, both); (2) Task 0 cluster verification
 harness made the BLOCKING first deliverable (CRITICAL, both); (3) STORY-0024 rescoped to single-domain

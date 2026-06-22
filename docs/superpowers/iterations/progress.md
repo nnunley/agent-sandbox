@@ -1,30 +1,36 @@
 # Progress
 
-**Phase:** ITER-0004 DONE + AUDIT CLEAN; **STORY-0025 benchmark spike DONE → ITER-0005 GATE CLEARED** (2026-06-21).
-**Iterations:** 5/9 done (ITER-0000/0001/0002/0003/0004). **Next eligible: ITER-0005** (micro-VM backend / NixOS golden / isolation tiers — gate cleared). ITER-0006 BLOCKED (Patrick sync).
-**Sentinel corpus:** JOURNEY-0001 green; incus-dispatcher + llm-proxy 166 tests green under -race; vet clean; zero TODO(ITER-0004).
-**STORY-0025 spike result:** nspawn Fast tier **76 ms** mean/97 ms p99 (N=100, nesting-enabled Incus NixOS container, warm /nix) vs Firecracker Hard tier **1861 ms** mean/2134 ms p99 (N=20). nspawn 24.5× faster = substrate-selection signal; microVM boot amortizes to <0.7% of a 5–10 min task. Decision: **two-tier** — nspawn (`security.nesting=true`) for trusted lanes, Firecracker for untrusted. Nesting research: Incus PR #2624 (in host's 6.23) drops sys/proc AppArmor protections when `security.nesting=true` → no privileged needed; default-off nesting is why agent-host failed. Artifacts: `fleet-worker/spikes/` (bench-spinup.sh + results + STORY-0025-benchmark-results.md).
-**Open follow-up (optional):** set `security.nesting=true` on `agent-host` permanently (needs container restart, briefly bounces microVMs) — currently a noted follow-up, not done.
-**Last event:** 2026-06-21 — STORY-0025 benchmark spike complete (nspawn measured); ITER-0005 gate cleared.
+**Phase:** ITER-0005b DONE (2026-06-22) — awaiting orchestrator audit (`auditing-progress`).
+**Iterations:** 7/9 done (ITER-0000/0001/0002/0003/0004/0005/0005b). **Next eligible: ITER-0005c**
+(FULL golden / provider routing / curated skills — gated only on the STORY-0025 benchmark, CLEARED;
+runs on `agent-host`). ITER-0006 BLOCKED (Patrick sync); ITER-0007/0008 pending.
 
-**ITER-0004 delivered (commits):**
-- T0 handoff-bundle schema doc (d67823a); T1+T2 Thread/Run/StumbleSignal data model (04b8687, 8663fe4);
-  T3 workspace-lease registry (4e2b2e7); T4+T5 ReconstructResumeAudit + SCENARIO-0015 (59b6a3c);
-  T7 ContextProvider interface + NoopProvider + AC-4/AC-5 (e8c2ca2); **T6 LeanCtxProvider default adapter
-  (2a1e447)**; **T8 fresh handoff bundle on autonomous requeue / STORY-0058 AC-25 (467a93e)**.
-- Stories done: STORY-0029/0030/0033/0018; partial: STORY-0031 (AC-1/2; AC-3/4 → ITER-0008), STORY-0058
-  (AC-25; AC-24 → ITER-0007).
-- Scenarios: SCENARIO-0015/0030/0031/0054 automated; SCENARIO-0077 (spike, prior). Corpus commands wired.
+**Sentinel corpus:** all 7 cluster scenarios PASS (golden-launch, durable-vm, nspawn-fast, hardtier,
+trust-boundary, microvm-boot, teardown); harness lib + golden-image + single-source structural tests
+PASS; `go vet` clean; `go test -race ./...` green (incl. live e2e); JOURNEY-0001 green; zero
+`TODO(ITER-0005b)` markers.
 
-**Decision (2026-06-21):** T6/T8 built local-TDD against the real lean-ctx binary + the fake-backend daemon
-seam, NOT a fresh cluster dogfood — the cross-one-shot session round-trip was already cluster-proven by the
-STORY-0034 spike (SCENARIO-0077). lean-ctx knowledge is project-scoped by CWD, so the integration test runs in
-an isolated temp project (skips if lean-ctx absent) and never touches the repo's own store.
+**ITER-0005b delivered (commits):**
+- T1 fast-tier nspawn substrate + probes (48c7035); T2 NspawnRunner@TierFast (cf7282d);
+  T4 FirecrackerRunner@TierHard + serve factory wiring + graft markers removed (7467bca);
+  T5 golden.nix + fleet-golden image + golden-launch probe (f9e1f65);
+  T6 trust-boundary probe + usable disposable-unit env / isolation correction (b1b22d5).
+- Stories done: STORY-0007/0021/0022/0008/0024/0005 (EPIC-002 5/5; EPIC-001 +0005/0008).
 
-**Environment note (2026-06-21):** local disk is ~full (≈877Mi free of 460Gi) — /tmp writes hit ENOSPC mid-run.
-Git commits unaffected. Cluster dogfood would need disk headroom on the worker host too.
+**Measured (agent-host, 2026-06-22):** fast tier nspawn 64ms mean / 72ms p99 (gate ≤1000); hard tier
+per-task Firecracker 737ms mean / 909ms p99 (gate ≤2500); durable-VM in-guest unit 16ms mean / 19ms p99;
+teardown 111ms unit-kill (incus-free); golden copy launch ~2.9–3.3s CoW (no live build); trust boundary
+guest kernel 6.12.78 ≠ host 6.8.0-106-generic.
+
+**Substrate decision (evidence-backed):** two-tier — `nspawn --ephemeral` inside the durable Firecracker
+coord VM for trusted lanes; per-task Firecracker for sensitive lanes. Grafted onto ITER-0005's
+`BackendFactory` (Fast→NspawnRunner, Hard→FirecrackerRunner) with no daemon/interface change.
+
+**Deferred (noted for audit):** STORY-0024 multi-domain provisioning/routing → ITER-0006+; FULL golden /
+skills / provider routing (STORY-0075/0076/0077/0078) → ITER-0005c. ITER-0005's deferred microVM ACs
+(STORY-0004 AC-3, STORY-0017 AC-3/4, STORY-0020 AC-2) substantively proven by this substrate harness.
+
+**Last event:** 2026-06-22 — ITER-0005b complete; all artifacts synced; ready for `auditing-progress`.
 
 **On resume:** "continue iterative development" → orchestrator runs `auditing-progress` (PAR, 3-tier) on
-ITER-0004, then picks the next pending iteration (ITER-0005, gated on the STORY-0025 disposable-unit benchmark
-spike; ITER-0006 stays blocked on the Patrick sync). Optional cluster-evidence pass: STORY-0068 AC-2 (let-go
-13→0) + a live SCENARIO-0030 diary round-trip on a real fleet worker.
+ITER-0005b, then picks ITER-0005c (next pending; ITER-0006 stays Patrick-blocked).

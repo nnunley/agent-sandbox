@@ -398,3 +398,55 @@ NIX_PATH, local-first `file:///srv/nix-shared` substituter ordering) against sil
 COPY replicates a working worker. AC-2 status refined: "delivered as incus container" DONE+validated;
 "delivered as Firecracker guest" + golden-copy replication + immutable-root/writable-scratch
 (STORY-0005 AC-1 / STORY-0049 AC-5) → ITER-0005b. **ITER-0005 CONFIRMED DONE.**
+
+## ITER-0005b — Firecracker micro-VM substrate & isolation tiers (DONE — closed 2026-06-22)
+
+**Completed:** 2026-06-22 (cluster-resident on `agent-host`; no Mac CI seam — every AC is e2e,
+proven by the Task-0 cluster verification harness `fleet-worker/cluster-tests/run.sh`).
+
+**Stories delivered:** STORY-0007 (durable coord VM — landed earlier in the iteration),
+STORY-0021 (fast tier), STORY-0022 (hard tier), STORY-0008 (disposable units + teardown),
+STORY-0024 (trust boundary, single-domain v1), STORY-0005 (immutable golden + incus-copy launch).
+EPIC-002 now 5/5; EPIC-001 +0005/0008. Deferred microVM ACs from ITER-0005 (STORY-0004 AC-3 backend,
+STORY-0017 AC-3 microVM ≤5s = SCENARIO-0029, STORY-0020 AC-2) are substantively proven by this
+substrate harness (microvm-boot 708ms; tier runners on one Runner interface) — noted for the audit.
+
+**Tasks executed:** (cluster work driven directly — single-VM/single-host serialization makes parallel
+implementer subagents unsafe; the harness IS the PAR-mandated evidence gate. Documented judgment call.)
+- T1 — fast-tier substrate: in-guest `fleet-unit.sh` (`systemd-nspawn --ephemeral` over warm RO /nix,
+  guest system profile on PATH so units have the full toolchain). Probes `nspawn-fast` (64ms mean /
+  72ms p99, N=20; genuine PID-ns isolation via real readlink) + `teardown` (incus-free, 111ms unit-kill).
+  Commit 48c7035 (+ isolation correction in b1b22d5).
+- T2 — `NspawnRunner` (Runner) under `TierFast`; nonzero-exit→Result, infra-err surfaces, Cleanup no-op
+  (ephemeral self-teardown). Unit + live e2e tests. Commit cf7282d.
+- T3 — hard-tier substrate: per-task worker microVM boot probe `hardtier` (737ms mean / 909ms p99, gate
+  ≤2500ms). (Wired in cf7282d's sibling run.sh edits; measured this iteration.)
+- T4 — `FirecrackerRunner` (Runner) under `TierHard`: boot → resolve dnsmasq lease IP → ssh worker →
+  run; Cleanup `systemctl stop` (never incus delete). serve entrypoint wires the real Fast+Hard factory;
+  both TODO(ITER-0005b) graft markers removed; `nspawnExec`→`hostExec`. Commit 7467bca.
+- T5 — `golden.nix` (immutable root + tmpfs /workspace,/tmp scratch) + `golden-image.test.sh`
+  (structural); published a real `fleet-golden` incus image; `golden-launch` probe (2.9–3.3s CoW, golden
+  marker present = no live build, writable scratch, clean teardown). Commit f9e1f65.
+- T6 — `trust-boundary` probe: own-kernel (guest 6.12.78 ≠ host 6.8.0-106-generic) + unit-inside-VM;
+  fast-tier disposable-unit env made usable (coreutils on PATH), which also corrected the T1 isolation
+  assertion to a genuine signal. Commit b1b22d5.
+
+**Scenarios:** SCENARIO-0003 (golden-launch), SCENARIO-0004 (durable-vm + disposable units/teardown),
+SCENARIO-0005 (fast tier), SCENARIO-0006 (hard tier), SCENARIO-0007 (trust boundary, single-domain v1)
+— all automated (cluster) and MEASURED PASS 2026-06-22. SCENARIO-0029 (microVM ≤5s) PASS at T0.
+Corpus commands were wired off-TBD at Task 0; scenario cards updated with measured results + commands.
+
+**Sentinel corpus results:** baseline clean (durable-vm + microvm-boot PASS, JOURNEY-0001 green). Post-
+iteration: all 7 cluster scenarios PASS; harness lib pure-logic + golden-image + single-source
+structural tests PASS; `go vet` clean; `go test -race ./...` green (incl. live nspawn + firecracker
+integration); zero `TODO(ITER-0005b)` markers remain.
+
+**Summary:** Landed the two-tier isolation substrate on real hardware — `nspawn --ephemeral` disposable
+units (Fast, ~64ms) inside the durable Firecracker coord VM for trusted lanes, and per-task Firecracker
+microVMs (Hard, ~740ms, own kernel) for sensitive lanes — grafted onto ITER-0005's `BackendFactory`
+seam with zero daemon/interface change (Fast→NspawnRunner, Hard→FirecrackerRunner; both graft markers
+resolved). Disposable-unit teardown is unit-kill, structurally incus-free (D5 hang avoided). The
+durable VM is a hardware trust boundary (distinct kernel from the host LXC); single-domain multi-tenancy
+v1 (dynamic multi-domain provisioning deferred to ITER-0006+). Workers launch as immutable golden copies
+via btrfs CoW with no live build (FULL golden/skills/provider → ITER-0005c). All cluster-only, proven by
+the Task-0 verification harness; the Go backends are additionally CI-provable on the Mac.
