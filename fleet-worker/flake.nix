@@ -73,16 +73,26 @@
         sources = skillSources;
         allowlist = curatedSkillIds;
       };
-      # mkBundle copy-trees ONLY the curated SKILL.md dirs (small derivation — no toolchain,
-      # no golden), the standalone STORY-0078 gate `nix build .#agent-skills-bundle`.
+      # mkBundle's default output is a SYMLINK-tree (each skill dir links into a --safe-links
+      # rsync'd source store path). Good enough for the STORY-0078 build gate.
       agentSkillsBundle = skillsLib.mkBundle {
         inherit pkgs;
         selection = skillSelection;
         name = "agent-skills-bundle";
       };
+      # STORY-0077 AC-4: an immutable COPY-TREE (real files, not symlinks) for the golden's
+      # discovery path. `cp -rL` dereferences the symlink-tree into regular files; the source
+      # trees are already in the closure so the result is fully offline.
+      agentSkillsBundleEtc = pkgs.runCommand "agent-skills-bundle-etc" { preferLocalBuild = true; } ''
+        cp -rL ${agentSkillsBundle} "$out"
+        chmod -R u+w "$out"
+      '';
     in {
-      # STORY-0078 standalone proof + STORY-0077 input: the curated skills bundle.
-      packages.${system}.agent-skills-bundle = agentSkillsBundle;
+      # STORY-0078 standalone proof (symlink bundle) + STORY-0077 copy-tree for the golden.
+      packages.${system} = {
+        agent-skills-bundle = agentSkillsBundle;
+        agent-skills-bundle-etc = agentSkillsBundleEtc;
+      };
 
       devShells.${system}.default = pkgs.mkShell {
         packages = [
