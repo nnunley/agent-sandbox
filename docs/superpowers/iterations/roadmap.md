@@ -331,21 +331,81 @@ SCENARIO-0077 (spike PASS). (SCENARIO-0018 pattern-learning → ITER-0008 with A
 **Look-ahead check:** gate STORY-0034 (ITER-0000) **CLEARED**; independent of substrate; Run/Thread/bundle schemas
 locked additive so ITER-0006 (substrate)/0007 (Temporal deadline)/0008 (Run augmentation + genome) graft without rework.
 
-### ITER-0005 — Micro-VM backend, NixOS golden & isolation tiers (post-benchmark)
+### ITER-0005 — Backend-abstraction & isolation-tier interface slice (CI-provable)
 
-**Stories:** STORY-0075, STORY-0077, STORY-0078, STORY-0076, STORY-0005, STORY-0007, STORY-0008, STORY-0021, STORY-0022, STORY-0023, STORY-0024, STORY-0017, STORY-0020, STORY-0004
-**Rationale:** The declarative-worker track (STORY-0075 here = the FULL golden /
-retire-Ubuntu / micro-VM build; the minimal container worker image already landed
-in ITER-0000 for the dogfood): NixOS golden, skills
-via agent-skills-nix, provider routing, immutable golden copies, the durable VM
-hosting disposable tiered units, fast/hard isolation tiers selected per template,
-trust-domain VMs, and the second (micro-VM) backend behind the interface. Gated on
-STORY-0025 benchmark choosing the disposable substrate.
-**Split-in (from ITER-0002 PAR):** STORY-0049 AC-5 (launched template is immutable root with
-writable scratch — /workspace, /tmp tmpfs/overlay) lands here as part of the golden image
-(STORY-0075); plus SCENARIO-0020's microVM host credential-socket isolation (the broker proof
-itself shipped in ITER-0002 at the container/proxy seam).
-**Status:** pending — **GATE CLEARED 2026-06-21** (STORY-0025 benchmark done): the substrate decision
+**Status:** done (2026-06-21) — interface seam locked + isolation-tier selection landed, all CI-provable.
+T1 `IsolationTier`+`TemplateRule.Tier`+`Policy.TierFor` (STORY-0023 AC-1); T2 `BackendFactory`+
+`staticBackendFactory.SelectRunner` (STORY-0004/0017 AC-1); T3 additive daemon wiring (tier→backend
++ D6 tier line + park-on-unavailable-tier); T4–T6 evidence (SCENARIO-0089/0028/0076 automated).
+Stories done: STORY-0023 (full); STORY-0004/0017/0020 (in-scope interface ACs; microVM ACs →
+ITER-0005b). Suite 177 green under `-race`, vet clean, JOURNEY-0001 + JOURNEY-0003 AC-1 sentinels
+green, zero `TODO(ITER-0005)` debt (2 intentional `TODO(ITER-0005b)` graft markers in `backend.go`).
+**Stories:** STORY-0004, STORY-0017, STORY-0020, STORY-0023
+**SCOPE DECISION (2026-06-21, user):** ITER-0005 was split. This iteration is the **interface
+slice** — the CI-provable / fleet-dogfoodable backend-abstraction + tier-selection work that
+needs no live Firecracker/nspawn. The heavy NixOS-golden / Firecracker-microVM / nspawn-fast-tier /
+agent-skills-nix infra stack (STORY-0005, 0007, 0008, 0021, 0022, 0024, 0075-full, 0076, 0077, 0078)
+moved to **ITER-0005b** (cluster-resident, runs on `agent-host`). Rationale: prior iterations were
+Mac-driven Go coordination code; this iteration keeps that momentum on the verifiable interface seam,
+and the benchmark spike established that the nspawn fast tier can't run until a real Firecracker
+microVM guest is stood up first (an ITER-0005b precondition).
+**Rationale:** Lock the backend-agnostic execution seam so ITER-0005b's microVM/nspawn backends graft
+in without rework. The `Runner` interface (`types.go:130`) + the container backend
+(`cli_runner.go`/`client_runner.go`) + the `container_runner_test.go` contract already exist; this
+iteration makes the abstraction *explicit and contract-tested* (STORY-0004 AC-1/AC-2, STORY-0017
+AC-1/AC-2, STORY-0020 AC-1), and adds the genuinely-new **isolation-tier selection** (STORY-0023
+AC-1: a `Fast|Hard` tier declared on the directive/template and validated through D1) plus a
+tier→backend selection seam (factory) with the container backend as the only registered backend and a
+documented `TODO(ITER-0005b)` graft point for microVM/nspawn.
+**AC scoping (deferred ACs → ITER-0005b):** STORY-0004 AC-3 (microVM backend, benchmark-gated);
+STORY-0017 AC-3 (microVM startup ≤5s measured) + AC-4 (microVM clean teardown); STORY-0020 AC-2
+(microVM backend passes same contract). These are cluster/Firecracker-only and have no CI seam here.
+**Design note (PAR-required, 2026-06-21):** `docs/plans/2026-06-21-iter0005-backend-tier-design.md` —
+locks the two decisions the scope review required: (1) IsolationTier lives on `TemplateRule` (D1
+mechanism), NOT on the Directive — so ITER-0006's strict `ParseDirective` is untouched and a
+worker-origin directive cannot downgrade isolation; (2) tier→backend selection is a
+`BackendFactory.SelectRunner(tier)` OUTSIDE `Runner.Run` (interface unchanged; ITER-0005b runners
+register against it). Also documents tier ⊥ ITER-0008 `worker_kind` orthogonality.
+**New work (vs already-coded interface):** IsolationTier type + `TemplateRule.Tier` + `Policy.TierFor`;
+`BackendFactory`/`staticBackendFactory` + additive daemon wiring + decision-log tier line; explicit
+contract tests (SCENARIO-0028/0076/0089) rather than implicit reliance on the existing `Runner`.
+**Impacted scenarios:** SCENARIO-0028 (D2 backend interface abstracts container vs microVM — unit),
+SCENARIO-0076 (container backend passes contract tests — integration; CI subset of the existing
+`container_runner_test.go`), SCENARIO-0089 (NEW: template-declared tier selects the backend — integration).
+(SCENARIO-0029 microVM ≤5s, SCENARIO-0005/0006/0007 tier-execution → ITER-0005b.)
+**Look-ahead check:** STORY-0025 gate (ITER-0000) CLEARED; the factory seam is the graft point for
+ITER-0005b's microVM/nspawn backends and ITER-0008's worker-kind dispatch (STORY-0011).
+**Scope review:** 2 PAR reviewers (2026-06-21) → both REVISE→APPROVE-after-revisions. All
+enumerated approval conditions resolved: tier-location + factory architecture documented in the
+design note (CRITICAL ×2); worker_kind orthogonality documented (CRITICAL); SCENARIO-0089 added
+(SERIOUS); new-work made explicit (SERIOUS). One B finding ("container_runner_test.go missing") was a
+false positive — the file exists (326 lines; a nested-go.mod search miss).
+
+### ITER-0005b — NixOS golden, Firecracker micro-VM & nspawn isolation tiers (cluster, post-spike)
+
+**Stories:** STORY-0005, STORY-0007, STORY-0008, STORY-0021, STORY-0022, STORY-0024, STORY-0075 (FULL golden), STORY-0076, STORY-0077, STORY-0078
+**Rationale:** The declarative-worker + execution-substrate track (split out of ITER-0005): the FULL
+NixOS golden (retire-Ubuntu) image, the durable Firecracker micro-VM per trust domain hosting the
+coordinator + warm /nix store, disposable units inside the VM, the `nspawn --ephemeral` fast tier
+(real-kernel guest), per-task Firecracker hard tier, trust-domain VMs, provider routing
+(llm-agents.nix), and curated skills via agent-skills-nix. **Cluster-resident — runs on `agent-host`;
+no CI seam on the Mac (no local Nix).** Grafts the microVM/nspawn backends onto ITER-0005's factory seam.
+**Split-in (from ITER-0002 PAR):** STORY-0049 AC-5 (immutable root + writable /workspace,/tmp scratch)
+lands here as part of the golden image (STORY-0075); plus SCENARIO-0020's microVM host
+credential-socket isolation (the broker proof itself shipped in ITER-0002 at the container/proxy seam).
+**Precondition:** stand up a durable Firecracker micro-VM guest first — the benchmark spike confirmed
+nspawn can't run in the unprivileged `agent-host` LXC even with `security.nesting`; the fast tier lives
+in the VM guest. Also lands the deferred microVM ACs from ITER-0005 (STORY-0004 AC-3, STORY-0017
+AC-3/AC-4, STORY-0020 AC-2).
+**ITER-0005b task (noted):** measure `nspawn --ephemeral` spin-up INSIDE an actual Firecracker micro-VM
+guest with a btrfs template — the faithful in-guest fast-tier number. The 76 ms figure was a
+privileged-Incus-container proxy; a real-kernel VM was confirmed to run nspawn natively without privilege
+(`fleet-worker/spikes/STORY-0025-vm-vs-lxc-comparison.md`), but the in-guest run itself is deferred here.
+**Impacted scenarios:** SCENARIO-0003 (golden launch), SCENARIO-0004 (durable microVM), SCENARIO-0005
+(fast tier), SCENARIO-0006 (hard tier), SCENARIO-0007 (trust-domain VM), SCENARIO-0029 (microVM ≤5s),
+SCENARIO-0065/0066 (golden), SCENARIO-0067 (provider routing), SCENARIO-0068/0069 (skills);
+SCENARIO-0008/0009 (benchmark, done).
+**Status:** pending (cluster) — **GATE CLEARED 2026-06-21** (STORY-0025 benchmark done): the substrate decision
 is evidence-backed. nspawn Fast tier **76 ms** mean/97 ms p99 (N=100) vs Firecracker Hard tier **1861 ms**
 mean/2134 ms p99 (N=20) — nspawn is 24.5× faster and is the substrate-selection signal; microVM boot is a
 one-time amortized cost (<0.7% of a 5–10 min task). Decision: **two-tier model** — `nspawn --ephemeral`
@@ -353,14 +413,10 @@ one-time amortized cost (<0.7% of a 5–10 min task). Decision: **two-tier model
 microVM for sensitive/untrusted lanes. (NB: nspawn can NOT run in the unprivileged agent-host LXC even
 with `security.nesting=true` — proc-mount/idmap restriction, verified 2026-06-18 & 2026-06-21 and
 codified in `host/configuration.nix`; the fast tier lives in the VM guest, per the design's nested
-topology.) ITER-0005 is the next eligible iteration (ITER-0006 stays blocked on the Patrick sync).
-**ITER-0005 task (noted):** measure `nspawn --ephemeral` spin-up INSIDE an actual Firecracker micro-VM
-guest with a btrfs template — the faithful in-guest fast-tier number. The 76 ms figure was a
-privileged-Incus-container proxy; a real-kernel VM was confirmed to run nspawn natively without privilege
-(`fleet-worker/spikes/STORY-0025-vm-vs-lxc-comparison.md`), but the in-guest run itself is deferred here.
-**Impacted scenarios:** tier-selection; immutable-image; VM-boot-readiness; backend-parity;
-immutable-root-scratch (STORY-0049 AC-5); SCENARIO-0008/0009 (benchmark, done)
-**Look-ahead check:** STORY-0025 gate (ITER-0000) **CLEARED**; reuses ITER-0000 backend interface.
+topology.) ITER-0005b becomes eligible once ITER-0005 (interface slice) lands (ITER-0006 stays blocked
+on the Patrick sync).
+**Look-ahead check:** STORY-0025 gate (ITER-0000) **CLEARED**; reuses ITER-0000 backend interface and
+grafts onto ITER-0005's tier→backend factory seam.
 
 ### ITER-0006 — Queue substrate (POST-PATRICK; substrate-coupled)
 

@@ -3,7 +3,8 @@
 **Summary:** Isolation tiers & micro-VM
 **Stories:** STORY-0021, STORY-0022, STORY-0023, STORY-0024, STORY-0025
 **Primary sources:** `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 1/5 done (STORY-0025 benchmark spike done:2026-06-21; STORY-0021/0022/0023/0024 → ITER-0005)
+**Status:** 2/5 done (STORY-0025 benchmark spike done:2026-06-21; STORY-0023 done:ITER-0005;
+STORY-0021/0022/0024 → ITER-0005b)
 
 ## STORY-0021
 
@@ -58,7 +59,11 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:81-89`
 
-**Status:** pending
+**Status:** done:ITER-0005 — AC-1: `IsolationTier` (Fast/Hard) is declared on the vetted
+`TemplateRule` and resolved via `Policy.TierFor` (D1 mechanism — never an author-settable Directive
+field, so a worker-origin directive cannot downgrade isolation); the daemon selects the backend by
+the resolved tier via `BackendFactory`. Unset/unknown → Hard (fail-safe). Evidence SCENARIO-0089.
+Design: `docs/plans/2026-06-21-iter0005-backend-tier-design.md`.
 
 ## STORY-0024
 

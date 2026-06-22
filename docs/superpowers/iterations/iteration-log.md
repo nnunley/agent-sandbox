@@ -320,3 +320,65 @@ an error, writes no bundle) when no id can be parsed — correct for soft state 
 non-conformant one) and unblocks ITER-0006's reliance on a non-empty SessionID. Regression test
 `TestLeanCtxProvider_CreateHandoffRequiresExplicitSessionID` added. Suite 166 green under `-race`, vet clean.
 **ITER-0004 CONFIRMED DONE.**
+
+## ITER-0005 — Backend-abstraction & isolation-tier interface slice (DONE — closed 2026-06-21)
+
+**Completed:** 2026-06-21
+
+**Scope decision (user, 2026-06-21):** the original ITER-0005 (14 stories, NixOS-golden +
+Firecracker + nspawn + skills) was split. This iteration is the **CI-provable interface slice**
+(STORY-0004, 0017, 0020, 0023); the heavy cluster-only infra (STORY-0005/0007/0008/0021/0022/0024/
+0075-full/0076/0077/0078) moved to a new **ITER-0005b** (runs on `agent-host`; no local Nix). Prior
+iterations were Mac-driven Go coordination code — this keeps that on the verifiable seam, and the
+benchmark spike established that the nspawn fast tier can't run until a real Firecracker microVM guest
+is stood up first (an ITER-0005b precondition).
+
+**Stories delivered:** STORY-0023 (isolation tier selected per template — AC-1, full). STORY-0004
+(execution-backend interface — AC-1/AC-2; AC-3 microVM → ITER-0005b). STORY-0017 (D2 backend-agnostic
+interface — AC-1/AC-2; AC-3/AC-4 microVM → ITER-0005b). STORY-0020 (container backend contract — AC-1;
+AC-2 microVM → ITER-0005b).
+
+**Pre-iteration scope review (PAR, 2026-06-21):** 2 adversarial reviewers → both REVISE→APPROVE-after-
+revisions, high agreement. Shared CRITICAL: tier-field location + tier→backend factory architecture
+must be locked before code. Shared SERIOUS: STORY-0023 had no scenario card. A-unique CRITICAL: no
+documented interaction with ITER-0008 `worker_kind` dispatch. A-unique SERIOUS: ambiguity on new-work
+vs already-coded. **Resolutions (all applied, mapping 1:1 to both reviewers' stated approval
+conditions):** (1) design note `docs/plans/2026-06-21-iter0005-backend-tier-design.md` — tier on
+`TemplateRule` (D1; NOT on the Directive, so ITER-0006's strict `ParseDirective` is untouched and a
+worker can't downgrade isolation), factory `SelectRunner(tier)` OUTSIDE `Runner.Run` (interface
+unchanged), tier ⊥ worker_kind orthogonality; (2) SCENARIO-0089 added; (3) new-work made explicit in
+the roadmap. One B finding ("`container_runner_test.go` missing") was a **false positive** — the file
+exists (326 lines; a nested-go.mod search miss). No scope reduction was needed.
+
+**Tasks executed:** (TDD red-green-refactor; local — all CI-provable, no cluster)
+- T1 — `tier.go` (`IsolationTier` Fast/Hard) + `TemplateRule.Tier` + `Policy.TierFor` (unset/unknown →
+  Hard, fail-safe). STORY-0023 AC-1. Commit (T1).
+- T2 — `backend.go`: `BackendFactory` + `staticBackendFactory.SelectRunner`; unregistered tier errors
+  with a `TODO(ITER-0005b)` graft point. STORY-0004/0017 AC-1. Commit (T2).
+- T3 — daemon: additive `Backend` field (nil → fall back to `Runner`); `RunOnce` resolves the tier
+  from the vetted template, selects the backend, records the resolved tier in D6, and PARKS +
+  escalates a directive whose tier has no backend yet (never runs sensitive work on a weaker
+  substrate). Updated `TestRunOnce_PassWritesReapThenDone` to the new chronological log order
+  (`hard,reap,done`). Commit (T3).
+- T4–T6 (evidence) — `scenario0089_test.go` (tier→backend selection; worker-cannot-propose-Hard D1
+  guard), `scenario0028_test.go` (daemon substrate-agnostic via `Runner`; compile-time conformance for
+  both container runners + the factory), SCENARIO-0076 wired to the existing `container_runner_test.go`
+  contract (integration cases self-skip when incus unreachable). Corpus + scenario cards wired off TBD.
+  Commit (T4–T6).
+
+**Scenarios:** SCENARIO-0089 (NEW — tier selection, integration; automated), SCENARIO-0028 (D2 backend
+interface, unit; automated), SCENARIO-0076 (container contract, integration; automated, self-skipping).
+JOURNEY-0001 + JOURNEY-0003 AC-1 sentinels stayed GREEN.
+
+**Sentinel corpus results:** baseline clean (166 tests, JOURNEY-0001 green). Post-iteration:
+incus-dispatcher + queue **177 tests green under `go test -race`**, vet clean, JOURNEY-0001 +
+JOURNEY-0003 AC-1 sentinels GREEN, zero `TODO(ITER-0005)` markers (2 intentional `TODO(ITER-0005b)`
+graft markers remain in `backend.go`, by design).
+
+**Summary:** Locked the backend-agnostic execution seam so ITER-0005b's microVM/nspawn backends graft
+in without rework, and landed isolation-tier selection as a D1 (template-declared) property. The tier
+lives on the vetted `TemplateRule` — never an author-settable Directive field — so a worker cannot
+downgrade isolation and ITER-0006's substrate swap is untouched; tier→backend selection is a factory
+OUTSIDE `Runner.Run`, keeping every backend on one interface. The daemon fails safe: a tier with no
+registered backend parks the directive rather than running it on a weaker substrate. All work was
+CI-provable on the Mac (no cluster needed); the Firecracker/nspawn/golden/skills stack is ITER-0005b.

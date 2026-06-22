@@ -3,7 +3,8 @@
 **Summary:** Execution backend & topology
 **Stories:** STORY-0001, STORY-0002, STORY-0003, STORY-0004, STORY-0005, STORY-0006, STORY-0007, STORY-0008, STORY-0009, STORY-0010, STORY-0011, STORY-0012, STORY-0013, STORY-0014, STORY-0015, STORY-0016, STORY-0017, STORY-0018, STORY-0019, STORY-0020
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 1/20 done (STORY-0018 done:ITER-0004)
+**Status:** 4/20 done (STORY-0018 done:ITER-0004; STORY-0004/0017/0020 done:ITER-0005 —
+in-scope interface ACs; their microVM ACs carry to ITER-0005b)
 
 ## STORY-0001
 
@@ -78,7 +79,10 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:51-53`
 
-**Status:** pending
+**Status:** done:ITER-0005 — AC-1 (Runner `launch→handle` abstraction; `BackendFactory.SelectRunner`
+seam, `types.go`/`backend.go`) + AC-2 (container backend proven via `container_runner_test.go`,
+SCENARIO-0076; daemon drives it through the factory, SCENARIO-0028). **AC-3 (microVM backend) →
+ITER-0005b** (Firecracker, cluster-only; the factory graft point is documented `TODO(ITER-0005b)`).
 
 ## STORY-0005
 
@@ -336,7 +340,10 @@ only with recursive delegation (ITER-0008). Avoids premature abstraction.
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:117-162`
 
-**Status:** pending
+**Status:** done:ITER-0005 — AC-1 (backend interface separates intent/template/queue from delivery
+— `Runner`/`BackendFactory`; daemon is substrate-agnostic, SCENARIO-0028) + AC-2 (worker NixOS
+config single declarative source = `fleet-worker`, delivered as the incus container backend).
+**AC-3 (microVM startup ≤5s measured) + AC-4 (microVM clean teardown) → ITER-0005b** (cluster/Firecracker, no CI seam).
 
 ## STORY-0018
 
@@ -401,4 +408,6 @@ only with recursive delegation (ITER-0008). Avoids premature abstraction.
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:401`
 
-**Status:** pending
+**Status:** done:ITER-0005 — AC-1 (container backend passes `container_runner_test.go`; CI subset
+green, integration cases self-skip when incus unreachable — SCENARIO-0076). **AC-2 (microVM backend
+passes same contract) → ITER-0005b** (the contract is the graft target for the Firecracker runner).
