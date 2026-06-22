@@ -292,6 +292,12 @@ func TestLaneqClaimSuccess(t *testing.T) {
 		t.Errorf("Lease Token=%q, want %q", lease.Token, "consumer-1")
 	}
 
+	// Verify Expiry is correctly constructed from Unix seconds (not milliseconds).
+	expectedExpiry := time.Unix(leaseUntil, 0)
+	if lease.Expiry != expectedExpiry {
+		t.Errorf("Lease Expiry=%v, want %v", lease.Expiry, expectedExpiry)
+	}
+
 	// Verify the gRPC call.
 	if len(mock.takeCalls) != 1 {
 		t.Fatalf("expected 1 Take call")
@@ -431,12 +437,12 @@ func TestLaneqNotBeforeMapping(t *testing.T) {
 }
 
 func TestLaneqTouchSuccess(t *testing.T) {
-	newExpiry := time.Now().Add(60 * time.Second).Unix()
+	expectedExpiry := time.Now().Add(60 * time.Second).Unix()
 
 	mock := &mockLaneqClient{
 		touchResp: &laneqpb.TouchResponse{
 			Id:             "d-456",
-			LeaseUntilUnix: &newExpiry,
+			LeaseUntilUnix: &expectedExpiry,
 		},
 	}
 	q := NewLaneqQueue(mock, "default")
@@ -457,6 +463,12 @@ func TestLaneqTouchSuccess(t *testing.T) {
 	}
 	if newLease.Token != "consumer-1" {
 		t.Errorf("Touch lease token=%q, want %q", newLease.Token, "consumer-1")
+	}
+
+	// Verify Expiry is correctly constructed from Unix seconds (not milliseconds).
+	expectedTime := time.Unix(expectedExpiry, 0)
+	if newLease.Expiry != expectedTime {
+		t.Errorf("Touch lease Expiry=%v, want %v", newLease.Expiry, expectedTime)
 	}
 
 	// Verify gRPC call.

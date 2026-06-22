@@ -29,6 +29,9 @@ type LaneqQueue struct {
 	lane   string
 }
 
+// Compile-time check: LaneqQueue must implement the Queue interface.
+var _ Queue = (*LaneqQueue)(nil)
+
 // NewLaneqQueue returns a new LaneqQueue using the provided gRPC client and lane.
 // If lane is empty, "default" is used.
 func NewLaneqQueue(client laneqpb.LaneqClient, lane string) *LaneqQueue {
@@ -130,11 +133,13 @@ func (q *LaneqQueue) Claim(consumer string, leaseDur time.Duration) (Directive, 
 }
 
 // directiveFromProto reconstructs a Directive from a proto message,
-// overlaying laneq's scheduling columns.
+// overlaying laneq's scheduling columns. Uses strict JSON decoding to reject
+// unknown fields and ensure body integrity.
 func (q *LaneqQueue) directiveFromProto(pb *laneqpb.Directive, consumer string) (Directive, Lease, error) {
-	// Unmarshal the opaque body JSON.
-	var d Directive
-	if err := json.Unmarshal([]byte(pb.Body), &d); err != nil {
+	// Unmarshal the opaque body JSON with strict field checking.
+	// This rejects any unknown fields, ensuring the body is a valid Directive.
+	d, err := ParseDirective([]byte(pb.Body))
+	if err != nil {
 		return Directive{}, Lease{}, fmt.Errorf("unmarshal body: %w", err)
 	}
 
@@ -182,10 +187,10 @@ func (q *LaneqQueue) Touch(lease Lease, leaseDur time.Duration) (Lease, error) {
 		return Lease{}, fmt.Errorf("touch: gRPC error: %w", err)
 	}
 
-	// Unpack the new lease_until_unix.
+	// Unpack the new lease_until_unix (seconds, not milliseconds).
 	var newExpiry time.Time
 	if resp.LeaseUntilUnix != nil {
-		newExpiry = time.Unix(0, *resp.LeaseUntilUnix*1_000_000)
+		newExpiry = time.Unix(*resp.LeaseUntilUnix, 0)
 	} else {
 		// Server returned no lease; directive is no longer claimed.
 		return Lease{}, ErrLeaseLost
@@ -220,10 +225,12 @@ func (q *LaneqQueue) Done(lease Lease) error {
 // Requeue returns a claimed directive to pending, incrementing Attempts and
 // setting its NotBefore (zero = immediately eligible).
 //
-// Note on requeue_count semantics:
-// The laneq server increments requeue_count when a directive transitions back
-// to PENDING (via SetStatus(PENDING)) or when it is reclaimed by Reap.
-// This mirrors the MemoryQueue stub behavior of incrementing Attempts on Requeue.
+// Note on requeue_count semantics (T1 fork requirement):
+// The laneq gRPC server MUST increment requeue_count on the requeue path
+// (SetStatus→PENDING) and on reap, so that Attempts tracking matches the
+// MemoryQueue stub. Stock laneq only increments on reap. This adapter assumes
+// the nnunley/laneq fork implements the required increment behavior; see
+// SCENARIO-0092 (T1 verification).
 func (q *LaneqQueue) Requeue(lease Lease, notBefore time.Time) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
