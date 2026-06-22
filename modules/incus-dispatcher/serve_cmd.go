@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/agent-sandbox/incus-dispatcher/queue"
-	"github.com/agent-sandbox/incus-dispatcher/queue/laneqpb"
 )
 
 // runServeCommand runs the coordinator daemon (STORY-0007 AC-2): a single long-running
@@ -55,6 +54,16 @@ func runServeCommand(args []string) int {
 		log.Printf("serve: queue init failed: %v", err)
 		return 1
 	}
+
+	// Clean up queue on daemon shutdown. LaneqQueue.Close() releases the gRPC connection;
+	// MemoryQueue has no Close method, so the type assertion safely skips it.
+	defer func() {
+		if c, ok := q.(interface{ Close() error }); ok {
+			if err := c.Close(); err != nil {
+				log.Printf("serve: queue close failed: %v", err)
+			}
+		}
+	}()
 
 	dm := &Daemon{
 		Q:        q,
@@ -107,13 +116,9 @@ func buildQueue(queueType, laneqAddr string) (queue.Queue, error) {
 			return nil, fmt.Errorf("laneq dial %q: %w", laneqAddr, err)
 		}
 
-		// TODO(ITER-0006/0007): Conn lifecycle: The gRPC conn is held by the LaneqQueue
-		// and lives for the lifetime of the daemon. On daemon shutdown (ctx cancellation
-		// in runServeCommand), the conn should be closed. For now, we rely on process
-		// exit cleanup; a future refactor will thread the conn through to a cleanup function.
-
-		client := laneqpb.NewLaneqClient(conn)
-		return queue.NewLaneqQueue(client, "default"), nil
+		// LaneqQueue takes ownership of conn and will close it on graceful shutdown (see runServeCommand defer).
+		// Multi-lane routing is an ITER-0008 extension point.
+		return queue.NewLaneqQueueWithConn(conn, "default"), nil
 
 	default:
 		return nil, fmt.Errorf("unknown queue backend %q (must be 'memory' or 'laneq')", queueType)

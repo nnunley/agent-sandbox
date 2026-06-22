@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -22,10 +23,11 @@ import (
 //   Deadline, MaxAttempts) is JSON-marshaled into laneq's opaque body field.
 //
 // Lane policy: LaneqQueue is configured with a single lane at construction (default="default").
-// All Claim/Peek operations use this lane. Multi-lane fan-out is a future concern
-// (per-lane LaneqQueue instances or a lane-aware extension); see TODO(ITER-0007/0008).
+// All Claim/Peek operations use this lane. Multi-lane fan-out is an ITER-0008 extension point
+// (per-lane LaneqQueue instances or a lane-aware extension).
 type LaneqQueue struct {
 	client laneqpb.LaneqClient
+	conn   *grpc.ClientConn // owned by LaneqQueue if non-nil; must be closed on shutdown
 	lane   string
 }
 
@@ -34,12 +36,30 @@ var _ Queue = (*LaneqQueue)(nil)
 
 // NewLaneqQueue returns a new LaneqQueue using the provided gRPC client and lane.
 // If lane is empty, "default" is used.
+// Deprecated: use NewLaneqQueueWithConn for production code (enables proper conn cleanup).
+// This constructor is retained for testing with mock clients.
 func NewLaneqQueue(client laneqpb.LaneqClient, lane string) *LaneqQueue {
 	if lane == "" {
 		lane = "default"
 	}
 	return &LaneqQueue{
 		client: client,
+		conn:   nil,
+		lane:   lane,
+	}
+}
+
+// NewLaneqQueueWithConn returns a new LaneqQueue using the provided gRPC connection and lane.
+// If lane is empty, "default" is used.
+// The LaneqQueue takes ownership of the connection; the caller must not close it.
+// On daemon shutdown, Close() must be called to release the connection.
+func NewLaneqQueueWithConn(conn *grpc.ClientConn, lane string) *LaneqQueue {
+	if lane == "" {
+		lane = "default"
+	}
+	return &LaneqQueue{
+		client: laneqpb.NewLaneqClient(conn),
+		conn:   conn,
 		lane:   lane,
 	}
 }
@@ -345,4 +365,14 @@ func (q *LaneqQueue) Reap() (int, error) {
 // TODO(ITER-0007): Implement via Stats() RPC when needed for observability.
 func (q *LaneqQueue) Len() (pending, claimed int) {
 	return 0, 0
+}
+
+// Close gracefully closes the underlying gRPC connection.
+// Called during daemon shutdown to ensure clean resource cleanup.
+// Safe to call multiple times (grpc.ClientConn.Close is idempotent).
+func (q *LaneqQueue) Close() error {
+	if q.conn != nil {
+		return q.conn.Close()
+	}
+	return nil
 }

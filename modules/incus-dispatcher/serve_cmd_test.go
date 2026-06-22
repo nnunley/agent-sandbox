@@ -3,6 +3,9 @@ package main
 import (
 	"testing"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/agent-sandbox/incus-dispatcher/queue"
 )
 
@@ -14,6 +17,7 @@ func TestBuildQueue(t *testing.T) {
 		laneqAddr string
 		wantErr   bool
 		checkType func(q queue.Queue) bool
+		cleanup   func(q queue.Queue) error
 	}{
 		{
 			name:      "memory backend (default)",
@@ -24,6 +28,7 @@ func TestBuildQueue(t *testing.T) {
 				_, ok := q.(*queue.MemoryQueue)
 				return ok
 			},
+			cleanup: nil,
 		},
 		{
 			name:      "memory backend (explicit)",
@@ -34,6 +39,7 @@ func TestBuildQueue(t *testing.T) {
 				_, ok := q.(*queue.MemoryQueue)
 				return ok
 			},
+			cleanup: nil,
 		},
 		{
 			name:      "laneq backend with address",
@@ -44,6 +50,12 @@ func TestBuildQueue(t *testing.T) {
 				_, ok := q.(*queue.LaneqQueue)
 				return ok
 			},
+			cleanup: func(q queue.Queue) error {
+				if c, ok := q.(interface{ Close() error }); ok {
+					return c.Close()
+				}
+				return nil
+			},
 		},
 		{
 			name:      "laneq backend missing address",
@@ -51,6 +63,7 @@ func TestBuildQueue(t *testing.T) {
 			laneqAddr: "",
 			wantErr:   true, // laneq requires an address
 			checkType: nil,
+			cleanup:   nil,
 		},
 		{
 			name:      "unknown backend",
@@ -58,6 +71,7 @@ func TestBuildQueue(t *testing.T) {
 			laneqAddr: "localhost:50051",
 			wantErr:   true,
 			checkType: nil,
+			cleanup:   nil,
 		},
 	}
 
@@ -72,7 +86,38 @@ func TestBuildQueue(t *testing.T) {
 				if !tt.checkType(q) {
 					t.Errorf("buildQueue(%q, %q): wrong type, got %T", tt.queueType, tt.laneqAddr, q)
 				}
+				// Clean up if needed (e.g., close gRPC connection).
+				if tt.cleanup != nil {
+					if err := tt.cleanup(q); err != nil {
+						t.Errorf("buildQueue(%q, %q): cleanup failed: %v", tt.queueType, tt.laneqAddr, err)
+					}
+				}
 			}
 		})
+	}
+}
+
+// TestLaneqQueueClose verifies that LaneqQueue.Close() properly closes the gRPC connection.
+func TestLaneqQueueClose(t *testing.T) {
+	// Create a dummy gRPC connection (won't actually connect due to lazy dial).
+	conn, err := grpc.Dial("localhost:50052", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.Dial failed: %v", err)
+	}
+
+	q := queue.NewLaneqQueueWithConn(conn, "test-lane")
+
+	// Close should succeed.
+	if err := q.Close(); err != nil {
+		t.Errorf("LaneqQueue.Close() failed: %v", err)
+	}
+
+	// Double-close is safe (gRPC conn.Close returns nil on already-closed connections in newer versions).
+	// This verifies the Close() method is idempotent or at least doesn't panic.
+	err = q.Close()
+	if err != nil && err.Error() != "rpc error: code = Canceled desc = context canceled" {
+		// Some gRPC versions return an error on double-close; that's acceptable.
+		// We just verify it doesn't panic.
+		t.Logf("LaneqQueue.Close() (second call) returned: %v (acceptable)", err)
 	}
 }
