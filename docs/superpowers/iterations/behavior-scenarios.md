@@ -1226,8 +1226,8 @@ microVM host-socket isolation → ITER-0005)
 - Coordination loop invokes backend methods without knowing substrate
 - Container and micro-VM backends pass same interface contract
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0028`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:117-128`
@@ -2692,8 +2692,8 @@ Passed=false because RunGrade computes the verdict solely from its own gate runs
 - test output shows 100% pass rate
 - backend is confirmed to match interface contract
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated
+**Execution command:** `cd modules/incus-dispatcher && go test . -run 'TestGenerateContainerName|TestTaskValidation|TestIsLocalPath|TestRemoteFileRead|TestContainerNameUniqueness|TestRunTaskInContainer|TestDeliverSourceViaClone|TestRoundTripWithOutputArtifacts'`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:401`
@@ -3067,3 +3067,31 @@ fresh"; recovery must resolve the explicit saved session id (or rely on auto-con
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:416-418`
+
+## SCENARIO-0089 — Isolation tier declared by template selects the backend (D1)
+
+**Kind:** contract
+**Proof seam:** integration
+**Owning stories:** STORY-0023
+
+**Preconditions:**
+- IsolationTier type defined (Fast, Hard); TemplateRule.Tier carries the template's tier (D1 mechanism — tier is NOT a Directive field)
+- BackendFactory.SelectRunner(tier) registered with the container backend for available tiers (TODO(ITER-0005b): microVM/nspawn)
+- daemon resolves the tier from the validated template via Policy.TierFor(template)
+
+**Action:**
+- run the daemon's RunOnce against directives whose templates declare tier=Fast, tier=Hard, and an unset tier
+
+**Expected observables:**
+- a tier=Fast template resolves (via the factory) to the runner registered for the fast tier
+- a tier=Hard template resolves to the runner registered for the hard tier
+- an unset/empty template tier defaults to Hard (fail-safe: most isolated)
+- the tier is fixed by the vetted TemplateRule, never settable on the Directive (a worker-origin directive cannot downgrade isolation)
+- the resolved tier is written to the D6 decision log for the run
+
+**Automation status:** automated
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0089`
+
+**Sources:**
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:81-89`
+- `docs/plans/2026-06-21-iter0005-backend-tier-design.md`

@@ -38,7 +38,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0025 | D1: Worker directive with root flag is rejected | integration | iteration | `cd modules/incus-dispatcher && go test -race -run TestScenario0025` | STORY-0049 |
 | SCENARIO-0026 | D1: Directive body contains no access_cmd or root flag | unit | iteration | `cd modules/incus-dispatcher && go test -run TestParseDirective ./queue` | STORY-0049 |
 | SCENARIO-0027 | D1: Child directive from worker inherits immutable provisioning, not p | integration | iteration | TBD | STORY-0049 |
-| SCENARIO-0028 | D2: Backend interface abstracts container vs. micro-VM delivery | unit | iteration | TBD | STORY-0017 |
+| SCENARIO-0028 | D2: Backend interface abstracts container vs. micro-VM delivery | unit | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0028` | STORY-0017 |
 | SCENARIO-0029 | D2: Micro-VM boot-to-ready ≤ 5 s with closure realized | process-level | iteration | TBD | STORY-0017 |
 | SCENARIO-0030 | D3: ctx_agent diary write and read preserve progression state | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestLeanCtxProvider` | STORY-0018 |
 | SCENARIO-0031 | D3: Authoritative state (diff + grade) independent of lean-ctx loss | e2e | iteration | TBD | STORY-0018 |
@@ -86,7 +86,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0073 | Daemon park rule: task enters durable hold state | unit | iteration | TBD | STORY-0059 |
 | SCENARIO-0074 | Template allowlist: worker-origin privileged template denied | integration | iteration | `cd modules/incus-dispatcher && go test -race -run TestScenario0074` | STORY-0053 |
 | SCENARIO-0075 | Graceful container teardown: stop-timeout routes to reaper | process-level | iteration | TBD | STORY-0060 |
-| SCENARIO-0076 | Container backend interface: passes existing contract tests | integration | iteration | TBD | STORY-0020 |
+| SCENARIO-0076 | Container backend interface: passes existing contract tests | integration | iteration | `cd modules/incus-dispatcher && go test . -run 'TestGenerateContainerName\|TestTaskValidation\|TestIsLocalPath\|TestRemoteFileRead\|TestContainerNameUniqueness\|TestRunTaskInContainer\|TestDeliverSourceViaClone\|TestRoundTripWithOutputArtifacts'` (integration cases self-skip when incus unreachable) | STORY-0020 |
 | SCENARIO-0077 | Context handoff round-trip: validate spike unblocks feature | integration | cluster-gated (manual) | `bash fleet-worker/spikes/leanctx-handoff-spike.sh` (PASS 2026-06-21: nonce round-trips across two claude -p invocations, no data loss) | STORY-0034 |
 | SCENARIO-0078 | Prioritization: deadline approaching promotes Q2 to Q1 | unit | iteration | TBD | STORY-0045 |
 | SCENARIO-0079 | Prioritization: no-deadline low-importance stays Q4 (idle-only) | unit | iteration | TBD | STORY-0045 |
@@ -99,3 +99,4 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0086 | Escalation: privileged escalation lands in escalations lane | integration | iteration | TBD | STORY-0061 |
 | SCENARIO-0087 | Escalation: stale escalation resurfaced by rising urgency | integration | iteration | TBD | STORY-0061 |
 | SCENARIO-0088 | Mac-off: human-only escalations queue durably for Mac return | e2e | iteration | TBD | STORY-0074 |
+| SCENARIO-0089 | Isolation tier declared by template selects the backend (D1) | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0089` | STORY-0023 |
