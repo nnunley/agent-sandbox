@@ -1,0 +1,340 @@
+package queue
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/agent-sandbox/incus-dispatcher/queue/laneqpb"
+)
+
+// LaneqQueue is a gRPC adapter that implements Queue over the laneq client.
+// It is a drop-in replacement for MemoryQueue.
+//
+// Storage split:
+// - Scheduling fields (priority, not_before_unix, lease_until_unix, requeue_count, etc.)
+//   are laneq columns.
+// - The rich Directive (Intent, Template, Origin, Repo, Ref, Task, Grade, HandoffIn,
+//   Deadline, MaxAttempts) is JSON-marshaled into laneq's opaque body field.
+//
+// Lane policy: LaneqQueue is configured with a single lane at construction (default="default").
+// All Claim/Peek operations use this lane. Multi-lane fan-out is a future concern
+// (per-lane LaneqQueue instances or a lane-aware extension); see TODO(ITER-0007/0008).
+type LaneqQueue struct {
+	client laneqpb.LaneqClient
+	lane   string
+}
+
+// NewLaneqQueue returns a new LaneqQueue using the provided gRPC client and lane.
+// If lane is empty, "default" is used.
+func NewLaneqQueue(client laneqpb.LaneqClient, lane string) *LaneqQueue {
+	if lane == "" {
+		lane = "default"
+	}
+	return &LaneqQueue{
+		client: client,
+		lane:   lane,
+	}
+}
+
+// importanceToProto converts queue.Importance to laneqpb.Priority.
+func importanceToProto(imp Importance) laneqpb.Priority {
+	switch imp {
+	case ImportanceHigh:
+		return laneqpb.Priority_PRIORITY_P0
+	case ImportanceLow:
+		return laneqpb.Priority_PRIORITY_P2
+	default:
+		return laneqpb.Priority_PRIORITY_P1
+	}
+}
+
+// protoToImportance converts laneqpb.Priority back to queue.Importance.
+func protoToImportance(p laneqpb.Priority) Importance {
+	switch p {
+	case laneqpb.Priority_PRIORITY_P0:
+		return ImportanceHigh
+	case laneqpb.Priority_PRIORITY_P2:
+		return ImportanceLow
+	default:
+		return ImportanceNormal
+	}
+}
+
+// Push enqueues a directive, assigning an ID if empty. Returns the ID.
+func (q *LaneqQueue) Push(d Directive) (string, error) {
+	if d.ID == "" {
+		// Let laneq assign the ID.
+		d.ID = ""
+	}
+	if d.Importance == "" {
+		d.Importance = ImportanceNormal
+	}
+
+	// Marshal the full directive to JSON for the opaque body.
+	body, err := json.Marshal(d)
+	if err != nil {
+		return "", fmt.Errorf("push: marshal directive: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := q.client.Push(ctx, &laneqpb.PushRequest{
+		Body:     string(body),
+		Priority: importanceToProto(d.Importance),
+		Lane:     q.lane,
+	})
+	if err != nil {
+		return "", fmt.Errorf("push: gRPC error: %w", err)
+	}
+
+	return resp.Id, nil
+}
+
+// Claim atomically reserves the highest-priority ELIGIBLE (NotBefore <= now)
+// pending directive and returns it with a Lease. Returns ErrEmpty if none.
+func (q *LaneqQueue) Claim(consumer string, leaseDur time.Duration) (Directive, Lease, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := q.client.Take(ctx, &laneqpb.TakeRequest{
+		Consumer:          consumer,
+		Lane:              q.lane,
+		LeaseDurationMs:   int64(leaseDur.Milliseconds()),
+		ReapStaleSeconds:  0, // No auto-reap here.
+	})
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return Directive{}, Lease{}, ErrEmpty
+		}
+		return Directive{}, Lease{}, fmt.Errorf("claim: gRPC error: %w", err)
+	}
+
+	// If the response directive is empty/nil, return ErrEmpty.
+	if resp.Directive == nil || resp.Directive.Id == "" {
+		return Directive{}, Lease{}, ErrEmpty
+	}
+
+	// Unmarshal the body back to a rich Directive and overlay laneq columns.
+	d, lease, err := q.directiveFromProto(resp.Directive, consumer)
+	if err != nil {
+		return Directive{}, Lease{}, fmt.Errorf("claim: unmarshal body: %w", err)
+	}
+
+	return d, lease, nil
+}
+
+// directiveFromProto reconstructs a Directive from a proto message,
+// overlaying laneq's scheduling columns.
+func (q *LaneqQueue) directiveFromProto(pb *laneqpb.Directive, consumer string) (Directive, Lease, error) {
+	// Unmarshal the opaque body JSON.
+	var d Directive
+	if err := json.Unmarshal([]byte(pb.Body), &d); err != nil {
+		return Directive{}, Lease{}, fmt.Errorf("unmarshal body: %w", err)
+	}
+
+	// Overlay laneq column values.
+	d.ID = pb.Id
+	d.Importance = protoToImportance(pb.Priority)
+	d.Attempts = int(pb.RequeueCount)
+
+	// Unpack optional not_before_unix (seconds -> time.Time).
+	if pb.NotBeforeUnix != nil {
+		d.NotBefore = time.Unix(*pb.NotBeforeUnix, 0)
+	} else {
+		d.NotBefore = time.Time{}
+	}
+
+	// Build the lease from the proto's taken_by and lease_until_unix.
+	var lease Lease
+	lease.DirectiveID = pb.Id
+	lease.Token = pb.TakenBy // Use consumer ID as the token (no separate opaque token in laneq).
+
+	if pb.LeaseUntilUnix != nil {
+		lease.Expiry = time.Unix(*pb.LeaseUntilUnix, 0)
+	} else {
+		// This shouldn't happen for a claimed directive, but be defensive.
+		lease.Expiry = time.Now()
+	}
+
+	return d, lease, nil
+}
+
+// Touch renews a lease. Returns ErrLeaseLost if expired/unknown.
+func (q *LaneqQueue) Touch(lease Lease, leaseDur time.Duration) (Lease, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := q.client.Touch(ctx, &laneqpb.TouchRequest{
+		Id:                lease.DirectiveID,
+		Consumer:          lease.Token,
+		LeaseDurationMs:   int64(leaseDur.Milliseconds()),
+	})
+	if err != nil {
+		if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition {
+			return Lease{}, ErrLeaseLost
+		}
+		return Lease{}, fmt.Errorf("touch: gRPC error: %w", err)
+	}
+
+	// Unpack the new lease_until_unix.
+	var newExpiry time.Time
+	if resp.LeaseUntilUnix != nil {
+		newExpiry = time.Unix(0, *resp.LeaseUntilUnix*1_000_000)
+	} else {
+		// Server returned no lease; directive is no longer claimed.
+		return Lease{}, ErrLeaseLost
+	}
+
+	return Lease{
+		DirectiveID: lease.DirectiveID,
+		Token:       lease.Token,
+		Expiry:      newExpiry,
+	}, nil
+}
+
+// Done marks a claimed directive complete and removes it.
+func (q *LaneqQueue) Done(lease Lease) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := q.client.SetStatus(ctx, &laneqpb.SetStatusRequest{
+		Id:     lease.DirectiveID,
+		Status: laneqpb.Status_STATUS_DONE,
+	})
+	if err != nil {
+		if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition {
+			return ErrLeaseLost
+		}
+		return fmt.Errorf("done: gRPC error: %w", err)
+	}
+
+	return nil
+}
+
+// Requeue returns a claimed directive to pending, incrementing Attempts and
+// setting its NotBefore (zero = immediately eligible).
+//
+// Note on requeue_count semantics:
+// The laneq server increments requeue_count when a directive transitions back
+// to PENDING (via SetStatus(PENDING)) or when it is reclaimed by Reap.
+// This mirrors the MemoryQueue stub behavior of incrementing Attempts on Requeue.
+func (q *LaneqQueue) Requeue(lease Lease, notBefore time.Time) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if notBefore.IsZero() {
+		// Immediately eligible: SetStatus(PENDING).
+		_, err := q.client.SetStatus(ctx, &laneqpb.SetStatusRequest{
+			Id:     lease.DirectiveID,
+			Status: laneqpb.Status_STATUS_PENDING,
+		})
+		if err != nil {
+			if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition {
+				return ErrLeaseLost
+			}
+			return fmt.Errorf("requeue: SetStatus error: %w", err)
+		}
+	} else {
+		// Deferred: Defer(id, until=notBefore).
+		_, err := q.client.Defer(ctx, &laneqpb.DeferRequest{
+			Id:       lease.DirectiveID,
+			UntilUnix: ptrInt64(notBefore.Unix()),
+		})
+		if err != nil {
+			if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition {
+				return ErrLeaseLost
+			}
+			return fmt.Errorf("requeue: Defer error: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// ptrInt64 is a helper to create a pointer to an int64.
+func ptrInt64(v int64) *int64 {
+	return &v
+}
+
+// Peek returns the directive Claim would return next — the highest-priority
+// eligible (NotBefore <= now) pending directive — without claiming it.
+// No lease is created and the queue is not mutated. Returns ErrEmpty if
+// no eligible pending directive exists.
+func (q *LaneqQueue) Peek() (Directive, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := q.client.Peek(ctx, &laneqpb.PeekRequest{
+		Lane: q.lane,
+	})
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return Directive{}, ErrEmpty
+		}
+		return Directive{}, fmt.Errorf("peek: gRPC error: %w", err)
+	}
+
+	// If the response directive is empty/nil, return ErrEmpty.
+	if resp.Directive == nil || resp.Directive.Id == "" {
+		return Directive{}, ErrEmpty
+	}
+
+	// Unmarshal the body and overlay columns (no lease for Peek).
+	d, _, err := q.directiveFromProto(resp.Directive, "")
+	if err != nil {
+		return Directive{}, fmt.Errorf("peek: unmarshal body: %w", err)
+	}
+
+	return d, nil
+}
+
+// Park moves a CLAIMED directive (held by lease) into a DURABLE parked hold state.
+// Returns ErrLeaseLost if the lease is expired/unknown.
+func (q *LaneqQueue) Park(lease Lease) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := q.client.Park(ctx, &laneqpb.ParkRequest{
+		Id:       lease.DirectiveID,
+		Consumer: lease.Token,
+	})
+	if err != nil {
+		if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition {
+			return ErrLeaseLost
+		}
+		return fmt.Errorf("park: gRPC error: %w", err)
+	}
+
+	return nil
+}
+
+// Reap reclaims expired leases (requeues them). Returns the count reclaimed.
+func (q *LaneqQueue) Reap() (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := q.client.Reap(ctx, &laneqpb.ReapRequest{
+		ExpiredLeases: true,
+		StaleSeconds:  0,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("reap: gRPC error: %w", err)
+	}
+
+	return int(resp.Reclaimed), nil
+}
+
+// Len reports pending + claimed directive counts (for tests/observability).
+// This stub implementation always returns (0, 0) as laneq doesn't expose
+// a direct count endpoint. A full implementation would use Stats or similar.
+//
+// TODO(ITER-0007): Implement via Stats() RPC when needed for observability.
+func (q *LaneqQueue) Len() (pending, claimed int) {
+	return 0, 0
+}
