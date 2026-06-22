@@ -13,11 +13,11 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | JOURNEY-0007 | Mac-off: successor resumes via handoff without replay | e2e | sentinel | TBD | STORY-0074 |
 | SCENARIO-0001 | Dispatcher recovers mid-flight after Mac host restart | e2e | iteration | TBD | STORY-0001, STORY-0006 |
 | SCENARIO-0002 | Dispatcher drains queue with deterministic coordination | integration | iteration | TBD | STORY-0003 |
-| SCENARIO-0003 | Worker launches from golden image without live build | integration | iteration | TBD | STORY-0005 |
-| SCENARIO-0004 | Durable micro-VM stays up across multiple task executions | process-level | iteration | TBD | STORY-0007, STORY-0008 |
-| SCENARIO-0005 | Trusted lane task uses Fast (namespace) isolation | integration | iteration | TBD | STORY-0021 |
-| SCENARIO-0006 | Sensitive lane task uses Hard (hardware) isolation | integration | iteration | TBD | STORY-0022 |
-| SCENARIO-0007 | Multi-tenant execution isolated by VM per trust domain | e2e | iteration | TBD | STORY-0024 |
+| SCENARIO-0003 | Worker launches from golden image without live build | integration | iteration | `bash fleet-worker/cluster-tests/run.sh golden-launch` | STORY-0005 |
+| SCENARIO-0004 | Durable micro-VM stays up across multiple task executions | process-level | iteration | `bash fleet-worker/cluster-tests/run.sh durable-vm` | STORY-0007, STORY-0008 |
+| SCENARIO-0005 | Trusted lane task uses Fast (namespace) isolation | integration | iteration | `bash fleet-worker/cluster-tests/run.sh nspawn-fast` | STORY-0021 |
+| SCENARIO-0006 | Sensitive lane task uses Hard (hardware) isolation | integration | iteration | `bash fleet-worker/cluster-tests/run.sh hardtier` | STORY-0022 |
+| SCENARIO-0007 | Multi-tenant execution isolated by VM per trust domain | e2e | iteration | `bash fleet-worker/cluster-tests/run.sh trust-boundary` | STORY-0024 |
 | SCENARIO-0008 | Benchmark shows nspawn spin-up time with boot-readiness probe | process-level | spike | `cd fleet-worker/spikes && ./bench-spinup.sh nspawn 100` | STORY-0025 |
 | SCENARIO-0009 | Benchmark shows per-task microVM spin-up time is not the limiting fact | process-level | spike | `cd fleet-worker/spikes && ./bench-spinup.sh microvm 20` | STORY-0025 |
 | SCENARIO-0010 | Mac disconnected → fleet still claims, runs, grades, escalates; succes | e2e | iteration | TBD | STORY-0026 |
@@ -39,7 +39,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0026 | D1: Directive body contains no access_cmd or root flag | unit | iteration | `cd modules/incus-dispatcher && go test -run TestParseDirective ./queue` | STORY-0049 |
 | SCENARIO-0027 | D1: Child directive from worker inherits immutable provisioning, not p | integration | iteration | TBD | STORY-0049 |
 | SCENARIO-0028 | D2: Backend interface abstracts container vs. micro-VM delivery | unit | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0028` | STORY-0017 |
-| SCENARIO-0029 | D2: Micro-VM boot-to-ready ≤ 5 s with closure realized | process-level | iteration | TBD | STORY-0017 |
+| SCENARIO-0029 | D2: Micro-VM boot-to-ready ≤ 5 s with closure realized | process-level | iteration | `bash fleet-worker/cluster-tests/run.sh microvm-boot` | STORY-0017 |
 | SCENARIO-0030 | D3: ctx_agent diary write and read preserve progression state | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestLeanCtxProvider` | STORY-0018 |
 | SCENARIO-0031 | D3: Authoritative state (diff + grade) independent of lean-ctx loss | e2e | iteration | TBD | STORY-0018 |
 | SCENARIO-0032 | D4: Pass grade → mark thread done (no escalation) | unit | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_Pass` | STORY-0055 |

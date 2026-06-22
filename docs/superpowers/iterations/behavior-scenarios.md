@@ -1252,8 +1252,8 @@ microVM host-socket isolation → ITER-0005)
 - Boot latency acceptable for per-task hard-tier cost (not per-task fast-tier)
 - Micro-VM teardown via systemctl stop is clean (no hang)
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (cluster) — measured PASS 2026-06-21: boot-to-ready mean 826ms / p99 1840ms (N=20) on agent-host microvm@test-vm, gate ≤5000ms
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh microvm-boot`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:140-158`
