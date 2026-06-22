@@ -240,12 +240,16 @@ case "$SCEN" in
     incus exec "${REMOTE}:${BH}" -- true >/dev/null 2>&1 || pending STORY-0078 "bundle build host ${BH} unreachable"
     dst=/tmp/fw-iter0005c
     if ! COPYFILE_DISABLE=1 tar --no-mac-metadata -C "$HERE/../.." --exclude='*.DS_Store' -czf - fleet-worker 2>/dev/null \
-         | incus exec "${REMOTE}:${BH}" -- bash -lc "rm -rf $dst && mkdir -p $dst && tar -C $dst -xzf -"; then
+         | incus exec "${REMOTE}:${BH}" -- bash -lc "rm -rf $dst && mkdir -p $dst && tar -C $dst --warning=no-unknown-keyword -xzf -"; then
       echo "FAIL ${SCEN}: could not push fleet-worker to ${BH}"; exit 1
     fi
     incus exec "${REMOTE}:${BH}" -- bash -lc "grep -q 'agent-skills-bundle' $dst/fleet-worker/flake.nix" \
       || pending STORY-0078 "flake.nix does not expose agent-skills-bundle yet — T1 pending"
-    out="$(incus exec "${REMOTE}:${BH}" -- bash -lc "cd $dst/fleet-worker && nix build --no-link --print-out-paths '${BUNDLE_FLAKE_ATTR}' --accept-flake-config 2>&1")" \
+    # --no-sandbox: nix-server is an unprivileged LXC with no kernel-namespace build sandbox
+    # (same constraint worker-container.nix disables declaratively). The bundle is a tiny
+    # copy-tree derivation, so substitution + an unsandboxed copy is safe here.
+    NIXFLAGS="--extra-experimental-features 'nix-command flakes' --accept-flake-config --no-sandbox"
+    out="$(incus exec "${REMOTE}:${BH}" -- bash -lc "cd $dst/fleet-worker && nix build --no-link --print-out-paths '${BUNDLE_FLAKE_ATTR}' ${NIXFLAGS} 2>&1")" \
       || { echo "FAIL ${SCEN}: nix build ${BUNDLE_FLAKE_ATTR} failed:"; echo "$out" | tail -8; exit 1; }
     store="$(printf '%s\n' "$out" | tail -1)"
     n="$(incus exec "${REMOTE}:${BH}" -- bash -lc "find -L '$store' -name SKILL.md | wc -l" 2>/dev/null | tr -d '[:space:]')"

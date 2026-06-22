@@ -25,16 +25,65 @@
     # prebuilt -> no local build -> sidesteps the nix sandbox-build issue.
     # Run the worker's `nix develop` with --accept-flake-config to pick up its cache.
     llm-agents.url = "github:numtide/llm-agents.nix";
+
+    # Declarative skills vendoring (STORY-0077 / STORY-0078). Kyure-A/agent-skills-nix
+    # provides the selectSkills/mkBundle library; the upstream skills repo is a NON-FLAKE
+    # source consumed as `flake = false` and curated by id. Both hash-pinned via flake.lock.
+    agent-skills-nix.url = "github:Kyure-A/agent-skills-nix";
+    agent-skills-nix.inputs.nixpkgs.follows = "nixpkgs";
+    agent-skills = {
+      url = "github:selamy-labs/agent-skills";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, llm-agents }:
+  outputs = { self, nixpkgs, llm-agents, agent-skills-nix, agent-skills }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
       agents = llm-agents.packages.${system};  # cached claude-code + alt-provider CLIs
       # let-go needs Go 1.26; fall back to default go if the pin is absent.
       goPkg = pkgs.go_1_26 or pkgs.go;
+
+      # --- Curated skills bundle (STORY-0077 / STORY-0078) -----------------------------
+      # The agent-skills-nix library (discoverCatalog / selectSkills / mkBundle).
+      skillsLib = agent-skills-nix.lib.agent-skills;
+      # Upstream layout, validated on the cluster 2026-06-22 (STORY-0078): a flat
+      # skills/<name>/SKILL.md tree → subdir="skills", filter.maxDepth=1, no idPrefix.
+      # `path` (not `input`) resolves the source directly, decoupled from agent-skills-nix's
+      # own inputs. See docs/plans/2026-06-22-skills-layout-validation.md.
+      skillSources = {
+        upstream = {
+          path = "${agent-skills}";
+          subdir = "skills";
+          filter.maxDepth = 1;
+        };
+      };
+      skillCatalog = skillsLib.discoverCatalog skillSources;
+      # The 13-skill curated subset (STORY-0077 AC-2). All confirmed present upstream.
+      curatedSkillIds = [
+        "using-laneq" "low-level-executor-task-spec" "process-aware-done"
+        "verify-from-system-of-record" "verify-real-artifact" "gate-before-push"
+        "graceful-shutdown-stateful-agents" "restart-resilience" "yield-on-wait"
+        "push-over-polling" "credential-proxy" "context-anchored-patching"
+        "agent-otel-trajectory"
+      ];
+      skillSelection = skillsLib.selectSkills {
+        catalog = skillCatalog;
+        sources = skillSources;
+        allowlist = curatedSkillIds;
+      };
+      # mkBundle copy-trees ONLY the curated SKILL.md dirs (small derivation — no toolchain,
+      # no golden), the standalone STORY-0078 gate `nix build .#agent-skills-bundle`.
+      agentSkillsBundle = skillsLib.mkBundle {
+        inherit pkgs;
+        selection = skillSelection;
+        name = "agent-skills-bundle";
+      };
     in {
+      # STORY-0078 standalone proof + STORY-0077 input: the curated skills bundle.
+      packages.${system}.agent-skills-bundle = agentSkillsBundle;
+
       devShells.${system}.default = pkgs.mkShell {
         packages = [
           agents.claude-code    # headless `claude -p` CLI (numtide llm-agents.nix — cached, daily-updated)

@@ -2525,8 +2525,13 @@ the gate — the gate is export-presence + flag-passthrough + grader-determinism
 - Built system closure includes immutable skills at /etc/claude/skills
 - Image is reproducible and offline-available
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated — **PASS on cluster (nix-server) 2026-06-22 (ITER-0005c T1, STORY-0078).**
+The curated bundle builds via `nix build .#agent-skills-bundle` with all 13 skills present
+(reproducible store path `…-agent-skills-bundle`, 13 SKILL.md). Inputs hash-pinned in
+`fleet-worker/flake.lock` (agent-skills @22ac232, agent-skills-nix @5ff9039). Layout validated in
+`docs/plans/2026-06-22-skills-layout-validation.md` (subdir=skills, idPrefix=null, maxDepth=1).
+(The `environment.etc."claude/skills"` copy-tree materialization is STORY-0077/SCENARIO-0068, T2.)
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh skills-discovery`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:332-347`
