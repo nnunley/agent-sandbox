@@ -3,7 +3,8 @@
 **Summary:** Worker image & skills
 **Stories:** STORY-0075, STORY-0076, STORY-0077, STORY-0078
 **Primary sources:** `docs/plans/2026-06-17-dispatcher-productization.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 1/4 done
+**Status:** 0/4 fully done (STORY-0075 PARTIAL — minimal worker-image slice done:ITER-0000; FULL
+golden + STORY-0076/0077/0078 → ITER-0005b)
 ## STORY-0075
 
 **Epic:** EPIC-013 — Worker image & skills
@@ -21,7 +22,12 @@
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:149-159`
 
-**Status:** done:ITER-0000
+**Status:** partial — **minimal worker-image slice done:ITER-0000** (stock NixOS + non-root `worker` +
+`nix develop ./fleet-worker` substituted from cache; real dogfood ran headless + produced a 10/10
+oracle-graded diff, no Ubuntu fallback — substance of AC-3 minus the bridge). **FULL golden →
+ITER-0005b:** AC-1 (build once + snapshot as golden + `incus copy` per task), AC-2 (clean-room
+integrity gate: byte-identical regen of generated artifacts), AC-3 with the lean-ctx bridge ON
+(STORY-0069 landed the bridge in ITER-0003; the golden-run-with-bridge graded proof is ITER-0005b).
 
 ## STORY-0076
 
