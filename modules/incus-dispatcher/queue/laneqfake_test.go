@@ -96,23 +96,11 @@ func (s *fakeLaneqServer) Push(ctx context.Context, req *laneqpb.PushRequest) (*
 	}, nil
 }
 
-// Take atomically claims the highest-priority eligible pending directive.
-// Semantics:
+// reclaimExpiredAndPromoteDeferred performs the shared state maintenance for Take and Peek:
 // 1. Reclaim expired leases (status=pending, requeue_count++).
 // 2. Promote deferred directives whose not_before has passed AND all blocked_by deps are terminal.
-// 3. Pick status=pending, lowest priority value, lowest id (FIFO).
-// 4. Set taken/taken_by/lease_until.
-// 5. Return directive or (nil, ErrEmpty).
-func (s *fakeLaneqServer) Take(ctx context.Context, req *laneqpb.TakeRequest) (*laneqpb.TakeResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	now := s.now()
-	lane := req.Lane
-	if lane == "" {
-		lane = "default"
-	}
-
+// This helper ensures Take and Peek both see the same queue state.
+func (s *fakeLaneqServer) reclaimExpiredAndPromoteDeferred(lane string, now time.Time) {
 	// Step 1: Reclaim expired leases.
 	for _, fd := range s.directives {
 		if fd.Status == laneqpb.Status_STATUS_TAKEN && fd.LeaseUntilUnix != nil && *fd.LeaseUntilUnix <= now.Unix() {
@@ -154,6 +142,27 @@ func (s *fakeLaneqServer) Take(ctx context.Context, req *laneqpb.TakeRequest) (*
 			}
 		}
 	}
+}
+
+// Take atomically claims the highest-priority eligible pending directive.
+// Semantics:
+// 1. Reclaim expired leases (status=pending, requeue_count++).
+// 2. Promote deferred directives whose not_before has passed AND all blocked_by deps are terminal.
+// 3. Pick status=pending, lowest priority value, lowest id (FIFO).
+// 4. Set taken/taken_by/lease_until.
+// 5. Return directive or (nil, ErrEmpty).
+func (s *fakeLaneqServer) Take(ctx context.Context, req *laneqpb.TakeRequest) (*laneqpb.TakeResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := s.now()
+	lane := req.Lane
+	if lane == "" {
+		lane = "default"
+	}
+
+	// Perform shared state maintenance.
+	s.reclaimExpiredAndPromoteDeferred(lane, now)
 
 	// Step 3: Find best pending directive in this lane (not parked).
 	var best *fakeDirective
@@ -190,6 +199,9 @@ func (s *fakeLaneqServer) Take(ctx context.Context, req *laneqpb.TakeRequest) (*
 }
 
 // Peek returns the directive Take would return next, without claiming or mutating it.
+// Peek performs the same reclaim-expired-leases and promote-deferred maintenance as Take
+// to ensure faithful state observation. The only difference from Take is that Peek does
+// NOT claim/lease the selected directive—it returns it read-only.
 func (s *fakeLaneqServer) Peek(ctx context.Context, req *laneqpb.PeekRequest) (*laneqpb.PeekResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -200,33 +212,15 @@ func (s *fakeLaneqServer) Peek(ctx context.Context, req *laneqpb.PeekRequest) (*
 		lane = "default"
 	}
 
-	// Same logic as Take, but read-only: find best pending in lane without claiming.
+	// Perform shared state maintenance (same as Take).
+	s.reclaimExpiredAndPromoteDeferred(lane, now)
+
+	// Find best pending directive in this lane (not parked).
 	var best *fakeDirective
 	var bestID string
 
 	for id, fd := range s.directives {
 		if fd.Lane != lane || fd.Status != laneqpb.Status_STATUS_PENDING || s.parked[id] {
-			continue
-		}
-
-		// Check not_before eligibility.
-		if fd.NotBeforeUnix != nil && *fd.NotBeforeUnix > now.Unix() {
-			continue
-		}
-
-		// Check blocked_by: must have all deps terminal.
-		blocked := false
-		for _, depID := range fd.BlockedBy {
-			depFd, ok := s.directives[depID]
-			if !ok {
-				continue
-			}
-			if depFd.Status != laneqpb.Status_STATUS_DONE && depFd.Status != laneqpb.Status_STATUS_DROPPED {
-				blocked = true
-				break
-			}
-		}
-		if blocked {
 			continue
 		}
 
@@ -241,6 +235,7 @@ func (s *fakeLaneqServer) Peek(ctx context.Context, req *laneqpb.PeekRequest) (*
 		return &laneqpb.PeekResponse{Directive: nil}, nil
 	}
 
+	// Return the directive read-only (no consumer token assigned; Peek does not lease).
 	return &laneqpb.PeekResponse{Directive: s.fdToProto(best)}, nil
 }
 

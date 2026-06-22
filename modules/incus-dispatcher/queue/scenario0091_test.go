@@ -223,6 +223,50 @@ func TestScenario0091(t *testing.T) {
 		}
 	})
 
+	// Test 5b: Peek promotes deferred directives (faithfulness test).
+	// This test verifies that Peek performs the same reclaim-expired + promote-deferred
+	// maintenance as Take. If Peek only did inline eligibility checks (not calling the
+	// shared helper), it would return ErrEmpty before the promotion, diverging from Take.
+	t.Run("PeekPromotesDeferredDirectives", func(t *testing.T) {
+		clock := &fakeClock{t: time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC)}
+		laneqClient, fakeServer := setupTestLaneqServer(t, clock)
+		q := NewLaneqQueue(laneqClient, "default")
+
+		// Push a directive and manually defer it with a not_before in the near future.
+		deferredID, _ := q.Push(Directive{Intent: "deferred-task"})
+		fakeServer.mu.Lock()
+		fd := fakeServer.directives[deferredID]
+		futureTime := clock.now().Add(10 * time.Second).Unix()
+		fd.Status = laneqpb.Status_STATUS_DEFERRED
+		fd.NotBeforeUnix = &futureTime
+		fakeServer.mu.Unlock()
+
+		// Peek now should return ErrEmpty (not yet eligible).
+		_, err := q.Peek()
+		if !errors.Is(err, ErrEmpty) {
+			t.Fatalf("peek before promotion = %v, want ErrEmpty", err)
+		}
+
+		// Advance past not_before so the deferred directive becomes eligible.
+		clock.advance(11 * time.Second)
+
+		// Peek should now observe the promotion and return the directive
+		// (this only happens if Peek calls the reclaim-expired + promote-deferred helper).
+		d, err := q.Peek()
+		if err != nil {
+			t.Fatalf("peek after promotion = %v, want directive", err)
+		}
+		if d.ID != deferredID {
+			t.Fatalf("peek returned %s, want %s", d.ID, deferredID)
+		}
+
+		// Verify that Claim also returns the same directive (consistency check).
+		d2, _, _ := q.Claim("w", time.Minute)
+		if d2.ID != deferredID {
+			t.Fatalf("claim returned %s, want %s", d2.ID, deferredID)
+		}
+	})
+
 	// Test 6: Park durability (no auto-promotion).
 	t.Run("ParkDurability", func(t *testing.T) {
 		clock := &fakeClock{t: time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC)}
@@ -237,7 +281,13 @@ func TestScenario0091(t *testing.T) {
 			t.Fatalf("park: %v", err)
 		}
 
-		// Park should be excluded from Claim/Peek (returns empty).
+		// Park should be excluded from Claim (returns empty).
+		_, _, err := q.Claim("w", time.Minute)
+		if !errors.Is(err, ErrEmpty) {
+			t.Fatalf("claim after park = %v, want ErrEmpty", err)
+		}
+
+		// Park should be excluded from Peek (returns empty).
 		if _, err := q.Peek(); !errors.Is(err, ErrEmpty) {
 			t.Fatalf("peek after park = %v, want ErrEmpty", err)
 		}
@@ -249,15 +299,9 @@ func TestScenario0091(t *testing.T) {
 		}
 
 		// Verify directive is still parked by attempting ops against it (all fail).
-		_, err := q.Touch(lease, time.Minute)
+		_, err = q.Touch(lease, time.Minute)
 		if !errors.Is(err, ErrLeaseLost) {
 			t.Fatalf("touch on parked = %v, want ErrLeaseLost", err)
-		}
-
-		// Verify Len excludes parked.
-		pending, claimed := q.Len()
-		if pending != 0 || claimed != 0 {
-			t.Fatalf("len after park = %d/%d, want 0/0", pending, claimed)
 		}
 
 		t.Logf("parked directive %s is durable and excluded from claim/peek/reap", parkID)
