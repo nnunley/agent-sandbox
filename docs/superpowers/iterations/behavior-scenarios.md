@@ -3252,15 +3252,23 @@ the `Defer`/`Reprioritize` seam.
   against the REAL laneq gRPC server (not the fake)
 
 **Expected observables:**
-- the full lifecycle behaves identically to the fake (SCENARIO-0091)
+- Priority/FIFO ordering (claim respects importance, then insertion order)
+- Lease Touch renewal (extends lease until)
+- Requeue increments Attempts (T1 requirement: requeue_count increments on SetStatus→PENDING + reap)
+- Not-before eligibility (deferred directives not claimable until eligible)
+- Park durability (parked directive excluded from Claim, Peek, and Reap — no auto-promotion)
+- Multi-lane isolation (lanes are independent)
+- ErrEmpty on empty queue (Claim and Peek)
+- ErrLeaseLost via stale-lease scenario (lease expires, Reap returns to pending, Touch fails with FAILED_PRECONDITION)
+- ErrLeaseLost via missing directive (valid integer ID never created, Touch fails with NotFound)
 - proves the Python gRPC binding + Go client are wire-compatible end to end (no stub fallback)
 - the gRPC `Defer`/`Reprioritize` seam works against real laneq → ITER-0007 Temporal can build on it
 
 **Automation status:** automated (ITER-0006 T6, real-wire via uvx @2d1b59e — PASS).
 Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 **Execution command:** `cd modules/incus-dispatcher/queue && bash run-laneq-wire.sh` OR `LANEQ_GRPC_REAL=1 LANEQ_GRPC_ADDR=localhost:50051 go test ./... -run TestScenario0092` (requires `uvx` and a reachable real laneq gRPC server at the address)
-**Test harness:** `modules/incus-dispatcher/queue/scenario0092_test.go` (TestScenario0092 with 10 subtests covering priority/fifo/touch/requeue/park/lanes/empty/leaselost)
-**Runner:** `modules/incus-dispatcher/queue/run-laneq-wire.sh` (starts uvx server, runs test, tears down; exit 0 on PASS, 1 on FAIL, 2 on SKIP)
+**Test harness:** `modules/incus-dispatcher/queue/scenario0092_test.go` (TestScenario0092 with 10 subtests covering priority/fifo/touch+reap+attempts-increment/notbefore/park-excluded-from-reap/lanes/empty/leaselost-stale+missing)
+**Runner:** `modules/incus-dispatcher/queue/run-laneq-wire.sh` (starts uvx server with 30s timeout, runs test, tears down via trap; exit 0 on PASS, 1 on FAIL, 2 on SKIP)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`

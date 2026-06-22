@@ -22,18 +22,27 @@ HOST="${ADDR%%:*}"
 PORT="${ADDR##*:}"
 FORK_HASH="2d1b59e"
 LANEQ_DB="$(mktemp)"
-TIMEOUT_SEC=10
+TIMEOUT_SEC=30
+SERVER_PID=""
+
+# Cleanup on exit: kill server and remove temp DB
+cleanup() {
+	if [ -n "$SERVER_PID" ]; then
+		kill "$SERVER_PID" 2>/dev/null || true
+		wait "$SERVER_PID" 2>/dev/null || true
+	fi
+	rm -f "$LANEQ_DB" "${LANEQ_DB}.log" 2>/dev/null || true
+}
+trap cleanup EXIT
 
 # Check prerequisites
 if ! command -v uvx &>/dev/null; then
   echo "SKIP: uvx not found (Python environment required)"
-  rm -f "$LANEQ_DB"
   exit 2
 fi
 
 if ! python3 --version &>/dev/null; then
   echo "SKIP: python3 not found"
-  rm -f "$LANEQ_DB"
   exit 2
 fi
 
@@ -45,7 +54,7 @@ export LANEQ_DB
 uvx --from "git+https://github.com/nnunley/laneq@${FORK_HASH}[grpc]" \
   laneq-grpc --addr "${ADDR}" \
   >"${LANEQ_DB}.log" 2>&1 &
-SERVER_PID=$!
+SERVER_PID="$!"
 
 # Wait for server to be reachable
 echo "Waiting for server to be reachable (${TIMEOUT_SEC}s timeout)..."
@@ -62,11 +71,8 @@ done
 
 if [ $READY -ne 1 ]; then
   echo "FAIL: Server did not become reachable within ${TIMEOUT_SEC}s"
-  kill $SERVER_PID 2>/dev/null || true
-  wait $SERVER_PID 2>/dev/null || true
   echo "--- Server log: ---"
   cat "${LANEQ_DB}.log" 2>/dev/null || echo "<no log>"
-  rm -f "$LANEQ_DB" "${LANEQ_DB}.log"
   exit 1
 fi
 
@@ -89,10 +95,6 @@ else
   TEST_RESULT=1
 fi
 
-# Cleanup
-echo "Tearing down laneq server..."
-kill $SERVER_PID 2>/dev/null || true
-wait $SERVER_PID 2>/dev/null || true
-rm -f "$LANEQ_DB" "${LANEQ_DB}.log" "$TEST_OUTPUT"
-
+echo "Test complete (cleanup via trap)"
+rm -f "$TEST_OUTPUT"
 exit $TEST_RESULT
