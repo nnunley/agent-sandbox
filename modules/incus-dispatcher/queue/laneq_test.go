@@ -241,6 +241,7 @@ func TestLaneqClaimSuccess(t *testing.T) {
 		Ref:         "main",
 		Task:        "task-1",
 		Attempts:    2, // Should be updated from requeue_count.
+		Lane:        "default", // Body lane (will be overridden by proto).
 	}
 
 	body, _ := json.Marshal(d)
@@ -253,13 +254,13 @@ func TestLaneqClaimSuccess(t *testing.T) {
 				Priority:        laneqpb.Priority_PRIORITY_P0,
 				Body:            string(body),
 				Status:          laneqpb.Status_STATUS_TAKEN,
-				Lane:            "default",
+				Lane:            "urgent", // Proto lane (authoritative column).
 				TakenBy:         "consumer-1",
 				LeaseUntilUnix:  &leaseUntil,
 				RequeueCount:    5,
 			},
 			Consumer: "consumer-1",
-			Lane:     "default",
+			Lane:     "urgent",
 		},
 	}
 	q := NewLaneqQueue(mock, "default")
@@ -282,6 +283,11 @@ func TestLaneqClaimSuccess(t *testing.T) {
 	// Verify Attempts is mapped from requeue_count.
 	if claimed.Attempts != 5 {
 		t.Errorf("Claim attempts=%d, want %d", claimed.Attempts, 5)
+	}
+
+	// Verify Lane column is authoritative: proto lane="urgent" overrides body lane="default".
+	if claimed.Lane != "urgent" {
+		t.Errorf("Claim lane=%q, want %q (column should override body JSON)", claimed.Lane, "urgent")
 	}
 
 	// Verify lease.
@@ -346,6 +352,7 @@ func TestLaneqPeekSuccess(t *testing.T) {
 		Template:   "example",
 		Importance: ImportanceLow,
 		Attempts:   1,
+		Lane:       "default", // Body lane (will be overridden by proto).
 	}
 
 	body, _ := json.Marshal(d)
@@ -357,7 +364,7 @@ func TestLaneqPeekSuccess(t *testing.T) {
 				Priority:     laneqpb.Priority_PRIORITY_P2,
 				Body:         string(body),
 				Status:       laneqpb.Status_STATUS_PENDING,
-				Lane:         "default",
+				Lane:         "priority", // Proto lane (authoritative column).
 				RequeueCount: 1,
 			},
 		},
@@ -377,6 +384,11 @@ func TestLaneqPeekSuccess(t *testing.T) {
 	}
 	if peeked.Attempts != 1 {
 		t.Errorf("Peek attempts=%d, want %d", peeked.Attempts, 1)
+	}
+
+	// Verify Lane column is authoritative: proto lane="priority" overrides body lane="default".
+	if peeked.Lane != "priority" {
+		t.Errorf("Peek lane=%q, want %q (column should override body JSON)", peeked.Lane, "priority")
 	}
 
 	// Verify the gRPC call.
@@ -700,6 +712,18 @@ func TestLaneqLaneDefault(t *testing.T) {
 	}
 	if mock.peekCalls[0].req.Lane != "default" {
 		t.Errorf("Lane=%q, want %q", mock.peekCalls[0].req.Lane, "default")
+	}
+}
+
+func TestLaneqLenStub(t *testing.T) {
+	// Len() is a stub that returns (0, 0) until implemented via Stats RPC.
+	// This test pins the documented stub behavior in CI.
+	mock := &mockLaneqClient{}
+	q := NewLaneqQueue(mock, "default")
+
+	pending, claimed := q.Len()
+	if pending != 0 || claimed != 0 {
+		t.Errorf("Len()=(%d, %d), want (0, 0); stub unimplemented per TODO(ITER-0007)", pending, claimed)
 	}
 }
 

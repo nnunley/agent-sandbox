@@ -147,6 +147,7 @@ func (q *LaneqQueue) directiveFromProto(pb *laneqpb.Directive, consumer string) 
 	d.ID = pb.Id
 	d.Importance = protoToImportance(pb.Priority)
 	d.Attempts = int(pb.RequeueCount)
+	d.Lane = pb.Lane
 
 	// Unpack optional not_before_unix (seconds -> time.Time).
 	if pb.NotBeforeUnix != nil {
