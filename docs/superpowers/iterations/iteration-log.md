@@ -450,3 +450,13 @@ durable VM is a hardware trust boundary (distinct kernel from the host LXC); sin
 v1 (dynamic multi-domain provisioning deferred to ITER-0006+). Workers launch as immutable golden copies
 via btrfs CoW with no live build (FULL golden/skills/provider → ITER-0005c). All cluster-only, proven by
 the Task-0 verification harness; the Go backends are additionally CI-provable on the Mac.
+
+**Audit (PAR, 2026-06-22):** two parallel adversarial auditors, three tiers, ran the live cluster
+harness + Go suite independently. **Both returned CLEAN** (high-confidence agreement): all 6 stories'
+ACs proven at their declared seams (measured on real hardware); Tier-2 impacted scenarios
+(0003/0004/0005/0006/0007/0008/0029 + backend 0028/0076/0089) PASS; Tier-3 sentinels JOURNEY-0001 +
+JOURNEY-0003 AC-1 green, `go vet` clean, `go test -race ./...` 192 tests pass (baseline 177, net +15 for
+the new runner/backend tests — no regression). Zero critical/serious/minor findings; no unrequested
+features; no leftover `fleet-golden-copy-*` instances; zero `TODO(ITER-0005b)` markers; exit-code
+mapping (task-fail vs infra-err) and incus-delete-free teardown both independently verified.
+**ITER-0005b CONFIRMED DONE.**

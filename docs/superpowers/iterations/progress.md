@@ -1,6 +1,6 @@
 # Progress
 
-**Phase:** ITER-0005b DONE (2026-06-22) — awaiting orchestrator audit (`auditing-progress`).
+**Phase:** ITER-0005b DONE + **AUDIT CLEAN** (PAR, 2026-06-22, both auditors CLEAN, high agreement).
 **Iterations:** 7/9 done (ITER-0000/0001/0002/0003/0004/0005/0005b). **Next eligible: ITER-0005c**
 (FULL golden / provider routing / curated skills — gated only on the STORY-0025 benchmark, CLEARED;
 runs on `agent-host`). ITER-0006 BLOCKED (Patrick sync); ITER-0007/0008 pending.
@@ -30,7 +30,8 @@ coord VM for trusted lanes; per-task Firecracker for sensitive lanes. Grafted on
 skills / provider routing (STORY-0075/0076/0077/0078) → ITER-0005c. ITER-0005's deferred microVM ACs
 (STORY-0004 AC-3, STORY-0017 AC-3/4, STORY-0020 AC-2) substantively proven by this substrate harness.
 
-**Last event:** 2026-06-22 — ITER-0005b complete; all artifacts synced; ready for `auditing-progress`.
+**Last event:** 2026-06-22 — ITER-0005b complete + PAR audit CLEAN (both auditors, 0 findings).
+ITER-0005c is the next pending iteration.
 
 **On resume:** "continue iterative development" → orchestrator runs `auditing-progress` (PAR, 3-tier) on
 ITER-0005b, then picks ITER-0005c (next pending; ITER-0006 stays Patrick-blocked).
