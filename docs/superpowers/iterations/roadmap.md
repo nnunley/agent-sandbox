@@ -563,13 +563,14 @@ flake inputs, orthogonal to queue/Temporal/worker_kind).
 ### ITER-0006 — Queue substrate (POST-PATRICK; substrate-coupled)
 
 **Stories:** STORY-0010, STORY-0044, STORY-0002, STORY-0064
-**Rationale:** Replace the stub queue with the chosen substrate (provisionally
-extend laneq + `not-before`), cluster-resident, passing the Mac-off acceptance
-test; finalize the directive contract fields. **BLOCKED on the Patrick sync —
-do not start until the substrate is confirmed.**
-**Status:** blocked
+**Rationale:** Replace the stub queue with the chosen substrate (extend laneq +
+`not-before`), cluster-resident, passing the Mac-off acceptance
+test; finalize the directive contract fields. **SUBSTRATE CONFIRMED (2026-06-22):
+Patrick confirmed open to extending LaneQ and added Norman as a LaneQ contributor —
+the substrate is LaneQ. Unblocked.**
+**Status:** pending
 **Impacted scenarios:** queue-substrate Mac-off; not-before eligibility; directive schema
-**Look-ahead check:** blocked-on-decision; unblocks ITER-0007.
+**Look-ahead check:** dependency resolved (substrate confirmed); unblocks ITER-0007.
 
 ### ITER-0007 — Time plane & Eisenhower prioritization (Temporal)
 
