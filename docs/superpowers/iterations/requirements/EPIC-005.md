@@ -194,12 +194,12 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:270-272`
 
-**Status:** partial:ITER-0000 (not-before stub done) — **ITER-0006 plan (PAR-revised 2026-06-22):**
+**Status:** partial:ITER-0000+ITER-0006 (AC-1, AC-2 done; AC-3 → ITER-0007) —
 **Discovery: laneq already ships `not_before` + `blocked_by` deferral upstream (v0.4.0 + #18)**, so
-ITER-0006 VALIDATES + INTEGRATES rather than adds it. AC-1 (not_before field) + AC-2 (`next` filters
-not_before<=now then highest importance) done in ITER-0006 via the gRPC adapter + SCENARIO-0091.
-**AC-3 (Temporal sole writer) → ITER-0007** — Temporal becomes the sole caller of the laneq gRPC
-`Defer`/`Reprioritize` seam built in ITER-0006. Story = PARTIAL after ITER-0006; closes in ITER-0007.
+ITER-0006 VALIDATED + INTEGRATED rather than added it. AC-1 (not_before field) + AC-2 (`next` filters
+not_before<=now then highest importance) done:ITER-0006 via the gRPC adapter + SCENARIO-0091 (fake CI)
++ SCENARIO-0092 (real-wire @2d1b59e). **AC-3 (Temporal sole writer) → ITER-0007** — Temporal becomes
+the sole caller of the laneq gRPC `Defer`/`Reprioritize` seam built in ITER-0006; closes in ITER-0007.
 
 ## STORY-0045
 

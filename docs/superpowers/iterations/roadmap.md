@@ -630,8 +630,19 @@ cost, single small feature). This removes any external-merge block on ITER-0006/
 - STORY-0064: AC-1..AC-14 done (contract schema via SCENARIO-0045 unit; AC-2 validation half cites D1 `ValidateTemplate`); **AC-15/AC-16 → ITER-0007** (importance/deadline as Temporal inputs; agents-propose-vs-humans-set authority — cross-surface, need Temporal).
 - STORY-0010: AC-4 done (not-before eligibility gate); decision RESOLVED (laneq); AC-2/AC-3/AC-5 = **not-chosen decision outcomes** (closed by decision, not unmet); **AC-1 (Mac-off cluster e2e) → ITER-0006b**.
 
-**Status:** pending
-**Impacted scenarios:** SCENARIO-0091 (NEW, CI integration — gRPC adapter lifecycle incl. lanes/threading); SCENARIO-0092 (NEW, real-wire e2e via uvx, **this iteration**); SCENARIO-0045 (directive contract, unit); SCENARIO-0012 (Mac-off → ITER-0006b)
+**Status:** done:ITER-0006 (2026-06-22) — laneq gRPC binding integrated end-to-end. Delivered all 7
+tasks (T0 proto contract; T1 Python gRPC server + `parked` status + requeue_count on the fork
+`nnunley/laneq@2d1b59e`, PR #19 CI green; T2 Go `LaneqQueue` adapter; T3 in-process fake + SCENARIO-0091
+CI gate; T4 SCENARIO-0045 directive contract AC-1..14; T5 `--queue=memory|laneq` selector + Close seam;
+T6 real-wire SCENARIO-0092 via uvx). PAR caught + fixed 7 real wire-fidelity bugs pre-merge (Touch
+seconds, Lane overlay, Peek reclaim/promote fidelity, hollow park test, fork timestamp-UTC, fork
+hardcoded-priority/missing-fields, fork gRPC error-codes) + an honest test-weakening (artificial
+ErrLeaseLost) reverted. Story outcomes: STORY-0002 AC-1 / STORY-0044 AC-1,AC-2 / STORY-0064 AC-1..14 /
+STORY-0010 AC-4 done; deferred AC-2/AC-3/AC-15/AC-16 → ITER-0007, STORY-0010 AC-1 → ITER-0006b,
+AC-2/3/5 not-chosen. Default suite green (`go test -race ./...`), 0091 CI sentinel green, 0092 gated
+real-wire PASS, JOURNEY-0001/0003 AC-1 sentinels green, zero `TODO(ITER-0006)`. **Divergence logged
+for ITER-0008:** real laneq leases are NOT consumer-exclusive (no per-consumer token enforcement).
+**Impacted scenarios:** SCENARIO-0091 (NEW, CI integration — gRPC adapter lifecycle incl. lanes/threading); SCENARIO-0092 (NEW, real-wire e2e via uvx @2d1b59e); SCENARIO-0045 (directive contract, unit, 22 AC-mapped); SCENARIO-0012 (Mac-off → ITER-0006b)
 **Look-ahead check:** substrate confirmed; the gRPC `Defer`/`Reprioritize` seam is built AND real-wire-proven (SCENARIO-0092) so ITER-0007 Temporal becomes the sole writer without rework. Unblocks ITER-0006b + ITER-0007.
 
 ### ITER-0006b — laneq Nix package + cluster deploy + Mac-off acceptance (cluster)

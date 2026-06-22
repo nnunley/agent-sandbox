@@ -44,10 +44,10 @@ substrate harness — see iteration-log)
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:39-43`
 
-**Status:** pending — **ITER-0006 plan (PAR-revised 2026-06-22):** AC-1 done in ITER-0006 (laneq is
+**Status:** partial:ITER-0006 (AC-1 done; AC-2 → ITER-0007) — AC-1 done:ITER-0006 (laneq is
 the durable cluster-resident queue: priority/lanes/threading/leasing, proven via the gRPC adapter +
-SCENARIO-0091). **AC-2 → ITER-0007** (only-actionable-in-queue / deferred-work-lives-in-Temporal
-needs Temporal as the deferral holder). Story = PARTIAL after ITER-0006.
+SCENARIO-0091 fake CI gate + SCENARIO-0092 real-wire @nnunley/laneq 2d1b59e). **AC-2 → ITER-0007**
+(only-actionable-in-queue / deferred-work-lives-in-Temporal needs Temporal as the deferral holder).
 
 ## STORY-0003
 
@@ -219,9 +219,9 @@ p99 in-guest unit spin-up (SCENARIO-0004 durable-vm). Evidence: cluster harness 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
 
-**Status:** pending — **ITER-0006 plan (PAR-revised 2026-06-22):** substrate decision RESOLVED =
-**laneq** (Python; gRPC binding; Norman is a contributor). AC-4 (not-before eligibility gate) done in
-ITER-0006 via SCENARIO-0091. AC-2/AC-3/AC-5 are **not-chosen decision outcomes** (network-native
+**Status:** partial:ITER-0006 (AC-4 done; AC-1 → ITER-0006b; AC-2/3/5 not-chosen) — substrate decision
+RESOLVED = **laneq** (Python; gRPC binding; Norman is a contributor). AC-4 (not-before eligibility gate)
+done:ITER-0006 via SCENARIO-0091/0092. AC-2/AC-3/AC-5 are **not-chosen decision outcomes** (network-native
 Postgres/NATS / dedicated-host candidates — closed BY the laneq decision, not unmet ACs). The
 Go↔**real laneq** gRPC wire is proven in ITER-0006 (SCENARIO-0092 via uvx). **AC-1 (Mac-off cluster
 e2e, SCENARIO-0012) carried → ITER-0006b** (Nix package + cluster deploy + Mac-off acceptance). Story =

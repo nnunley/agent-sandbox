@@ -35,10 +35,10 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:276-308`
 
-**Status:** pending — **ITER-0006 plan (PAR-revised 2026-06-22):** the Go `Directive` struct already
-carries every field; ITER-0006 activates `ParseDirective` at the laneq opaque-`body` JSON boundary and
-proves **AC-1..AC-14** (all required/optional fields present; access_cmd/root rejected via
-`DisallowUnknownFields`) via SCENARIO-0045 (unit). AC-2's *template-vs-allowlist+origin validation*
+**Status:** partial:ITER-0006 (AC-1..AC-14 done; AC-15/AC-16 → ITER-0007) — the Go `Directive` struct
+already carries every field; ITER-0006 activated `ParseDirective` at the laneq opaque-`body` JSON boundary
+and proves **AC-1..AC-14** done:ITER-0006 (all required/optional fields present; access_cmd/root rejected via
+`DisallowUnknownFields`) via SCENARIO-0045 (unit, 22 AC-mapped sub-tests). AC-2's *template-vs-allowlist+origin validation*
 half is ALREADY proven by the ITER-0002 D1 `ValidateTemplate` (`policy.go:35`,
 `policy_test.go`/`scenario_d1_test.go`) — cited, not re-proven (PAR re-review B-critical resolved).
 **AC-15/AC-16 → ITER-0007** (importance/deadline as

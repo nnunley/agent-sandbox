@@ -517,3 +517,53 @@ btrfs CoW with zero rebuild. Provider routing is now actually plumbed (the `--pr
 were previously dead) while the grader stays deterministic. The only gap is the clean-room graded-run
 proof, blocked by a faithfully-reproduced upstream let-go codegen bug and carried per the approved
 allowance.
+
+## ITER-0006 — Queue substrate: laneq gRPC binding + Go adapter + directive contract
+
+**Completed:** 2026-06-22
+
+**Stories delivered:** STORY-0002 (partial — AC-1 done; AC-2 → ITER-0007), STORY-0044 (partial —
+AC-1/AC-2 done; AC-3 → ITER-0007), STORY-0064 (partial — AC-1..AC-14 done; AC-15/AC-16 → ITER-0007),
+STORY-0010 (partial — AC-4 done; AC-1 → ITER-0006b; AC-2/AC-3/AC-5 not-chosen decision outcomes).
+
+**Tasks executed:** T0 `laneq.proto` gRPC contract + generated Go stubs (optional-int64 UTC-seconds
+timestamps, field-number guard, buf-lint clean). T1 Python gRPC server on the fork `nnunley/laneq`
+(branch `grpc-binding` @ `2d1b59e`) over `core.py` — added `parked` status (excluded from
+take/peek/reap, no auto-promote) + requeue_count-on-requeue; structured NotFound/Precondition →
+NOT_FOUND/FAILED_PRECONDITION error codes; PR #19 CI green (ruff format+check, 94 pytest, ≥95% coverage
+with generated stubs omitted). T2 Go `LaneqQueue` adapter implementing `queue.Queue` over the gRPC
+client (Importance↔priority, NotBefore↔not_before, Attempts↔requeue_count, Lease.Token↔consumer,
+Park↔parked; column-authoritative overlay incl. Lane; strict `ParseDirective` body decode). T3
+in-process faithful fake gRPC server + SCENARIO-0091 CI gate (priority/FIFO/lease/requeue/defer/
+blocked_by/park/lanes/threading + Peek reclaim/promote parity). T4 SCENARIO-0045 directive-contract
+unit evidence (22 AC-mapped sub-tests; AC-2 validation cites ITER-0002 D1 `ValidateTemplate`). T5
+`--queue=memory|laneq` selector + `--laneq-addr` + `LaneqQueue.Close()` shutdown seam + Temporal-
+sole-writer seam doc (default stays MemoryQueue until ITER-0006b). T6 real-wire SCENARIO-0092 (gated
+`LANEQ_GRPC_REAL=1`): boots the real laneq server via `uvx --from git+...@2d1b59e[grpc]` and drives
+the Go adapter through the full lifecycle. Every task ran the two-stage PAR (spec-compliance +
+code-quality/boxing-in); PAR caught 7 real wire-fidelity bugs pre-merge (Touch seconds-vs-nanos, Lane
+overlay omission, fake Peek reclaim/promote divergence, hollow Len-based park assertion, fork local-tz
+timestamps, fork hardcoded-priority/missing Take-Peek fields, fork gRPC error-code mapping) and
+reverted one honest test-weakening (artificial InvalidArgument-triggered ErrLeaseLost → realistic
+FAILED_PRECONDITION/NotFound).
+
+**Scenarios:** SCENARIO-0091 (NEW — CI contract gate, in-process fake, automated); SCENARIO-0092 (NEW —
+real-wire e2e via uvx @2d1b59e, gated, automated PASS); SCENARIO-0045 (directive contract, unit,
+automated). SCENARIO-0012 (Mac-off) carried → ITER-0006b.
+
+**Sentinel corpus results:** baseline clean (JOURNEY-0001 + JOURNEY-0003 AC-1 green). Post-iteration:
+`go test -race ./...` green (283 tests; LaneqQueue + laneqpb + 0091 + 0045 added, 0092 correctly
+skipped without `LANEQ_GRPC_REAL`); `go vet` clean; JOURNEY-0001 + JOURNEY-0003 AC-1 sentinels green;
+zero `TODO(ITER-0006)` markers; SCENARIO-0091 CI gate green; SCENARIO-0092 real-wire PASS against the
+PR-green fork.
+
+**Summary:** Replaced the in-memory `MemoryQueue` stub with the real **laneq** substrate via a new gRPC
+binding, behind the unchanged `queue.Queue` interface. Discovery showed laneq already shipped
+not_before/blocked_by deferral + leasing upstream, so the work shifted to validate+integrate: a shared
+`laneq.proto` contract, a Python gRPC server on a controlled fork (`nnunley/laneq@2d1b59e`, PR #19
+green) adding `parked` + requeue_count + adapter-matching error codes, a drop-in Go adapter, a
+CI-native fake-based gate (0091), a directive-contract unit proof (0045), a `--queue` selector
+(default still memory until the ITER-0006b cluster deploy), and a real-wire e2e (0092). Temporal
+becomes the sole writer of the gRPC Defer/Reprioritize seam in ITER-0007. **Logged divergence for
+ITER-0008:** real laneq leases are NOT consumer-exclusive (no per-consumer token enforcement on
+Touch/Done) — the fake is stricter; multi-consumer delegation must not assume exclusivity.
