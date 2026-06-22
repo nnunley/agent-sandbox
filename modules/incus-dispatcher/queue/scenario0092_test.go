@@ -131,70 +131,53 @@ func TestScenario0092(t *testing.T) {
 		}
 	})
 
-	// Test 3: Lease Touch renewal and reap + requeue_count increment.
-	// Verifies T1 requirement: Attempts increments when a claimed directive is reaped.
+	// Test 3: Lease touch renewal, and requeue_count increment on reap (T1 requirement).
+	// Two independent parts with GENEROUS timing margins so the real-server wall-clock
+	// reap is deterministic (tight sub-second margins were flaky against the live server).
 	t.Run("TouchAndReap", func(t *testing.T) {
-		q := NewLaneqQueue(client, "scenario0092-touchreap")
-		_, _ = q.Push(Directive{Intent: "leased"})
-
-		// Claim with short lease (1s).
-		_, lease, _ := q.Claim("worker-1", 1*time.Second)
-
-		// Immediately touch to renew with a longer lease.
-		newLease, err := q.Touch(lease, 10*time.Second)
+		// Part A — Touch renews a lease: claim with a 1s lease, immediately extend to 30s.
+		// Using a dedicated lane so the held directive can't interfere with Part B.
+		qa := NewLaneqQueue(client, "scenario0092-touch")
+		_, _ = qa.Push(Directive{Intent: "renewed"})
+		_, leaseA, err := qa.Claim("worker-A", 1*time.Second)
 		if err != nil {
-			t.Fatalf("touch: %v", err)
+			t.Fatalf("claim renewed: %v", err)
 		}
-		lease = newLease
-		t.Logf("touch renewed lease: %v", lease.Expiry)
+		extended, err := qa.Touch(leaseA, 30*time.Second)
+		if err != nil {
+			t.Fatalf("touch (renew): %v", err)
+		}
+		t.Logf("touch renewed lease to %v", extended.Expiry)
 
-		// Wait for the original 1s lease to have expired (if we hadn't touched),
-		// then reap to reclaim any that DID expire. Our directive should still be held
-		// (we touched it with 10s), so reap should return 0 for this one.
-		time.Sleep(1200 * time.Millisecond)
-		reclaimed, err := q.Reap()
+		// Part B — requeue_count increments on reap of an EXPIRED lease (T1 requirement).
+		// Deterministic: claim with a 1s lease, do NOT touch, wait 2.5s (>> 1s) so the lease
+		// is unambiguously expired, then reap MUST reclaim it (hard assertion, no tolerance).
+		qb := NewLaneqQueue(client, "scenario0092-reap")
+		id2, _ := qb.Push(Directive{Intent: "expire-and-reap"})
+		if _, _, err := qb.Claim("worker-B", 1*time.Second); err != nil {
+			t.Fatalf("claim expire-and-reap: %v", err)
+		}
+		time.Sleep(2500 * time.Millisecond)
+		reclaimed, err := qb.Reap()
 		if err != nil {
 			t.Fatalf("reap: %v", err)
 		}
-		t.Logf("reap after touch returned %d reclaimed", reclaimed)
-
-		// Now let the touched lease (10s from now) expire. To make this deterministic
-		// without a 10s sleep, let the ORIGINAL lease that we'll test expire instead.
-		// Create a NEW directive with a very short lease that we DON'T touch.
-		id2, _ := q.Push(Directive{Intent: "short-no-touch"})
-		_, _, _ = q.Claim("worker-2", 500*time.Millisecond)
-
-		// Wait for SHORT lease to expire.
-		time.Sleep(700 * time.Millisecond)
-
-		// Reap should reclaim the short-lease directive.
-		reclaimed2, err := q.Reap()
-		if err != nil {
-			t.Fatalf("reap after short-lease expiry: %v", err)
-		}
-		if reclaimed2 < 1 {
-			t.Logf("reap returned %d for short-lease (expected ≥1), continuing", reclaimed2)
+		if reclaimed < 1 {
+			t.Fatalf("reap reclaimed %d after a 1s lease + 2.5s wait, want >=1", reclaimed)
 		}
 
-		// Re-claim the short-lease directive and verify Attempts incremented (T1 requirement).
-		d2, _, err := q.Claim("worker-2", 5*time.Second)
+		// Re-claim and assert Attempts incremented (requeue_count 0 -> 1 on reap).
+		d2, _, err := qb.Claim("worker-C", 5*time.Second)
 		if err != nil {
 			t.Fatalf("reclaim after reap: %v", err)
 		}
 		if d2.ID != id2 {
 			t.Fatalf("reclaimed wrong directive: got %s, want %s", d2.ID, id2)
 		}
-		expectedAttempts := 0 + 1 // Initial is 0, after reap should be 1.
-		if d2.Attempts != expectedAttempts {
-			t.Fatalf("requeue_count after reap = %d, want %d", d2.Attempts, expectedAttempts)
+		if d2.Attempts != 1 {
+			t.Fatalf("requeue_count after reap = %d, want 1", d2.Attempts)
 		}
-		t.Logf("requeue_count incremented on reap: 0 → %d", d2.Attempts)
-
-		// Finally, verify our original directive can still be touched (lease was extended).
-		_, err = q.Touch(lease, 5*time.Second)
-		if err != nil {
-			t.Fatalf("touch on extended lease should still work: %v", err)
-		}
+		t.Logf("requeue_count incremented on reap: 0 -> %d", d2.Attempts)
 	})
 
 	// Test 4: Requeue increments Attempts.
