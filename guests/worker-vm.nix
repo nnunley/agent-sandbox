@@ -47,7 +47,7 @@
     home = "/home/worker";
     extraGroups = [ "wheel" ];
     openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII4cDacSoTxUpn9/1q0t179zX1FelIfHU2ZzEkfRqCJI root@agent-host"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEKAM+3oJVyiKZVdzi0ed5muG8SdMcDTHQm/LzCcundk root@agent-host"
     ];
   };
   security.sudo.wheelNeedsPassword = false;

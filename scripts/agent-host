@@ -46,8 +46,11 @@ _denoise() {
 
 cmd_build() {
   local out
-  out=$(_iexec bash -c "cd ${FLAKE_DIR} && nix --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.${CONTAINER}.config.system.build.toplevel --no-link --print-out-paths" 2>/dev/null) \
-    || die "build failed (run with --verbose: incus exec $TARGET -- bash -c 'cd ${FLAKE_DIR} && nix build .#nixosConfigurations.${CONTAINER}.config.system.build.toplevel')"
+  # --no-sandbox is REQUIRED: agent-host is an unprivileged LXC with no kernel-namespace
+  # build sandbox ("system does not support the kernel namespaces required for sandboxing").
+  # Substitution covers most paths; the few residual builds (microvm guests, units) are tiny.
+  out=$(_iexec bash -c "cd ${FLAKE_DIR} && nix --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.${CONTAINER}.config.system.build.toplevel --no-link --no-sandbox --print-out-paths" 2>/dev/null) \
+    || die "build failed (run with --verbose: incus exec $TARGET -- bash -c 'cd ${FLAKE_DIR} && nix build .#nixosConfigurations.${CONTAINER}.config.system.build.toplevel --no-sandbox')"
   echo "$out"
 }
 

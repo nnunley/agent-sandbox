@@ -41,6 +41,12 @@
   # microvm.nix host defaults
   microvm.host.enable = true;
 
+  # KSM (kernel same-page merging) can't be toggled from the unprivileged agent-host LXC
+  # (/sys/kernel/mm/ksm/run is read-only → enable-ksm.service fails the activation). Disable
+  # it declaratively so `switch-to-configuration` completes cleanly; KSM is a host-kernel
+  # memory optimization, not required for correctness.
+  hardware.ksm.enable = lib.mkForce false;
+
   # Test micro-VM using base guest image
   microvm.vms.test-vm = {
     config = {
