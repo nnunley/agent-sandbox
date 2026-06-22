@@ -2,7 +2,7 @@
 # Real-wire SCENARIO-0092: Go adapter ↔ real Python laneq gRPC server
 #
 # This script:
-# 1. Starts the real laneq gRPC server via uvx (nnunley/laneq@b5294a1)
+# 1. Starts the real laneq gRPC server via uvx (nnunley/laneq@2d1b59e)
 # 2. Waits for the server to be reachable
 # 3. Runs SCENARIO-0092 test with LANEQ_GRPC_REAL=1
 # 4. Tears down the server
@@ -20,7 +20,7 @@ set -uo pipefail
 ADDR="${LANEQ_GRPC_ADDR:-localhost:50051}"
 HOST="${ADDR%%:*}"
 PORT="${ADDR##*:}"
-FORK_HASH="b5294a1"
+FORK_HASH="2d1b59e"
 LANEQ_DB="$(mktemp)"
 TIMEOUT_SEC=10
 

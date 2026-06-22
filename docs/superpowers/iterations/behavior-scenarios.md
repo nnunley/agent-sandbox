@@ -3256,7 +3256,7 @@ the `Defer`/`Reprioritize` seam.
 - proves the Python gRPC binding + Go client are wire-compatible end to end (no stub fallback)
 - the gRPC `Defer`/`Reprioritize` seam works against real laneq → ITER-0007 Temporal can build on it
 
-**Automation status:** automated (ITER-0006 T6, real-wire via uvx @b5294a1 — PASS).
+**Automation status:** automated (ITER-0006 T6, real-wire via uvx @2d1b59e — PASS).
 Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 **Execution command:** `cd modules/incus-dispatcher/queue && bash run-laneq-wire.sh` OR `LANEQ_GRPC_REAL=1 LANEQ_GRPC_ADDR=localhost:50051 go test ./... -run TestScenario0092` (requires `uvx` and a reachable real laneq gRPC server at the address)
 **Test harness:** `modules/incus-dispatcher/queue/scenario0092_test.go` (TestScenario0092 with 10 subtests covering priority/fifo/touch/requeue/park/lanes/empty/leaselost)
