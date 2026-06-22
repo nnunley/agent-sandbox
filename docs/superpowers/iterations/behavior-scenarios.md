@@ -2344,9 +2344,10 @@ Passed=false because RunGrade computes the verdict solely from its own gate runs
 **Owning stories:** STORY-0075
 
 **Preconditions:**
-- incus is running on the host
-- nix is available on the host (or in a builder container)
-- fleet-worker/flake.nix exists and references llm-agents.nix
+- **Cluster-only (ITER-0005c): runs on `agent-host` (Incus on `ndn-desktop`); no Mac/local-nix seam.**
+- incus is running on `ndn-desktop`
+- nix is available INSIDE the cluster (on `agent-host`/`nix-server`, via the NixOS system profile) — NOT on the Mac
+- fleet-worker/flake.nix exists and references llm-agents.nix (and, after STORY-0077, agent-skills-nix)
 
 **Action:**
 - build golden once: `nix develop ./fleet-worker --accept-flake-config -c echo 'closure realized'`
@@ -2384,11 +2385,13 @@ Passed=false because RunGrade computes the verdict solely from its own gate runs
 **Owning stories:** STORY-0075
 
 **Preconditions:**
-- NixOS golden has been built and a task has run to completion
+- **Cluster-only (ITER-0005c): grader + golden run on `agent-host`; no Mac/local-nix seam.**
+- NixOS golden has been built (SCENARIO-0065) and a task has run to completion **with the lean-ctx bridge ON** (STORY-0075 AC-3)
 - worker diff is harvested
-- oracle verification is ready
+- oracle verification is ready — reuses the ITER-0003 STORY-0068 external grader (git-based, deterministic; the existing dispatcher `grade` subcommand) on a clean `let-go` checkout the worker never touched
 
 **Action:**
+- **(AC-3 graded run):** inside a golden copy, run the focused Level-style brief headless with `lean-ctx serve`/bridge active, `claude -p` → harvest `worker.diff` + `result.json` (no Ubuntu fallback)
 - grader starts with a pristine NixOS container (copy from golden)
 - grader applies worker diff (source files only)
 - grader runs `make generate` inside the NixOS golden
@@ -2444,8 +2447,16 @@ Passed=false because RunGrade computes the verdict solely from its own gate runs
 - grader remains deterministic (oracle is the source of truth)
 - cost is minimized while rigor is preserved
 
+**Verification (PAR 2026-06-22, B-minor "routing observable untestable" resolved):** the AC-1 proof is
+split into two concrete, checkable parts — (a) **export presence:** the golden's `nix develop`
+PATH/closure contains `codex`, `gemini-cli`, `qwen-code` (assert with `command -v` inside a golden
+copy); (b) **routing passthrough + grader determinism:** a dispatcher contract test asserts
+`--provider`/`--model` are forwarded to the worker invocation and that the `grade` path makes zero LLM
+calls (git-based oracle). Live provider traffic to `ndn.local:11434` is the aspirational end state, not
+the gate — the gate is export-presence + flag-passthrough + grader-determinism.
+
 **Automation status:** pending
-**Execution command:** TBD
+**Execution command:** TBD (wired in ITER-0005c Task 0: golden-provider export check + dispatcher passthrough contract test)
 
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:161-165`

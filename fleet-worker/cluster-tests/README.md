@@ -40,9 +40,24 @@ its gate is met. Until then it names the owning story, so the harness can't sile
 Gates derive from the STORY-0025 benchmark (nspawn 76 ms / Firecracker 1861 ms mean, 2134 ms p99) and
 the story ACs (STORY-0017 AC-3 ≤5s; STORY-0008 AC-3 sub-second unit spin-up).
 
+### ITER-0005c image track (golden / skills / provider — reuses this harness, Task 0)
+
+| Scenario | Story / AC | Readiness sentinel (what "ready" means) | Gate |
+|---|---|---|---|
+| `skills-discovery` (0069) | STORY-0078 | bundle BUILDS standalone (`nix build .#agent-skills-bundle` on `nix-server`, no golden needed) | all `GATE_SKILLS_COUNT` (13) SKILL.md present |
+| `skills-path` (0068) | STORY-0077 | `${SKILLS_DISCOVERY_PATH}` exists on a launched golden copy | 13 SKILL.md, copy-tree (no symlinked SKILL.md) |
+| `golden-full` (0065) | STORY-0075 AC-1 | realized toolchain (`${GOLDEN_TOOLCHAIN}`) resolves on a golden copy with no live build | toolchain present + marker + copy-per-task works |
+| `provider-routing` (0067) | STORY-0076 AC-1 | golden exports `${GOLDEN_PROVIDER_CLIS}` (dispatcher passthrough is the Go test `TestScenario0067`, CI) | all provider CLIs resolve on a copy |
+| `cleanroom` (0066) | STORY-0075 AC-2/AC-3 | full golden + let-go repo + bridge ON; clean-room byte-identical regen + graded run | byte-identical regen + graded diff (carry-allowed) |
+
+These follow the same PENDING/PASS/SKIP/FAIL discipline: each reports PENDING (naming its owning
+story) until T1–T5 land its evidence. `skills-discovery` needs only `nix-server` (the small bundle
+derivation), not the golden — it is the standalone STORY-0078 gate that runs before STORY-0077.
+
 ## Corpus wiring
 `run.sh <scenario>` is the corpus command for SCENARIO-0003/0004/0005/0006/0007/0029 (and the
-STORY-0008 AC-2 teardown check). As each substrate story lands, its scenario flips PENDING→PASS.
+STORY-0008 AC-2 teardown check), plus the ITER-0005c image-track SCENARIO-0065/0066/0067/0068/0069.
+As each story lands, its scenario flips PENDING→PASS.
 
 ## Status (2026-06-21)
 - `tests/lib.test.sh` green on the Mac.

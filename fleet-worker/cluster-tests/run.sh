@@ -4,6 +4,8 @@
 #   bash fleet-worker/cluster-tests/run.sh <scenario>
 #   scenarios: microvm-boot(0029) durable-vm(0004) nspawn-fast(0005)
 #              hardtier(0006) trust-boundary(0007) golden-launch(0003) teardown(0008ac2)
+#   ITER-0005c image track: golden-full(0065) cleanroom(0066) provider-routing(0067)
+#              skills-path(0068) skills-discovery(0069)
 #
 # Exit codes:
 #   0  PASS  — gate met
@@ -164,6 +166,91 @@ case "$SCEN" in
     echo "$SCEN teardown: ${ms} ms (unit-kill, no incus delete)"
     assert_le "$ms" "${GATE_TEARDOWN_MS}" "teardown unit-kill bounded" || rc=1
     exit $rc ;;
+
+  golden-full|0065)    # STORY-0075 AC-1 / SCENARIO-0065: NixOS golden built once with the FULL
+                       # toolchain realized; `incus copy` per task = zero rebuild.
+    aliases="$(incus image alias list "${REMOTE}:" 2>/dev/null)"
+    grep -q "${FLEET_GOLDEN_IMAGE}" <<<"$aliases" || pending STORY-0075 "no ${FLEET_GOLDEN_IMAGE} image (build-once + snapshot not done)"
+    inst="$(launch_golden_copy "${FLEET_GOLDEN_IMAGE}")" || { echo "FAIL ${SCEN}: launch from ${FLEET_GOLDEN_IMAGE} failed"; exit 1; }
+    rc=0
+    # FULL-golden signal: the realized toolchain resolves on a launched copy WITHOUT a live
+    # build — on PATH (baked) or via the realized devshell at GOLDEN_FLAKE_PATH (substitution
+    # only). If the core agent CLIs are absent the image is only the substrate (not the full
+    # golden) → PENDING STORY-0075 (T3 not yet landed).
+    GFP="${GOLDEN_FLAKE_PATH:-/etc/fleet-worker}"
+    resolve_tool() { incus exec "${REMOTE}:${inst}" -- bash -lc \
+      "command -v $1 >/dev/null 2>&1 || nix develop ${GFP} --accept-flake-config -c command -v $1 >/dev/null 2>&1"; }
+    resolve_tool claude && resolve_tool lean-ctx || { reap_copy "${inst}"; pending STORY-0075 "full golden toolchain not realized (claude/lean-ctx absent on copy) — T3 pending"; }
+    miss=""; for t in ${GOLDEN_TOOLCHAIN}; do resolve_tool "$t" || miss+="$t "; done
+    assert_true "$([ -z "$miss" ] && echo 1 || echo 0)" "golden copy exposes realized toolchain (${GOLDEN_TOOLCHAIN})${miss:+ — missing: $miss}" || rc=1
+    marker="$(incus exec "${REMOTE}:${inst}" -- cat /etc/fleet-golden-version 2>/dev/null | tr -d '\r')"
+    assert_true "$([ -n "$marker" ] && echo 1 || echo 0)" "golden marker present (no live build): ${marker:-<absent>}" || rc=1
+    # copy-per-task works: a SECOND fresh copy launches from the same golden (zero rebuild).
+    inst2="$(launch_golden_copy "${FLEET_GOLDEN_IMAGE}")" && incus exec "${REMOTE}:${inst2}" -- true >/dev/null 2>&1
+    assert_true "$([ -n "$inst2" ] && echo 1 || echo 0)" "incus copy golden per task works (2nd copy launched, no rebuild)" || rc=1
+    reap_copy "${inst}"; [ -n "$inst2" ] && reap_copy "${inst2}"
+    exit $rc ;;
+
+  cleanroom|0066)      # STORY-0075 AC-2/AC-3 / SCENARIO-0066: clean-room byte-identical regen +
+                       # bridge-ON graded run on the let-go repo (ITER-0003 journey0003 fixture).
+    aliases="$(incus image alias list "${REMOTE}:" 2>/dev/null)"
+    grep -q "${FLEET_GOLDEN_IMAGE}" <<<"$aliases" || pending STORY-0075 "no ${FLEET_GOLDEN_IMAGE} image (AC-1 full golden first)"
+    # AC-2/AC-3 are the toolchain-sensitive e2e (let-go + bridge); measured in T5. Until the
+    # graded-run + regen harness lands, report PENDING (carry-allowed per ITER-0005c PAR R2).
+    pending STORY-0075 "clean-room regen + bridge-ON graded run (AC-2/AC-3) not yet wired — T5, carry-allowed (let-go toolchain)"
+    ;;
+
+  provider-routing|0067) # STORY-0076 AC-1 / SCENARIO-0067: golden EXPORTS the cheap-implementer CLIs.
+                       # (Dispatcher --provider/--model passthrough + grader-determinism is the Go
+                       #  contract test TestScenario0067 in modules/incus-dispatcher — run in CI.)
+    aliases="$(incus image alias list "${REMOTE}:" 2>/dev/null)"
+    grep -q "${FLEET_GOLDEN_IMAGE}" <<<"$aliases" || pending STORY-0076 "no ${FLEET_GOLDEN_IMAGE} image (golden not built)"
+    inst="$(launch_golden_copy "${FLEET_GOLDEN_IMAGE}")" || { echo "FAIL ${SCEN}: launch from ${FLEET_GOLDEN_IMAGE} failed"; exit 1; }
+    GFP="${GOLDEN_FLAKE_PATH:-/etc/fleet-worker}"
+    resolve_tool() { incus exec "${REMOTE}:${inst}" -- bash -lc \
+      "command -v $1 >/dev/null 2>&1 || nix develop ${GFP} --accept-flake-config -c command -v $1 >/dev/null 2>&1"; }
+    # If none of the provider CLIs resolve, the export line isn't enabled yet → PENDING STORY-0076.
+    any=0; for c in ${GOLDEN_PROVIDER_CLIS}; do resolve_tool "$c" && any=1; done
+    [ "$any" = 1 ] || { reap_copy "${inst}"; pending STORY-0076 "provider CLIs not exported in golden (flake export not enabled) — T4 pending"; }
+    rc=0; miss=""; for c in ${GOLDEN_PROVIDER_CLIS}; do resolve_tool "$c" || miss+="$c "; done
+    assert_true "$([ -z "$miss" ] && echo 1 || echo 0)" "golden exports provider CLIs (${GOLDEN_PROVIDER_CLIS})${miss:+ — missing: $miss}" || rc=1
+    reap_copy "${inst}"
+    exit $rc ;;
+
+  skills-path|0068)    # STORY-0077 / SCENARIO-0068: curated skills resolve at the discovery path
+                       # on a launched golden copy, as regular files (copy-tree, not symlinks).
+    aliases="$(incus image alias list "${REMOTE}:" 2>/dev/null)"
+    grep -q "${FLEET_GOLDEN_IMAGE}" <<<"$aliases" || pending STORY-0077 "no ${FLEET_GOLDEN_IMAGE} image (golden not built)"
+    inst="$(launch_golden_copy "${FLEET_GOLDEN_IMAGE}")" || { echo "FAIL ${SCEN}: launch from ${FLEET_GOLDEN_IMAGE} failed"; exit 1; }
+    incus exec "${REMOTE}:${inst}" -- test -d "${SKILLS_DISCOVERY_PATH}" 2>/dev/null \
+      || { reap_copy "${inst}"; pending STORY-0077 "no ${SKILLS_DISCOVERY_PATH} on golden copy (skills not baked) — T2 pending"; }
+    rc=0
+    n="$(incus exec "${REMOTE}:${inst}" -- bash -lc "find -L '${SKILLS_DISCOVERY_PATH}' -name SKILL.md | wc -l" 2>/dev/null | tr -d '[:space:]')"
+    echo "$SCEN: ${SKILLS_DISCOVERY_PATH} has ${n} SKILL.md"
+    assert_true "$([ "$n" = "${GATE_SKILLS_COUNT}" ] && echo 1 || echo 0)" "all ${GATE_SKILLS_COUNT} curated skills at discovery path" || rc=1
+    # copy-tree, not symlink: the path itself is a real directory and SKILL.md are regular files.
+    nsl="$(incus exec "${REMOTE}:${inst}" -- bash -lc "find '${SKILLS_DISCOVERY_PATH}' -name SKILL.md -type l | wc -l" 2>/dev/null | tr -d '[:space:]')"
+    assert_true "$([ "$nsl" = 0 ] && echo 1 || echo 0)" "skills are copy-tree (no symlinked SKILL.md; found ${nsl})" || rc=1
+    reap_copy "${inst}"
+    exit $rc ;;
+
+  skills-discovery|0069) # STORY-0078 / SCENARIO-0069: the curated bundle BUILDS with all 13 skills
+                       # (standalone gate — needs only the small bundle derivation, not the golden).
+    BH="${BUNDLE_BUILD_HOST:-nix-server}"
+    incus exec "${REMOTE}:${BH}" -- true >/dev/null 2>&1 || pending STORY-0078 "bundle build host ${BH} unreachable"
+    dst=/tmp/fw-iter0005c
+    if ! COPYFILE_DISABLE=1 tar --no-mac-metadata -C "$HERE/../.." --exclude='*.DS_Store' -czf - fleet-worker 2>/dev/null \
+         | incus exec "${REMOTE}:${BH}" -- bash -lc "rm -rf $dst && mkdir -p $dst && tar -C $dst -xzf -"; then
+      echo "FAIL ${SCEN}: could not push fleet-worker to ${BH}"; exit 1
+    fi
+    incus exec "${REMOTE}:${BH}" -- bash -lc "grep -q 'agent-skills-bundle' $dst/fleet-worker/flake.nix" \
+      || pending STORY-0078 "flake.nix does not expose agent-skills-bundle yet — T1 pending"
+    out="$(incus exec "${REMOTE}:${BH}" -- bash -lc "cd $dst/fleet-worker && nix build --no-link --print-out-paths '${BUNDLE_FLAKE_ATTR}' --accept-flake-config 2>&1")" \
+      || { echo "FAIL ${SCEN}: nix build ${BUNDLE_FLAKE_ATTR} failed:"; echo "$out" | tail -8; exit 1; }
+    store="$(printf '%s\n' "$out" | tail -1)"
+    n="$(incus exec "${REMOTE}:${BH}" -- bash -lc "find -L '$store' -name SKILL.md | wc -l" 2>/dev/null | tr -d '[:space:]')"
+    echo "$SCEN: bundle ${store} has ${n} SKILL.md"
+    assert_true "$([ "$n" = "${GATE_SKILLS_COUNT}" ] && echo 1 || echo 0)" "bundle builds with all ${GATE_SKILLS_COUNT} curated skills"; exit $? ;;
 
   *) echo "unknown scenario: $SCEN"; exit 64 ;;
 esac

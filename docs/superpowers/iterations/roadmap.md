@@ -466,10 +466,85 @@ with STORY-0075.
 verification harness for golden launch + graded-run proofs.
 **Impacted scenarios:** SCENARIO-0065/0066 (golden built once + clean-room integrity), SCENARIO-0067
 (provider routing), SCENARIO-0068/0069 (skills bundle + discovery path).
-**Status:** pending (cluster) — eligible in parallel with ITER-0005b (both gated only on the STORY-0025
-benchmark, CLEARED). STORY-0075 is PARTIAL (minimal worker-image slice done:ITER-0000; FULL golden here).
-**Look-ahead check:** independent of the substrate track; reuses ITER-0005b Task 0 harness; STORY-0049
-AC-5 immutable-root scratch is shared substrate (tracked in ITER-0005b).
+**Status:** in-progress (cluster, started 2026-06-22) — ITER-0005b done, so this image track is eligible.
+STORY-0075 is PARTIAL (minimal worker-image slice done:ITER-0000; FULL golden here).
+**PAR scope review (2026-06-22) — 2 adversarial reviewers → both REVISE; revisions applied (below),
+re-review to APPROVE.** Aggregated findings + resolutions (same-issue-from-both = high confidence;
+severity disagreement = worst):
+- **(CRITICAL, B; = A-S3) STORY-0078 proof undefined / timing paradox** → RESOLVED: STORY-0078's
+  standalone gate is the **bundle BUILD** `nix build .#agent-skills-bundle` (needs only the small
+  bundle derivation, not the golden) → runs before STORY-0077's golden integration, no paradox.
+  Discovery already executed on the cluster (upstream non-flake, flat `skills/<name>/SKILL.md`,
+  subdir=skills/idPrefix=null/maxDepth=1, 13 skills present). Captured in EPIC-013 STORY-0078 +
+  the layout-validation doc deliverable `docs/plans/2026-06-22-skills-layout-validation.md`.
+- **(CRITICAL, B) no ITER-0005c harness wiring** → RESOLVED: **Task 0** wires SCENARIO-0065/0066/0067/
+  0068/0069 into `fleet-worker/cluster-tests/run.sh` with the same PENDING(2)/PASS(0)/SKIP(0)/FAIL(1)
+  discipline + gates, BEFORE story work.
+- **(SERIOUS, B "split" vs A "not split-worthy") STORY-0075 heterogeneous ACs** → RESOLVED by
+  task-level ordering + carry-allowance (no renumber): AC-1 (build/snapshot/copy, integration,
+  must-pass) → AC-2 (clean-room byte-identical regen, e2e, toolchain-sensitive GATE) → AC-3 (bridge-ON
+  graded run, e2e). **Carry-allowance** (precedent ITER-0003 STORY-0068 AC-2): AC-1 must pass; AC-2/AC-3
+  may carry with an explicit let-go-toolchain reason if they hit the wall, without blocking 0076/0077/0078.
+- **(SERIOUS, A-S2 + B) STORY-0075 AC-3 bridge proof unspecified** → RESOLVED: SCENARIO-0066 action
+  extended to require the graded run execute with the lean-ctx bridge ON.
+- **(SERIOUS, B) STORY-0076 routing opaque** → RESOLVED: no new story — AC-1 = golden EXPORTS the CLIs
+  (nix: uncomment `fleet-worker/flake.nix:55`) + dispatcher routing ALREADY exists (flags + proxy.go);
+  contract test asserts flag passthrough + grader determinism (SCENARIO-0067 verification clarified).
+- **(SERIOUS, B; A-minor) SCENARIO-0065/0066 "nix on host" contradicts cluster-only** → RESOLVED:
+  preconditions rewritten to cluster-only (nix inside agent-host/nix-server, not the Mac).
+- **(SERIOUS, A) EPIC-013 header wrong iteration** (ITER-0005b→0005c) → RESOLVED.
+- **(minor, B) STORY-0078 seam** → clarified as nix-eval/build proof.
+**PAR re-review (2026-06-22, round 2) — both reviewers confirm 8/8 round-1 findings RESOLVED + core
+scope sound; raised 5 clarification asks (all doc, no scope/architecture change), codified below →
+APPROVE:**
+- **(A-ISSUE-1) T0 timing/PENDING semantics** → T0 runs FIRST and is executable IMMEDIATELY (the
+  harness scaffolding needs no substrate). Its scenarios report PENDING(2) until each ITER-0005c
+  STORY's *own* evidence lands (the bundle build / golden / provider export) — PENDING tracks
+  0065-0069 story evidence, NOT the ITER-0005b substrate (which is done). Each flips PENDING→PASS as
+  T1–T5 complete.
+- **(A-ISSUE-2) AC-2/AC-3 carry trigger** → STORY-0075 marks AC-2/AC-3 PARTIAL+carry ONLY if, with
+  AC-1 (golden launch) otherwise green and reproducible, the cluster run hits one of: (a) `make
+  generate` produces non-compiling / non-byte-identical artifacts due to a host-vs-golden toolchain
+  version skew, OR (b) the graded run / regen exceeds a 15-min wall per attempt across 2 attempts.
+  Anything else (a real golden defect) is a FAIL, not a carry.
+- **(A-ISSUE-3) bundle-build closure semantics** → `packages.agent-skills-bundle` = `mkBundle`'s
+  copy-tree of ONLY the 13 curated SKILL.md dirs (a `runCommand`/rsync derivation); its closure is the
+  13 skill source trees + coreutils/rsync, NOT nixpkgs toolchain, claude-code, or the golden system.
+  Inputs `agent-skills`/`agent-skills-nix` are source fetches (already cached on nix-server). Expect a
+  sub-minute build — genuinely a small standalone gate, independent of the golden.
+- **(B-new-1) T5 repository target** → pinned: T5 uses the **let-go repository + the captured
+  `testdata/journey0003/lvl1-focused.diff` fixture from ITER-0003 STORY-0068** (JOURNEY-0003), the same
+  toolchain-sensitive case — not a new/simpler project.
+- **(B-new-2) "no Ubuntu fallback"** → it is a *sufficiency assertion* (the NixOS golden alone runs the
+  graded task end-to-end), NOT a separate Ubuntu-retire story. There is no Ubuntu fallback in scope; the
+  Ubuntu stopgap was already abandoned at ITER-0000's real dogfood.
+**Task decomposition (TDD where code; evidence interleaved; cluster-resident on agent-host):**
+- **T0** (harness, executable now): wire SCENARIO-0065/0066/0067/0068/0069 into `cluster-tests/run.sh`
+  (each PENDING until ITS OWN STORY evidence lands — per A-ISSUE-1) + add gates. The verification GATE
+  for this cluster-only iteration.
+- **T1** (STORY-0078, discovery): write `docs/plans/2026-06-22-skills-layout-validation.md`; add the
+  `agent-skills` (flake=false) + `agent-skills-nix` inputs to `fleet-worker/flake.nix`; expose
+  `packages.agent-skills-bundle` via `selectSkills`+`mkBundle` (13 ids, subdir=skills, maxDepth=1;
+  small copy-tree derivation per A-ISSUE-3); prove by `nix build .#agent-skills-bundle` listing all 13
+  (SCENARIO-0069). GATES T2.
+- **T2** (STORY-0077): place the bundle at `environment.etc."claude/skills".source` via copy-tree (not
+  symlink) in the worker/golden config; prove the 13 SKILL.md resolve at the discovery path in a golden
+  copy, regular files not symlinks (SCENARIO-0068).
+- **T3** (STORY-0075 AC-1): build golden once (`nix develop` realized: claude-code+lean-ctx+go+make+skills),
+  snapshot as golden image, `incus copy` per task = zero rebuild (SCENARIO-0065, must-pass).
+- **T4** (STORY-0076): uncomment codex/gemini-cli/qwen-code export in flake.nix; export-presence check
+  in a golden copy + dispatcher `--provider`/`--model` passthrough contract test + grader-determinism
+  (SCENARIO-0067).
+- **T5** (STORY-0075 AC-2/AC-3, e2e, CARRY-ALLOWED): clean-room byte-identical regen gate + bridge-ON
+  headless graded run on the **let-go repository + the ITER-0003 `testdata/journey0003/lvl1-focused.diff`
+  fixture** (SCENARIO-0066). Carry-trigger per A-ISSUE-2 above; "no Ubuntu fallback" = sufficiency
+  assertion (B-new-2). If toolchain wall → mark PARTIAL + carry with reason.
+**Impacted scenarios:** SCENARIO-0065/0066 (golden built once + clean-room integrity + bridge-ON graded),
+SCENARIO-0067 (provider routing), SCENARIO-0068/0069 (skills bundle + discovery path).
+**Look-ahead check:** independent of the substrate track; reuses ITER-0005b Task 0 harness pattern;
+STORY-0049 AC-5 immutable-root scratch is shared substrate (tracked in ITER-0005b). No boxing-in of
+ITER-0006/0007/0008 (both reviewers PASS check 3 — skills+provider are image-layer config, additive
+flake inputs, orthogonal to queue/Temporal/worker_kind).
 
 ### ITER-0006 — Queue substrate (POST-PATRICK; substrate-coupled)
 

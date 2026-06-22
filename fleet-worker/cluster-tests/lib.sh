@@ -91,6 +91,27 @@ vm_active() { guest_exec "systemctl is-active ${1}" 2>/dev/null | grep -q '^acti
 # now_ms — wall clock in milliseconds (python3 for portability).
 now_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
 
+# launch_golden_copy <image-alias> — launch a FRESH disposable copy from a golden image
+# (btrfs CoW; never built live) and poll until exec-ready. Echoes the instance name on
+# success (the caller must reap it with reap_copy); rc 1 if launch fails. Used by the
+# ITER-0005c golden/skills/provider scenarios (0065/0067/0068).
+launch_golden_copy() {
+  local img="$1" inst="golden-probe-$(now_ms)"
+  incus launch "${REMOTE}:${img}" "${inst}" >/dev/null 2>&1 || return 1
+  local i; for i in $(seq 1 120); do
+    incus exec "${REMOTE}:${inst}" -- true >/dev/null 2>&1 && break
+    sleep 0.5
+  done
+  echo "$inst"
+}
+
+# reap_copy <instance> — stop-then-delete a disposable copy (D5 discipline: --force on the
+# STOP, never `incus delete -f` of a running instance, to avoid the delete-hang).
+reap_copy() {
+  incus stop --force "${REMOTE}:$1" >/dev/null 2>&1 || true
+  incus delete "${REMOTE}:$1" >/dev/null 2>&1 || incus delete --force "${REMOTE}:$1" >/dev/null 2>&1 || true
+}
+
 # wait_microvm_ready <unit> [timeout_polls] — READINESS SENTINEL for a Firecracker
 # microVM: systemd unit active AND Main PID present (then caller adds network settle).
 # Echoes 1 (ready) / 0 (timed out).

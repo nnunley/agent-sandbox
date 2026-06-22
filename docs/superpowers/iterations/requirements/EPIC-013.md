@@ -4,7 +4,7 @@
 **Stories:** STORY-0075, STORY-0076, STORY-0077, STORY-0078
 **Primary sources:** `docs/plans/2026-06-17-dispatcher-productization.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
 **Status:** 0/4 fully done (STORY-0075 PARTIAL — minimal worker-image slice done:ITER-0000; FULL
-golden + STORY-0076/0077/0078 → ITER-0005b)
+golden + STORY-0076/0077/0078 → ITER-0005c)
 ## STORY-0075
 
 **Epic:** EPIC-013 — Worker image & skills
@@ -27,7 +27,24 @@ golden + STORY-0076/0077/0078 → ITER-0005b)
 oracle-graded diff, no Ubuntu fallback — substance of AC-3 minus the bridge). **FULL golden →
 ITER-0005b:** AC-1 (build once + snapshot as golden + `incus copy` per task), AC-2 (clean-room
 integrity gate: byte-identical regen of generated artifacts), AC-3 with the lean-ctx bridge ON
-(STORY-0069 landed the bridge in ITER-0003; the golden-run-with-bridge graded proof is ITER-0005b).
+(STORY-0069 landed the bridge in ITER-0003; the golden-run-with-bridge graded proof is ITER-0005c).
+
+**ITER-0005c AC-ordering + carry-allowance (PAR 2026-06-22 — A "not split-worthy" vs B "split":
+resolved by task-level ordering, no renumber):** the 3 ACs have heterogeneous dependency profiles, so
+they are decomposed into ordered tasks with separate scenario evidence rather than renumbered into
+0075a/b/c (avoids requirements-index churn):
+- **AC-1** (build-once + snapshot + `incus copy` per task) · seam `integration` · SCENARIO-0065 —
+  the must-pass core; harness-gated; depends only on the ITER-0005b golden substrate (done).
+- **AC-2** (clean-room byte-identical regen of `core_compiled.lgb`/`core_go_lowered/`/`generated.sums`)
+  · seam `e2e` · SCENARIO-0066 — a toolchain-sensitive GATING proof; needs the real `let-go` repo +
+  nix-pinned toolchain. **This is the same toolchain-sensitivity ITER-0003 STORY-0068 AC-2 hit.**
+- **AC-3** (bridge-ON headless graded run, no Ubuntu fallback) · seam `e2e` · SCENARIO-0066 (extended:
+  the graded run MUST execute with the lean-ctx bridge active — resolves A-S2/B "bridge proof
+  unspecified") — composes AC-1 + AC-2 + STORY-0069 bridge.
+**Carry-allowance (precedent: ITER-0003 STORY-0068 AC-2):** AC-1 must pass this iteration. If AC-2/AC-3
+hit the let-go-toolchain wall on the cluster within the iteration, STORY-0075 is marked PARTIAL (AC-1
+done; AC-2/AC-3 carried with an explicit toolchain reason + a captured fixture) rather than blocking
+the whole image track. The skills/provider work (0077/0076/0078) does NOT depend on AC-2/AC-3.
 
 ## STORY-0076
 
@@ -44,7 +61,14 @@ integrity gate: byte-identical regen of generated artifacts), AC-3 with the lean
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:161-165`
 
-**Status:** pending
+**Status:** pending — **ITER-0005c AC-1 scope clarification (PAR 2026-06-22, B-SERIOUS resolved):**
+AC-1 decomposes into two already-distinct concerns, neither needing a new story: (a) the **golden
+exports** `codex`/`gemini-cli`/`qwen-code` from `llm-agents.nix` (nix-level: uncomment the commented
+line in `fleet-worker/flake.nix:55`), and (b) the **dispatcher routing** of `--provider`/`--model`
+already exists (`modules/incus-dispatcher` flags + `modules/llm-proxy/proxy.go` per-provider routes) —
+proven by a contract test that the dispatcher passes the flags through and the grader stays
+deterministic (the oracle is git-based, no LLM). SCENARIO-0067 asserts (a) export presence + (b)
+flag-passthrough/grader-determinism.
 
 ## STORY-0077
 
@@ -87,3 +111,16 @@ DISCOVERY — confirm the upstream agent-skills-nix subdir/idPrefix layout + `fi
 building the bundle (STORY-0077). AC-5/AC-6 proof = a validated layout doc + the resolved bundle
 exhibiting the expected discovery paths (folded into SCENARIO-0068/0069 evidence; no separate
 scenario). Run FIRST in ITER-0005c so a broken/changed upstream layout surfaces before bundle config.
+
+**ITER-0005c proof clarification (PAR 2026-06-22 — A-S3 + B-C2 "proof undefined / timing paradox"
+resolved):** STORY-0078's standalone gate is the **bundle BUILD itself** —
+`nix build .#agent-skills-bundle` (the `mkBundle` of the `selectSkills` of the 13 ids). This needs
+only the small bundle derivation, NOT the golden image, so it runs BEFORE STORY-0077 bakes the bundle
+into the golden — no timing paradox. The build succeeding with all 13 expected skill ids present at
+the discovery layout IS the AC-5/AC-6 proof (SCENARIO-0069), accompanied by the layout-validation doc
+`docs/plans/2026-06-22-skills-layout-validation.md`. **Discovery already executed on the cluster
+(2026-06-22):** upstream `github:selamy-labs/agent-skills` (rev 22ac232) is NON-FLAKE → `flake = false`
+input; flat layout `skills/<name>/SKILL.md` (96 skills) → source cfg `subdir = "skills"`,
+`idPrefix = null`, `filter.maxDepth = 1`; agent-skills-nix `github:Kyure-A/agent-skills-nix` (rev
+5ff9039) exposes `lib.selectSkills` + `lib.mkBundle`; all 13 curated skills confirmed present.
+Seam note (B-minor): AC-5/AC-6 are nix-eval/build proofs (need nix, not the microVM substrate).
