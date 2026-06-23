@@ -116,7 +116,7 @@
 - AC-3: Quadrant mapping is stable: Q1 (important+urgent)→run now; Q2 (important+not-urgent)→schedule; Q3 (not-important+urgent)→soon; Q4 (not-important+not-urgent)→idle-only · impact:`local` · seam:`unit`
 
 **Sources:**
-- `docs/plans/2026-06-18-fleet-orchestration-design.md:231-247`
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:250-263`
 
 **Status:** pending
 
@@ -135,7 +135,7 @@
 - AC-3: laneq.next returns the highest-importance item whose not-before time has passed, with no knowledge of urgency logic · impact:`local` · seam:`unit` · scenario:`SCENARIO-0056`
 
 **Sources:**
-- `docs/plans/2026-06-18-fleet-orchestration-design.md:248-254`
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:265-271`
 
 **Status:** pending
 
@@ -154,7 +154,7 @@
 - AC-3: A drifting agent cannot self-promote to Q1/P0 without explicit bounds being exceeded and blocked · impact:`local` · seam:`unit` · scenario:`SCENARIO-0057`
 
 **Sources:**
-- `docs/plans/2026-06-18-fleet-orchestration-design.md:256-263`
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:273-281`
 
 **Status:** pending
 
@@ -173,7 +173,7 @@
 - AC-3: An item with no deadline and low importance (Q4) remains idle-only by design and never ages up · impact:`local` · seam:`unit` · scenario:`SCENARIO-0056`
 
 **Sources:**
-- `docs/plans/2026-06-18-fleet-orchestration-design.md:266-268`
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:283-285`
 
 **Status:** pending
 
@@ -192,7 +192,7 @@
 - AC-3: Temporal is the sole writer of not-before; no other actor modifies it · impact:`local` · seam:`integration`
 
 **Sources:**
-- `docs/plans/2026-06-18-fleet-orchestration-design.md:270-272`
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:287-289`
 
 **Status:** partial:ITER-0000+ITER-0006 (AC-1, AC-2 done; AC-3 → ITER-0007) —
 **Discovery: laneq already ships `not_before` + `blocked_by` deferral upstream (v0.4.0 + #18)**, so
@@ -216,7 +216,7 @@ the sole caller of the laneq gRPC `Defer`/`Reprioritize` seam built in ITER-0006
 - AC-3: laneq next returns highest-importance *eligible* item only · impact:`local` · seam:`unit` · scenario:`SCENARIO-0078`
 
 **Sources:**
-- `docs/plans/2026-06-18-fleet-orchestration-design.md:405-409`
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:453-457`
 
 **Status:** pending
 
@@ -234,7 +234,7 @@ the sole caller of the laneq gRPC `Defer`/`Reprioritize` seam built in ITER-0006
 - AC-2: concurrent reads of priority by multiple daemon instances are consistent · impact:`local` · seam:`integration` · scenario:`SCENARIO-0081`
 
 **Sources:**
-- `docs/plans/2026-06-18-fleet-orchestration-design.md:409`
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:456-457`
 
 **Status:** pending
 
@@ -253,6 +253,6 @@ the sole caller of the laneq gRPC `Defer`/`Reprioritize` seam built in ITER-0006
 - AC-3: agent-proposed rescore with privileged implication routes to approval queue · impact:`cross-surface` · seam:`integration` · scenario:`SCENARIO-0082`
 
 **Sources:**
-- `docs/plans/2026-06-18-fleet-orchestration-design.md:410-412`
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:458-460`
 
 **Status:** pending
