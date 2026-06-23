@@ -654,20 +654,50 @@ deterministic real-wire PASS; default `-race` suite green (0092 still gated). Ti
 ### ITER-0006b — laneq Nix package + cluster deploy + Mac-off acceptance (cluster)
 
 **Stories:** STORY-0010 (closeout AC-1)
-**Rationale:** Package laneq + its gRPC server (pinned-hash fork) as a **Nix package** for the NixOS
-cluster; deploy on `ndn-desktop` with the SQLite DB on a host volume; run the **Mac-off acceptance
-test**. The Go↔real-laneq wire is already proven in ITER-0006 (SCENARIO-0092 via uvx); this iteration
-*productionizes* it (Nix-packaged service) and proves the cluster Mac-off property — the
-cluster/deploy half that cannot run in Go-only CI (mirrors the ITER-0005/0005b/0005c CI-vs-cluster
-split).
-**Task sketch:** Nix derivation for laneq (pinned hash) + gRPC server entrypoint; deploy unit on
-ndn-desktop (DB host volume); re-run SCENARIO-0092 against the Nix-packaged service; SCENARIO-0012
-(Mac-off: close Mac → workers keep claiming/processing via laneq on ndn-desktop; DB survives;
-reconnect with no loss).
+**Rationale:** Productionize laneq as a cluster-resident service: package the pinned-hash fork as a
+**Nix package**, deploy the gRPC service on `ndn-desktop` (SQLite DB on an Incus host volume), and
+prove the Mac-off property. The Go↔real-laneq wire was proven in ITER-0006 via `uvx` on the dev Mac;
+this iteration proves it over a real network port from a Nix-packaged cluster service (mirrors the
+ITER-0005/0005b/0005c CI-vs-cluster split).
+
+**MUST-PASS core (PAR-revised 2026-06-22, A+B "carry-abuse risk" resolved — the iteration must ship
+real STORY-0010 substance even if the full Mac-off carries):**
+- **T0 — Nix package** for laneq (`nnunley/laneq@2d1b59e`) on `nix-server` via `buildPythonApplication`
+  (fetchFromGitHub pinned), exposing `laneq-grpc`. **Version skew is a solvable packaging detail, NOT a
+  carry risk (nixos MCP-confirmed nixpkgs 25.11: protobuf 6.33.1, grpcio 1.76.0, grpcio-tools 1.76.0):**
+  the robust recipe REGENERATES the proto stubs in-build with grpcio-tools 1.76 from the fork's
+  `proto/laneq.proto` (nativeBuildInputs), so the generated `*_pb2*.py` always match the runtime grpcio
+  — ignoring the fork's committed 1.81 stubs. (Nix definitions are flexible: if regen is awkward, an
+  `overridePythonAttrs`/custom derivation pinning grpcio 1.81 is the fallback; protobuf 6.33.1↔6.33.6 is
+  already compatible.) **Pre-flight gate (must pass FIRST):** `nix build` succeeds AND the built
+  interpreter can `import laneq.grpc.laneq_pb2_grpc` AND a local smoke RPC round-trips. This retires the
+  PAR B-serious "protobuf/grpcio mismatch" risk.
+- **T1 — Deploy** the laneq gRPC service on `ndn-desktop`: a systemd unit (on a container) with the
+  SQLite DB on an Incus host volume; a **documented deploy contract** (port, DB path, readiness probe,
+  log location). **Temporal-sole-writer note (PAR):** the deploy doc MUST state Temporal (ITER-0007)
+  writes not_before/priority ONLY via gRPC `Defer`/`Reprioritize` — never direct SQLite — so the
+  single-service/host-volume DB is not boxed in.
+- **T2 — SCENARIO-0092 over the wire:** re-run the real-wire lifecycle against the deployed Nix service
+  over a real network port (Go adapter from a cluster container → the systemd laneq). This is NEW
+  evidence over the uvx-on-Mac 0092 (proves packaging + systemd lifecycle + host-volume persistence +
+  network wire), not redundant.
+
+**CARRY-ELIGIBLE (PAR-revised — honest, no silent carry):**
+- **T3 — SCENARIO-0012 Mac-off acceptance:** the NARROW substrate proof — a **cluster-side** drain
+  (claim/process loop run ON the cluster via `incus exec agent-host`, NOT orchestrated from the Mac)
+  claims+drains directives enqueued into the deployed laneq while the Mac's client is disconnected; the
+  host-volume DB persists; Mac reconnect shows no loss. Driven + observed entirely cluster-side with a
+  durable captured log (precedent: ITER-0005c cleanroom evidence). **Carry-eligible** ONLY if it hits
+  a real wall (e.g., it requires baking the full Go dispatcher into a cluster coordinator service that
+  does not yet exist) — in which case carry with an explicit documented reason and defer the FULL
+  sustained-Mac-off + escalation to **ITER-0008 (STORY-0074, the full Mac-off acceptance)**. Must NOT
+  silently carry: deliver either a genuine narrow cluster-autonomous Mac-off proof OR a documented wall.
+
 **Status:** pending
-**Impacted scenarios:** SCENARIO-0012 (Mac-off acceptance); SCENARIO-0092 (re-run productionized)
-**Look-ahead check:** depends on ITER-0006 binding (real-wire already proven); closes STORY-0010 AC-1;
-carry-allowance applies if the cluster Mac-off e2e hits a deploy wall (precedent: ITER-0005c).
+**Impacted scenarios:** SCENARIO-0092 (NEW evidence — over-the-wire vs Nix service, must-pass); SCENARIO-0012 (Mac-off acceptance, rewritten cluster-driven execution model, carry-eligible)
+**Look-ahead check:** depends on ITER-0006 binding (real-wire proven); the must-pass core (T0–T2)
+ships real STORY-0010 substance regardless; ITER-0007 (Temporal) builds on the deployed service via the
+documented gRPC-only write seam. Full operator/sustained Mac-off → ITER-0008 STORY-0074.
 
 ### ITER-0007 — Time plane & Eisenhower prioritization (Temporal)
 

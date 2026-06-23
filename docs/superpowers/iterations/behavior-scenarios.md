@@ -678,35 +678,43 @@ task — boot is NOT the limiting factor; nspawn (76 ms) is the substrate-select
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:354-363`
 
-## SCENARIO-0012 — [BLOCKED-ON-SUBSTRATE-DECISION] Laneq-as-cluster-service: MCP clients reconnect after Mac downtime, queue state intact
+## SCENARIO-0012 — Laneq-as-cluster-service: cluster coordinates with the Mac off, queue state intact
 
 **Kind:** failure-recovery
 **Proof seam:** e2e
 **Owning stories:** STORY-0010
 
+**Execution model (PAR-revised 2026-06-22 — must be CLUSTER-DRIVEN, not Mac-orchestrated):** the proof
+runs ENTIRELY on the cluster. The Mac is genuinely uninvolved during the drain — no orchestration,
+polling, or decision-making from the Mac. The test is driven + observed by a cluster-side script (on
+`agent-host`/`nix-server` via `incus exec`), NOT from the Mac. Directives are enqueued BEFORE the Mac
+disconnect; the Mac reconnects only at the end to confirm no loss.
+
 **Preconditions:**
-- laneq + MCP server runs on ndn-desktop with DB on host volume
-- Mac and worker containers are remote MCP clients
-- One or more tasks are in queue
+- the Nix-packaged laneq gRPC service (ITER-0006b T0/T1) runs on `ndn-desktop` as a systemd unit with
+  the SQLite DB on an Incus host volume
+- a cluster-resident claim/drain consumer runs on the cluster (`incus exec agent-host`, using the Go
+  `LaneqQueue` adapter / dispatcher against the cluster laneq) — NOT invoked from the Mac
+- directives are enqueued into laneq before the Mac is disconnected
 
 **Action:**
-- Mac MCP client is disconnected (Mac powered off or network isolated)
-- Worker MCP client claims and processes tasks while Mac is offline
-- Mac client reconnects
+- enqueue N directives into the deployed laneq (cluster-side)
+- disconnect the Mac (network-isolate or power off) — the Mac's laneq client goes away
+- the cluster-resident consumer claims + drains all N directives autonomously while the Mac is offline
+- reconnect the Mac
 
 **Expected observables:**
-- Server-side laneq process continues running; DB is not affected
-- Queue state is fully persisted on host volume
-- Queue leases are issued and tracked on ndn-desktop
-- Tasks are dequeued and executed without Mac involvement
-- MCP server re-establishes connection; no state loss
-- Client can query queue state and observe completed/in-progress tasks
-- laneq process uptime is continuous (no restart during Mac downtime)
-- DB transaction log shows all queue operations persisted
-- Mac client successfully resumes MPC communication with no missing commands
+- the laneq systemd service stays up continuously (no restart) during Mac downtime
+- all N directives are claimed + completed by the cluster consumer with the Mac offline
+- queue state + leases are persisted on the host-volume DB throughout
+- on Mac reconnect, the Mac's client observes the completed state — no lost directives, no missing ops
+- the host-volume DB survives a laneq service restart (durability)
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** planned (ITER-0006b T3) — cluster e2e via a cluster-side script (durable captured
+log, ITER-0005c-style); NOT Go-CI-native. **Carry-eligible** per the ITER-0006b allowance if it requires
+a cluster-resident dispatcher service that doesn't yet exist (full sustained Mac-off → ITER-0008
+STORY-0074).
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh laneq-macoff` (planned, ITER-0006b)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
@@ -3266,7 +3274,8 @@ the `Defer`/`Reprioritize` seam.
 
 **Automation status:** automated (ITER-0006 T6, real-wire via uvx @2d1b59e — PASS).
 Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
-**Execution command:** `cd modules/incus-dispatcher/queue && bash run-laneq-wire.sh` OR `LANEQ_GRPC_REAL=1 LANEQ_GRPC_ADDR=localhost:50051 go test ./... -run TestScenario0092` (requires `uvx` and a reachable real laneq gRPC server at the address)
+**Execution command:** `cd modules/incus-dispatcher/queue && bash run-laneq-wire.sh` OR `LANEQ_GRPC_REAL=1 LANEQ_GRPC_ADDR=localhost:50051 go test ./... -run TestScenario0092` (requires `uvx` and a reachable real laneq gRPC server at the address).
+**ITER-0006b T2 (over-the-wire vs Nix service):** same `TestScenario0092`, but `LANEQ_GRPC_ADDR` points at the deployed Nix-packaged systemd laneq on `ndn-desktop:<port>` (a real network port from a cluster container), NOT a local uvx server — proving packaging + systemd lifecycle + host-volume persistence + network wire, distinct from the uvx-on-Mac run. Wired as `fleet-worker/cluster-tests/run.sh laneq-wire` in T2.
 **Test harness:** `modules/incus-dispatcher/queue/scenario0092_test.go` (TestScenario0092 with 10 subtests covering priority/fifo/touch+reap+attempts-increment/notbefore/park-excluded-from-reap/lanes/empty/leaselost-stale+missing)
 **Runner:** `modules/incus-dispatcher/queue/run-laneq-wire.sh` (starts uvx server with 30s timeout, runs test, tears down via trap; exit 0 on PASS, 1 on FAIL, 2 on SKIP)
 
