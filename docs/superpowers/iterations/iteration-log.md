@@ -665,3 +665,10 @@ live Temporal grafts deployment + wiring onto proven algorithms without re-litig
 introduced (defers STORY-0035 colliding-Run risk to ITER-0008); single-writer documented process-level and
 orthogonal to laneq's non-exclusive leases. STORY-0064 fully closed; all live/wall-clock/e2e ACs explicitly
 carried to ITER-0007b (cluster Temporal) and ITER-0008 (operator UX).
+
+**Audit (PAR, 2026-06-23):** two adversarial auditors in parallel, both **CLEAN** — Tier 1 (every done:ITER-0007
+AC PASS, evidence ADEQUATE, tests confirmed non-tautological), Tier 2 (SCENARIO-0091/0045 PASS; queue change is
+a TODO re-tag only), Tier 3 (JOURNEY-0001 + JOURNEY-0003 AC-1 sentinels green; suite 283→383, no regression).
+Both independently confirmed the ITER-0007b/0008 deferrals legitimate (live Temporal / wall-clock / e2e /
+concurrent-daemon), counters correct (EPIC-005 3/13, EPIC-010 1/1), zero `TODO(ITER-0007)`, no unrequested work.
+ITER-0007 confirmed done.
