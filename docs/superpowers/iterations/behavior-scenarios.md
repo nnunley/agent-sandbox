@@ -710,11 +710,16 @@ disconnect; the Mac reconnects only at the end to confirm no loss.
 - on Mac reconnect, the Mac's client observes the completed state — no lost directives, no missing ops
 - the host-volume DB survives a laneq service restart (durability)
 
-**Automation status:** planned (ITER-0006b T3) — cluster e2e via a cluster-side script (durable captured
-log, ITER-0005c-style); NOT Go-CI-native. **Carry-eligible** per the ITER-0006b allowance if it requires
-a cluster-resident dispatcher service that doesn't yet exist (full sustained Mac-off → ITER-0008
-STORY-0074).
-**Execution command:** `bash fleet-worker/cluster-tests/run.sh laneq-macoff` (planned, ITER-0006b)
+**Automation status:** PASS-NARROW (ITER-0006b T3, 2026-06-23) — cluster e2e via a cluster-side script
+(durable captured log: `fleet-worker/cluster-tests/results/laneq-macoff-2026-06-23.log`). **Honest carry:**
+The incus exec session model does not naturally support truly detached background processes. To prove
+genuine sustained Mac-off autonomy (Mac session closed → drain continues → completion confirmed on
+reconnect), we would need either (a) a persistent sidecar already running on the cluster, or
+(b) systemd integration. The test proves the NARROW property: **cluster-resident consumers can drain
+all directives via laneq's Take/SetStatus API without Mac involvement**, using standard client protocol
+that could run indefinitely with a persistent background process. Full sustained Mac-off (dispatcher daemon
+with event loop + graceful service handling) → deferred to ITER-0008 STORY-0074.
+**Execution command:** `bash fleet-worker/cluster-tests/run.sh laneq-macoff` (ITER-0006b)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
