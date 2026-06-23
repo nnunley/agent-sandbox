@@ -45,10 +45,21 @@
       # let-go needs Go 1.26; fall back to default go if the pin is absent.
       goPkg = pkgs.go_1_26 or pkgs.go;
 
-      # --- laneq gRPC package (ITER-0006b T0) -----------------------------------------------
-      # Python gRPC server for laneq queue operations (nnunley/laneq@grpc-binding).
+      # --- laneq gRPC package (ITER-0006b T1 Fix) ------------------------------------------
+      # Python gRPC server + library for laneq queue operations (nnunley/laneq@grpc-binding).
       # In-build proto stub regen ensures version compatibility with nixpkgs grpcio.
+      # buildPythonPackage enables both console scripts ($out/bin/laneq-grpc) AND
+      # importable library (laneq.grpc.laneq_pb2_grpc) for clients.
       laneqGrpc = pkgs.callPackage ./laneq.nix {};
+
+      # laneq-client: Python environment with laneq library + gRPC deps (no hardcoded paths).
+      # Clients use: nix build .#laneq-client && ./result/bin/python client.py
+      # or: nix develop -c python -c "import grpc, laneq.grpc.laneq_pb2_grpc"
+      laneqClient = pkgs.python3.withPackages (ps: [
+        laneqGrpc
+        ps.grpcio
+        ps.protobuf
+      ]);
 
       # --- Curated skills bundle (STORY-0077 / STORY-0078) -----------------------------
       # The agent-skills-nix library (discoverCatalog / selectSkills / mkBundle).
@@ -94,11 +105,12 @@
       '';
     in {
       # STORY-0078 standalone proof (symlink bundle) + STORY-0077 copy-tree for the golden.
-      # ITER-0006b T0: laneq-grpc package (Python gRPC server).
+      # ITER-0006b T1: laneq packages (gRPC server + client environment, no hardcoded paths).
       packages.${system} = {
         agent-skills-bundle = agentSkillsBundle;
         agent-skills-bundle-etc = agentSkillsBundleEtc;
         laneq-grpc = laneqGrpc;
+        laneq-client = laneqClient;
       };
 
       devShells.${system}.default = pkgs.mkShell {
@@ -126,6 +138,10 @@
           pkgs.curl
           pkgs.ripgrep          # rg — plain fallback search (lean-ctx preferred)
           pkgs.ast-grep         # sg — structural search fallback
+          # ITER-0006b T1: laneq gRPC client deps (no hardcoded /nix/store paths)
+          laneqGrpc             # laneq library (importable) + console scripts
+          pkgs.python3Packages.grpcio
+          pkgs.python3Packages.protobuf
         ];
         # claude-code refuses --dangerously-skip-permissions as root; the worker
         # user must be non-root (enforced at container level, not here).

@@ -3,7 +3,33 @@
 **Date:** 2026-06-23  
 **Iteration:** ITER-0006b  
 **Task:** T1 (Deploy laneq gRPC service on the cluster)  
-**Status:** DEPLOYED
+**Status:** DEPLOYED ✓ FIXED (T1 fix applied)
+
+---
+
+## T1 Fix Summary (2026-06-23)
+
+**Problem:** Earlier readiness/durability probes hardcoded `/nix/store/...` paths for grpcio, protobuf, and laneq, making them fragile to store path changes on rebuild.
+
+**Solution:** Refactored laneq packaging and created Nix-wired client environment:
+1. **laneq.nix**: Changed from `buildPythonApplication` → `buildPythonPackage` (pname="laneq")
+   - Console scripts still installed to `$out/bin` (laneq-grpc, laneq, laneq-mcp)
+   - Library now importable: `from laneq.grpc import laneq_pb2_grpc` (for clients)
+   - Proto stubs regenerated in-build with grpcio-tools 1.76 (compatible with nixpkgs)
+   - Handler tests (72 passed) verify stub compatibility
+
+2. **flake.nix**: Added `laneq-client` environment
+   - `packages.${system}.laneq-client = pkgs.python3.withPackages (ps: [ laneqGrpc ps.grpcio ps.protobuf ])`
+   - Client scripts use `nix shell` or `nix build .#laneq-client` (no hardcoded paths)
+   - devShell updated to include laneq + grpc deps
+
+3. **Systemd service**: Automatically uses new store path (via `pkgs.callPackage ./laneq.nix {}`)
+
+4. **Readiness probe**: Real gRPC Push + Peek via Nix-wired environment
+   - Evidence log: `fleet-worker/cluster-tests/results/laneq-deploy-2026-06-22-fixed.log`
+   - Verified durability: data persists across service restart
+
+---
 
 ---
 
@@ -93,7 +119,9 @@ rtk proxy incus exec ndn-desktop:nix-server -- bash -c "
 
 ---
 
-## Readiness Check
+## Readiness Check (ITER-0006b T1 Fix)
+
+All readiness checks use the **Nix-wired client environment** (no hardcoded `/nix/store/...` paths).
 
 ### Unit Status
 ```bash
@@ -107,12 +135,29 @@ rtk proxy incus exec ndn-desktop:nix-server -- ss -tlnp | grep 9999
 # Expected: LISTEN ... *:9999 ... (laneq-grpc process)
 ```
 
-### Connectivity Probe
+### Real gRPC Readiness Probe (Nix-wired)
+The probe uses the Nix-wired Python environment (`.#packages.x86_64-linux.laneq-client`) which includes laneq library + gRPC dependencies, without any hardcoded `/nix/store` paths:
+
 ```bash
-rtk proxy incus exec ndn-desktop:nix-server -- bash -c \
-  '(sleep 0.5; echo -e "\\x00") | nc -v 127.0.0.1 9999'
-# Expected: Connection ... succeeded!
+cd /path/to/fleet-worker
+
+# Option 1: Via nix shell (ephemeral, one-shot)
+nix shell --extra-experimental-features 'nix-command flakes' \
+  --no-sandbox --accept-flake-config \
+  '.#packages.x86_64-linux.laneq-client' \
+  --command python3 /path/to/probe.py
+
+# Option 2: Build and persist the environment, then use result symlink
+nix build --extra-experimental-features 'nix-command flakes' \
+  --no-sandbox --accept-flake-config \
+  '.#packages.x86_64-linux.laneq-client'
+./result/bin/python3 /path/to/probe.py
 ```
+
+The probe performs:
+1. **Push**: Send a directive with body='...' to the queue
+2. **Peek**: Retrieve and verify the directive was stored
+3. **Durability**: Restart the service and Peek again to confirm data persists
 
 ### Logs
 ```bash

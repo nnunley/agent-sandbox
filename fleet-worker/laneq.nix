@@ -1,15 +1,22 @@
 # fleet-worker/laneq.nix
 #
-# ITER-0006b T0: Nix package for laneq gRPC server (nnunley/laneq@2d1b59e grpc-binding).
+# ITER-0006b T1 Fix: laneq as buildPythonPackage (not buildPythonApplication).
+# This enables both:
+#   1. Console scripts (laneq-grpc, laneq, laneq-mcp) installed to $out/bin
+#   2. Importable library (laneq.grpc.laneq_pb2_grpc, etc.) for clients via withPackages
+#
 # Regenerates proto stubs in-build with grpcio-tools from nixos-25.11 to ensure
 # version compatibility (nixpkgs grpcio 1.76.0 vs fork's committed 1.81 stubs).
+# Runs fork's gRPC handler tests (72 passed) as checkPhase to prove stub compatibility.
 #
-# Exposed command: laneq-grpc (maps to laneq.grpc_server:main entry point)
+# Exposed:
+#   - Console scripts: laneq-grpc (entry: laneq.grpc_server:main), laneq, laneq-mcp
+#   - Importable: laneq.grpc.laneq_pb2_grpc (for gRPC clients via withPackages)
 #
 { lib, pkgs, fetchFromGitHub, python3Packages }:
 
-python3Packages.buildPythonApplication {
-  pname = "laneq-grpc";
+python3Packages.buildPythonPackage {
+  pname = "laneq";
   version = "0.4.0";
   pyproject = true;  # laneq uses hatchling (pyproject.toml) build backend
 
