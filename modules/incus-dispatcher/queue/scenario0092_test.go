@@ -255,8 +255,12 @@ func TestScenario0092(t *testing.T) {
 		if err != nil {
 			t.Fatalf("push to-park: %v", err)
 		}
-		time.Sleep(100 * time.Millisecond)  // Ensure directive is persisted before claim
-		d, lease, err := q.Claim("w", 1*time.Second)
+		time.Sleep(100 * time.Millisecond) // ensure directive is persisted before claim
+		// Generous lease: Park must run while the lease is still held. A short (1s) lease
+		// could expire across the several over-the-wire RPCs before Park(), making Park fail
+		// with ErrLeaseLost (flaky). Park clears the lease anyway (status=parked), so a long
+		// lease here doesn't affect the reap-exclusion proof below.
+		d, lease, err := q.Claim("w", time.Minute)
 		if err != nil {
 			t.Fatalf("claim to-park: %v", err)
 		}
