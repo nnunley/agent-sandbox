@@ -67,7 +67,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0054 | Fail grading triggers retry with same worker | process-level | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_RequeueEmitsFreshHandoff` | STORY-0058 |
 | SCENARIO-0055 | Template validation rejects unauthorized template | integration | iteration | TBD | STORY-0050 |
 | SCENARIO-0056 | Q2 item promoted to Q1 as deadline nears | integration | iteration | TBD | STORY-0043, STORY-0041 |
-| SCENARIO-0057 | Agent rescore beyond bound is rejected; human rescore succeeds | integration | iteration | TBD | STORY-0042 |
+| SCENARIO-0057 | Agent rescore beyond bound is rejected; human rescore succeeds | integration | iteration | `cd modules/incus-dispatcher && go test -race -run 'TestScenario0057' ./temporal/` (done:ITER-0007, mock-Temporal) | STORY-0042 |
 | SCENARIO-0058 | No-deadline low-importance item never runs while higher-tier work exis | process-level | iteration | TBD | STORY-0043, STORY-0041 |
 | SCENARIO-0059 | Rescore operation is the unified gateway for all priority changes | integration | iteration | TBD | STORY-0041, STORY-0042 |
 | SCENARIO-0060 | Worker PATH resolution via Go client exec | app-level | iteration | TBD | STORY-0067 |
@@ -89,16 +89,16 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0076 | Container backend interface: passes existing contract tests | integration | iteration | `cd modules/incus-dispatcher && go test . -run 'TestGenerateContainerName\|TestTaskValidation\|TestIsLocalPath\|TestRemoteFileRead\|TestContainerNameUniqueness\|TestRunTaskInContainer\|TestDeliverSourceViaClone\|TestRoundTripWithOutputArtifacts'` (integration cases self-skip when incus unreachable) | STORY-0020 |
 | SCENARIO-0077 | Context handoff round-trip: validate spike unblocks feature | integration | cluster-gated (manual) | `bash fleet-worker/spikes/leanctx-handoff-spike.sh` (PASS 2026-06-21: nonce round-trips across two claude -p invocations, no data loss) | STORY-0034 |
 | SCENARIO-0091 | Go gRPC adapter drives laneq through the full directive lifecycle | integration | iteration | `cd modules/incus-dispatcher && go test ./queue/... -run TestLaneqFakeLifecycle` | STORY-0002, STORY-0044, STORY-0010 |
-| SCENARIO-0078 | Prioritization: deadline approaching promotes Q2 to Q1 | unit | iteration | TBD | STORY-0045 |
+| SCENARIO-0078 | Prioritization: deadline approaching promotes Q2 to Q1 | unit | iteration | `cd modules/incus-dispatcher && go test -race -run 'TestScenario0078' ./temporal/` (done:ITER-0007) | STORY-0045 |
 | SCENARIO-0079 | Prioritization: no-deadline low-importance stays Q4 (idle-only) | unit | iteration | TBD | STORY-0045 |
 | SCENARIO-0080 | Laneq next: returns highest-importance eligible item only | unit | iteration | TBD | STORY-0045 |
-| SCENARIO-0081 | Single-writer: only Temporal writes effective priority | integration | iteration | TBD | STORY-0046 |
-| SCENARIO-0082 | Rescore authority: human can move item to any bucket | integration | iteration | TBD | STORY-0047 |
+| SCENARIO-0081 | Single-writer: only Temporal writes effective priority | integration | iteration | `cd modules/incus-dispatcher && go test -race -run 'TestScenario0081\|TestMultipleDirectivesIndependent' ./temporal/` (guard done:ITER-0007; live AC-2 → ITER-0007b) | STORY-0046 |
+| SCENARIO-0082 | Rescore authority: human can move item to any bucket | integration | iteration | `cd modules/incus-dispatcher && go test -race -run 'TestScenario0082' ./temporal/` (routing done:ITER-0007; live AC-1 → ITER-0007b) | STORY-0047 |
 | SCENARIO-0083 | Rescore authority: agent rescore beyond bound rejected | unit | iteration | TBD | STORY-0047 |
 | SCENARIO-0084 | Rescore authority: privileged rescore routed to approval | integration | iteration | TBD | STORY-0047 |
 | SCENARIO-0085 | Escalation: autonomous climb through pre-approved rungs | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_AutonomousRungDoesNotEscalate` | STORY-0061 |
 | SCENARIO-0086 | Escalation: privileged escalation lands in escalations lane | integration | iteration | TBD | STORY-0061 |
-| SCENARIO-0087 | Escalation: stale escalation resurfaced by rising urgency | integration | iteration | TBD | STORY-0061 |
+| SCENARIO-0087 | Escalation: stale escalation resurfaced by rising urgency | integration | iteration | `cd modules/incus-dispatcher && go test -race -run 'TestOperatorScenario0087' ./temporal/` (reprojection logic done:ITER-0007; live re-raise → ITER-0007b; operator journey → ITER-0008) | STORY-0061 |
 | SCENARIO-0088 | Mac-off: human-only escalations queue durably for Mac return | e2e | iteration | TBD | STORY-0074 |
 | SCENARIO-0089 | Isolation tier declared by template selects the backend (D1) | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0089` | STORY-0023 |
 | SCENARIO-0090 | Worker NixOS config is a single declarative source (patterns captured) | integration | iteration | `bash fleet-worker/tests/single-source.test.sh` | STORY-0017 |

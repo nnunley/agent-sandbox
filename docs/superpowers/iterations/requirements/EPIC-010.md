@@ -3,7 +3,7 @@
 **Summary:** Directive contract & queue substrate
 **Stories:** STORY-0064
 **Primary sources:** `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/1 done
+**Status:** 1/1 done (STORY-0064 closed: AC-1..AC-14 done:ITER-0006, AC-15/AC-16 done:ITER-0007)
 
 ## STORY-0064
 
@@ -41,6 +41,8 @@ and proves **AC-1..AC-14** done:ITER-0006 (all required/optional fields present;
 `DisallowUnknownFields`) via SCENARIO-0045 (unit, 22 AC-mapped sub-tests). AC-2's *template-vs-allowlist+origin validation*
 half is ALREADY proven by the ITER-0002 D1 `ValidateTemplate` (`policy.go:35`,
 `policy_test.go`/`scenario_d1_test.go`) — cited, not re-proven (PAR re-review B-critical resolved).
-**AC-15/AC-16 → ITER-0007** (importance/deadline as
-Temporal *projection inputs*, and the agents-may-only-PROPOSE-vs-humans-set-freely authority — both
-cross-surface, requiring Temporal). Story = PARTIAL after ITER-0006; closes in ITER-0007.
+**AC-15/AC-16 done:ITER-0007** (importance/deadline as
+Temporal *projection inputs* — proven by `temporal/projection.go` consuming importance+deadline →
+quadrant/effective-priority, evidence SCENARIO-0078; and the agents-may-only-PROPOSE-vs-humans-set-freely
+authority — proven by `temporal/authority.go` `IsAgentBounded`/`IsHumanUnrestricted`, evidence SCENARIO-0082).
+Story = PARTIAL after ITER-0006; **CLOSED in ITER-0007** (all 16 ACs done).

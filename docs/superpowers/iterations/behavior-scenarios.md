@@ -2077,8 +2077,8 @@ to deadline-prioritization/STORY-0045 — corrected to SCENARIO-0054.)
 - Human override authority is retained
 - Temporal re-projection is triggered only by successful rescores
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated:ITER-0007 (CI-logic, mock-Temporal; rescore-authority bounds proven)
+**Execution command:** `cd modules/incus-dispatcher && go test -race -run 'TestScenario0057' ./temporal/`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:256-263`
@@ -2834,8 +2834,8 @@ fresh"; recovery must resolve the explicit saved session id (or rely on auto-con
 - task.queue is Q1
 - task is eligible for immediate execution
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated:ITER-0007 (CI-logic, fake-clock; 3 tests green under -race)
+**Execution command:** `cd modules/incus-dispatcher && go test -race -run 'TestScenario0078' ./temporal/`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:405-409`
@@ -2917,8 +2917,9 @@ fresh"; recovery must resolve the explicit saved session id (or rely on auto-con
 - no unauthorized writes to effective_priority detected
 - concurrent reads are consistent
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** partial:ITER-0007 (single-writer guard automated via mock-Temporal GuardedDirective;
+AC-2 live concurrent-read consistency across daemon instances → ITER-0007b)
+**Execution command:** `cd modules/incus-dispatcher && go test -race -run 'TestScenario0081|TestMultipleDirectivesIndependent' ./temporal/`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:409`
@@ -2948,8 +2949,9 @@ fresh"; recovery must resolve the explicit saved session id (or rely on auto-con
 - no approval request was created
 - rescore is immediately effective
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** partial:ITER-0007 (authority routing — agent-bounded rejection + privileged→approval —
+automated via mock-Temporal; AC-1 live human-rescore-to-any-bucket → ITER-0007b)
+**Execution command:** `cd modules/incus-dispatcher && go test -race -run 'TestScenario0082' ./temporal/`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:410-412`
@@ -3098,8 +3100,9 @@ fresh"; recovery must resolve the explicit saved session id (or rely on auto-con
 - it ranks higher in escalations lane by urgency
 - human reviewer will see it before new low-urgency escalations
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** partial:ITER-0007 (urgency-reprojection LOGIC for stale escalations automated via
+fake-clock; Temporal live re-raise → ITER-0007b; operator/TUI acts-on-resurfaced journey → ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test -race -run 'TestOperatorScenario0087' ./temporal/`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:413-415`

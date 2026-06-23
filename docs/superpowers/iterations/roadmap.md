@@ -759,7 +759,12 @@ the fields), explicitly **orthogonal to laneq lease exclusivity** — it must NO
 leases (ITER-0006 proved real laneq leases are non-exclusive); documented so ITER-0008 multi-consumer
 delegation is not boxed in.
 
-**Status:** pending
+**Status:** done:ITER-0007 (2026-06-23) — Eisenhower projection/authority/single-writer/escalation LOGIC
+implemented pure-Go in `modules/incus-dispatcher/temporal/` (`projection.go`/`authority.go`/`writer.go`/`escalate.go`),
+100 new tests green under -race (suite 283→383). Stories: STORY-0040/0042/0045 done:ITER-0007 (full);
+STORY-0041/0043/0044/0046/0047 + split-ins STORY-0001/0002/0055/0058/0061/0064 — CI-logic ACs done:ITER-0007,
+live ACs → ITER-0007b (STORY-0064 fully CLOSED). Evidence SCENARIO-0078/0057/0082/0081/0087 wired + runnable.
+TODO(ITER-0007) re-tagged → ITER-0007b (laneq Stats() observability is live-cluster, out of CI-logic scope).
 **Impacted scenarios:** SCENARIO-0078 (deadline→Q2/Q1 + Q4-idle projection, **unit/fake-clock**),
 SCENARIO-0057 (agent-bounded rescore rejection, unit/integration), SCENARIO-0082 (authority routing,
 integration — human/agent identity via directive origin from ITER-0002), SCENARIO-0081 (single-writer

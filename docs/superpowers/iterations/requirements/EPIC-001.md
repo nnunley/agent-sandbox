@@ -26,7 +26,11 @@ substrate harness — see iteration-log)
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:31-37`
 
-**Status:** pending
+**Status:** partial:ITER-0007 (AC-3 design done; AC-1, AC-2 → ITER-0007b) — AC-3 (single-writer constraint:
+only Temporal writes laneq scheduling fields) proven at the design/logic level by the `GuardedDirective`
+writer-role guard (`modules/incus-dispatcher/temporal/writer.go`), evidence SCENARIO-0081 (mock-Temporal).
+**AC-1 (Temporal plane owns durable Schedules/timers/retry-backoff) + AC-2 (server+workers on ndn-desktop;
+state survives host restart — e2e) → ITER-0007b** (cluster, live Temporal).
 
 ## STORY-0002
 
@@ -44,10 +48,12 @@ substrate harness — see iteration-log)
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:39-43`
 
-**Status:** partial:ITER-0006 (AC-1 done; AC-2 → ITER-0007) — AC-1 done:ITER-0006 (laneq is
-the durable cluster-resident queue: priority/lanes/threading/leasing, proven via the gRPC adapter +
-SCENARIO-0091 fake CI gate + SCENARIO-0092 real-wire @nnunley/laneq 2d1b59e). **AC-2 → ITER-0007**
-(only-actionable-in-queue / deferred-work-lives-in-Temporal needs Temporal as the deferral holder).
+**Status:** partial:ITER-0006+ITER-0007 (AC-1 done; AC-2 contract done:ITER-0007 [mock], live durable-hold →
+ITER-0007b) — AC-1 done:ITER-0006 (laneq is the durable cluster-resident queue: priority/lanes/threading/leasing,
+proven via the gRPC adapter + SCENARIO-0091 fake CI gate + SCENARIO-0092 real-wire @nnunley/laneq 2d1b59e).
+**AC-2 deferral-holder contract done:ITER-0007** — the Temporal-holds-deferred-until-eligible contract is proven
+against a mock Temporal/laneq seam (`temporal/projection.go` not-before gating logic); **live durable hold of
+deferred/future work in deployed Temporal until eligible → ITER-0007b.**
 
 ## STORY-0003
 

@@ -368,7 +368,9 @@ func (q *LaneqQueue) Reap() (int, error) {
 // This stub implementation always returns (0, 0) as laneq doesn't expose
 // a direct count endpoint. A full implementation would use Stats or similar.
 //
-// TODO(ITER-0007): Implement via Stats() RPC when needed for observability.
+// TODO(ITER-0007b): Implement via Stats() RPC when needed for observability.
+// Re-tagged from ITER-0007: laneq Stats() observability is live-cluster work (no Mac CI seam),
+// out of ITER-0007's CI-provable Eisenhower-logic scope. Belongs with the live laneq gRPC wiring.
 func (q *LaneqQueue) Len() (pending, claimed int) {
 	return 0, 0
 }

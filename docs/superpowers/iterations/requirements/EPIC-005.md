@@ -3,7 +3,7 @@
 **Summary:** Prioritization & scheduling (Temporal)
 **Stories:** STORY-0035, STORY-0036, STORY-0037, STORY-0038, STORY-0039, STORY-0040, STORY-0041, STORY-0042, STORY-0043, STORY-0044, STORY-0045, STORY-0046, STORY-0047
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/13 done
+**Status:** 3/13 done (STORY-0040/0042/0045 done:ITER-0007; STORY-0041/0043/0044/0046/0047 partial — CI-logic ACs done:ITER-0007, live ACs → ITER-0007b)
 ## STORY-0035
 
 **Epic:** EPIC-005 — Prioritization & scheduling (Temporal)
@@ -118,7 +118,10 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:250-263`
 
-**Status:** pending
+**Status:** done:ITER-0007 — AC-1/AC-2 (importance static vs urgency deriving from (deadline,now)) +
+AC-3 (Q1/Q2/Q3/Q4 quadrant mapping stable) proven pure-Go in `modules/incus-dispatcher/temporal/projection.go`
+(`ComputeUrgency`/`ComputeQuadrant`/`ComputeEffectivePriority`), evidence SCENARIO-0078 (fake-clock, 8-day
+timeline, Q4 stability + deadline aging).
 
 ## STORY-0041
 
@@ -137,7 +140,10 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:265-271`
 
-**Status:** pending
+**Status:** partial:ITER-0006+ITER-0007 (AC-3 done; AC-1, AC-2 → ITER-0007b) — AC-3 (laneq.next returns
+highest-importance eligible item, no urgency knowledge) proven ITER-0006 SCENARIO-0091/0092 and re-asserted
+here against the temporal projection seam. **AC-1/AC-2 (Temporal is the live sole writer of effective-priority
++ not-before; re-projects on rescore over the real laneq gRPC seam) → ITER-0007b** (cluster, live Temporal).
 
 ## STORY-0042
 
@@ -156,7 +162,10 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:273-281`
 
-**Status:** pending
+**Status:** done:ITER-0007 — AC-1 (human rescore accepts any (importance,deadline), Temporal re-projects),
+AC-2 (agent rescore bounded; big/privileged jumps require approval), AC-3 (drifting agent cannot self-promote
+to Q1/P0) proven in `modules/incus-dispatcher/temporal/authority.go` (`IsHumanUnrestricted`/`IsAgentBounded`),
+evidence SCENARIO-0057 (rescore-authority unit/integration) + SCENARIO-0082 (drifting-agent prevention).
 
 ## STORY-0043
 
@@ -175,7 +184,10 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:283-285`
 
-**Status:** pending
+**Status:** partial:ITER-0007 (AC-1, AC-3 done; AC-2 → ITER-0007b) — AC-1 (urgency monotonic in (deadline,now))
++ AC-3 (no-deadline low-importance Q4 never ages up) proven pure-math/fake-clock in
+`modules/incus-dispatcher/temporal/projection.go`, evidence SCENARIO-0078. **AC-2 (Q2→Q1 promotion over
+wall-clock time, no human intervention — `journey`/`integration`) → ITER-0007b** (live Temporal wall-clock aging).
 
 ## STORY-0044
 
@@ -194,12 +206,15 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:287-289`
 
-**Status:** partial:ITER-0000+ITER-0006 (AC-1, AC-2 done; AC-3 → ITER-0007) —
+**Status:** partial:ITER-0000+ITER-0006+ITER-0007 (AC-1, AC-2 done; AC-3 logic done:ITER-0007 [mock laneq],
+live gRPC → ITER-0007b) —
 **Discovery: laneq already ships `not_before` + `blocked_by` deferral upstream (v0.4.0 + #18)**, so
 ITER-0006 VALIDATED + INTEGRATED rather than added it. AC-1 (not_before field) + AC-2 (`next` filters
 not_before<=now then highest importance) done:ITER-0006 via the gRPC adapter + SCENARIO-0091 (fake CI)
-+ SCENARIO-0092 (real-wire @2d1b59e). **AC-3 (Temporal sole writer) → ITER-0007** — Temporal becomes
-the sole caller of the laneq gRPC `Defer`/`Reprioritize` seam built in ITER-0006; closes in ITER-0007.
++ SCENARIO-0092 (real-wire @2d1b59e). **AC-3 (Temporal sole writer) logic done:ITER-0007** — the
+single-writer-as-sole-caller contract is proven against a mock laneq via the `GuardedDirective` writer-role
+guard (`temporal/writer.go`); **live Temporal-as-sole-caller over the real laneq gRPC `Defer`/`Reprioritize`
+seam → ITER-0007b**.
 
 ## STORY-0045
 
@@ -218,7 +233,10 @@ the sole caller of the laneq gRPC `Defer`/`Reprioritize` seam built in ITER-0006
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:453-457`
 
-**Status:** pending
+**Status:** done:ITER-0007 — AC-1 (deadline approaching promotes Q2→Q1 within threshold), AC-2 (no-deadline
+low-importance stays Q4 idle-only), AC-3 (laneq.next returns highest-importance eligible only) proven
+deterministically in `modules/incus-dispatcher/temporal/projection.go`, evidence SCENARIO-0078 (fake-clock
+8-day timeline). Projection is pure and deterministic (same inputs → same quadrant/priority).
 
 ## STORY-0046
 
@@ -236,7 +254,12 @@ the sole caller of the laneq gRPC `Defer`/`Reprioritize` seam built in ITER-0006
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:456-457`
 
-**Status:** pending
+**Status:** partial:ITER-0007 (AC-1 done; AC-2 → ITER-0007b) — AC-1 (only Temporal can write effective-priority
++ not-before; no other actor) proven by the `GuardedDirective` writer-role guard
+(`modules/incus-dispatcher/temporal/writer.go`: private fields + role-checked setters reject Queue/Human writes),
+evidence SCENARIO-0081 (single-writer guard, unit/integration + code-review). Single-writer is process-level and
+**orthogonal to laneq lease exclusivity** (ITER-0006 proved real laneq leases are non-exclusive). **AC-2
+(concurrent reads consistent under live Temporal across daemon instances) → ITER-0007b.**
 
 ## STORY-0047
 
@@ -255,4 +278,7 @@ the sole caller of the laneq gRPC `Defer`/`Reprioritize` seam built in ITER-0006
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:458-460`
 
-**Status:** pending
+**Status:** partial:ITER-0007 (AC-2, AC-3 done; AC-1 → ITER-0007b) — AC-2 (agent-proposed rescore beyond bound
+rejected with reason logged) + AC-3 (privileged-implication rescore routes to approval queue, reusing the
+ITER-0001 escalation lane) proven in `modules/incus-dispatcher/temporal/authority.go`, evidence SCENARIO-0082.
+**AC-1 (live human rescore moves an item to any bucket via the deployed Temporal rescore path) → ITER-0007b.**

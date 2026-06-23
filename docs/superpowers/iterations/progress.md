@@ -23,6 +23,18 @@ T8: SCENARIO-0087 logic evidence (operator 7-day workflow: human rescores, agent
 - Deferred STORY-0035/0036/0037/0038/0039 (provider routing, budget guardrails, thread aging, multi-repo) to ITER-0008 (not time-plane; STORY-0035 Run fields must co-define with STORY-0011/0015)
 - Boxing-in: no Run struct, single-writer is process-level + documented orthogonal to laneq's non-exclusive leases (ITER-0006 finding)
 
-**Last event:** 2026-06-24 — ITER-0007 implementation complete (all T0-T8 done). Committed ae1aa9d. Post-iteration baseline: 383 -race green, go vet clean. Ready for ITER-0007b (cluster) or ITER-0008 (capstone).
+**ITER-0007 wrap-up bookkeeping COMPLETE (2026-06-23):** the implementation commit (ae1aa9d) left story
+markers/roadmap/scenarios/iteration-log untouched; now reconciled. Story ACs marked across EPIC-001/005/008/010
+(STORY-0040/0042/0045 done:ITER-0007 full; STORY-0064 fully CLOSED → EPIC-010 1/1; STORY-0041/0043/0044/0046/0047
++ split-ins 0001/0002/0055/0058/0061 partial — CI-logic done, live ACs → ITER-0007b). EPIC-005 counter 0/13→3/13.
+5 scenarios (0078/0057/0082/0081/0087) given runnable execution commands in behavior-scenarios.md + behavior-corpus.md
+(all green under -race). `TODO(ITER-0007)` re-tagged → `TODO(ITER-0007b)` (laneq Stats() observability, live-cluster,
+out of CI-logic scope) — step-9 gate clear. roadmap.md ITER-0007 → done. iteration-log.md ITER-0007 entry appended.
+Validators: `validate_iteration_log.py` OK, `check_citations.py` OK (78/78).
 
-**On resume:** ITER-0007 (CI-logic slice) is locked. Baseline is clean (383 -race green, JOURNEY sentinels green, citation check OK). Next: either ITER-0007b (LIVE Temporal + Nix+systemd deployment on ndn-desktop) or ITER-0008 (provider/budget/thread-aging/multi-repo coordination layer).
+**Last event:** 2026-06-23 — ITER-0007 (CI-logic slice) fully wrapped: implementation (ae1aa9d, 383 -race green)
++ full iteration bookkeeping (this pass). go vet clean, all sentinels green, no remaining TODO(ITER-0007).
+
+**On resume:** ITER-0007 is DONE and bookkept. Next: run `auditing-progress` (audit this iteration's evidence
+tiers), then proceed to ITER-0007b (LIVE Temporal + Nix+systemd on ndn-desktop) or ITER-0008 (provider/budget/
+thread-aging/multi-repo capstone).

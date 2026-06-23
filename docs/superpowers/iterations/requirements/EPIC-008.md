@@ -25,7 +25,10 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:188-208`
 
-**Status:** done:ITER-0001 (D4 loop + ladder AC-1..6; AC-7 Temporal resurface→ITER-0007)
+**Status:** done:ITER-0001 (D4 loop + ladder AC-1..6; AC-7 decision-log done ITER-0001, Temporal-resurface
+logic done:ITER-0007 [urgency-reprojection of stale escalations, `temporal/escalate.go`
+`ReprojectOnEscalation`, fake-clock evidence SCENARIO-0087 logic], live re-raise → ITER-0007b, operator-acts
+journey → ITER-0008)
 
 ## STORY-0056
 
@@ -83,7 +86,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:322-324`
 
-**Status:** partial:ITER-0000+0001+0004 (AC-22 done ITER-0000, AC-23 synchronous ladder done ITER-0001, **AC-25 done:ITER-0004** — daemon emits a fresh handoff bundle on each autonomous requeue, evidence SCENARIO-0054 daemon seam); AC-24 Temporal→ITER-0007
+**Status:** partial:ITER-0000+0001+0004 (AC-22 done ITER-0000, AC-23 synchronous ladder done ITER-0001, **AC-25 done:ITER-0004** — daemon emits a fresh handoff bundle on each autonomous requeue, evidence SCENARIO-0054 daemon seam); **AC-24 retry-backoff projection logic done:ITER-0007** (`temporal/escalate.go` importance-dependent escalation windows + reproject, fake-clock); live durable re-push of retries with backoff in deployed Temporal → ITER-0007b
 
 ## STORY-0059
 
@@ -141,4 +144,7 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:413-415`
 
-**Status:** partial:ITER-0001 (AC-1 autonomous climb + AC-2 non-blocking human lane done); AC-3 urgency resurface→ITER-0007
+**Status:** partial:ITER-0001+ITER-0007 (AC-1 autonomous climb + AC-2 non-blocking human lane done); AC-3
+urgency-reprojection logic done:ITER-0007 (stale escalations resurface in priority order as urgency rises —
+`temporal/escalate.go`, fake-clock evidence SCENARIO-0087 logic); live Temporal re-raise → ITER-0007b;
+operator-acts-on-resurfaced journey → ITER-0008

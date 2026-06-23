@@ -614,3 +614,54 @@ the deployed service over a real network hop (SCENARIO-0092), and proved the sub
 autonomously with the Mac uninvolved via a systemd-run detached drain (SCENARIO-0012 PASS-NARROW). The
 full sustained operator/fleet Mac-off (dispatcher daemon + event loop) is deferred to ITER-0008
 STORY-0074. ITER-0007 (Temporal) builds on the deployed service via the documented gRPC-only write seam.
+
+## ITER-0007 — Eisenhower prioritization logic (CI-provable slice)
+
+**Completed:** 2026-06-23
+
+**Stories delivered:** STORY-0040 (done:ITER-0007 — importance/urgency orthogonality + Q1/Q2/Q3/Q4 quadrant
+mapping), STORY-0042 (done:ITER-0007 — human-unrestricted / agent-bounded rescore validation), STORY-0045
+(done:ITER-0007 — deterministic temporal projection). PARTIAL (CI-logic ACs closed here, live ACs → ITER-0007b):
+STORY-0041 (AC-3 highest-importance-eligible re-asserted; AC-1/AC-2 live sole-writer → 0007b), STORY-0043
+(AC-1/AC-3 urgency-math + Q4-never-ages; AC-2 wall-clock aging → 0007b), STORY-0044 (AC-3 sole-caller logic vs
+mock laneq; live gRPC → 0007b), STORY-0046 (AC-1 single-writer guard; AC-2 live concurrent reads → 0007b),
+STORY-0047 (AC-2/AC-3 agent-bounded rejection + privileged→approval; AC-1 live human-rescore → 0007b). Split-in
+stories: STORY-0001 (AC-3 single-writer design done; AC-1/AC-2 → 0007b), STORY-0002 (AC-2 deferral-holder
+contract done [mock]; live durable-hold → 0007b), STORY-0055 (AC-7 Temporal-resurface logic done; live re-raise
+→ 0007b, operator journey → 0008), STORY-0058 (AC-24 retry-backoff projection logic done [fake clock]; live
+durable re-push → 0007b), STORY-0061 (AC-3 urgency-reprojection logic done; live re-raise → 0007b, operator →
+0008), **STORY-0064 fully CLOSED** (AC-15/AC-16 done:ITER-0007 — importance/deadline as projection inputs +
+agents-propose-vs-humans-set authority; EPIC-010 now 1/1).
+
+**Tasks executed:** T0 — re-anchored stale EPIC-005 design-doc citations (artifact debt from the
+`2026-06-18-fleet-orchestration-design.md` restructure). T1 — Eisenhower projection core
+(`temporal/projection.go`: `ComputeUrgency`/`ComputeQuadrant`/`ComputeEffectivePriority`, `ImportanceStringToTier`
+bridge; 18 unit tests). T2 — SCENARIO-0078 evidence (quadrant transitions, deadline aging, Q4 stability over an
+8-day fake-clock timeline). T3 — rescore authority (`temporal/authority.go`: `IsHumanUnrestricted`/`IsAgentBounded`,
+agents bounded to 1-tier jumps, no self-promote to Critical). T4 — SCENARIO-0057/0082 evidence (human override,
+agent bounds, approval escalation, drifting-agent prevention). T5 — single-writer guard
+(`temporal/writer.go`: `GuardedDirective` with `sync.RWMutex` + private fields + role-checked setters). T6 —
+SCENARIO-0081 evidence (sole-writer under concurrent reads + temporal writer). T7 — escalation/retry reprojection
+(`temporal/escalate.go`: `EscalationThreshold`/`IsEscalationTriggered`/`ReprojectOnEscalation`, importance-dependent
+7/5/3/1-day windows). T8 — SCENARIO-0087 logic evidence (7-day operator workflow). Wrap-up: marked story ACs across
+EPIC-001/005/008/010; wired 5 scenario execution commands; re-tagged the laneq `Len()/Stats()` `TODO(ITER-0007)`
+→ `TODO(ITER-0007b)` (live-cluster observability, out of CI-logic scope).
+
+**Scenarios:** SCENARIO-0078 (`go test -race -run TestScenario0078 ./temporal/`, done:ITER-0007, fake-clock),
+SCENARIO-0057 (`...TestScenario0057...`, done:ITER-0007, mock-Temporal), SCENARIO-0082 (`...TestScenario0082...`,
+authority routing done; live human-rescore → 0007b), SCENARIO-0081 (`...TestScenario0081|TestMultipleDirectivesIndependent...`,
+single-writer guard done; live concurrent-read AC-2 → 0007b), SCENARIO-0087 (`...TestOperatorScenario0087...`,
+urgency-reprojection logic done; live re-raise → 0007b, operator journey → 0008). All five green under -race.
+
+**Sentinel corpus results:** baseline 2026-06-23 clean (283 -race green, JOURNEY-0001 + JOURNEY-0003 AC-1 green,
+citation check 78/78). Post-iteration: `go test -race ./...` **383 green** (+100 temporal; no regression in the
+prior 283), `go vet ./...` clean, zero `TODO(ITER-0007)` markers remaining (re-tagged → 0007b), all 5 new scenario
+commands PASS.
+
+**Summary:** Locked the Eisenhower projection + rescore-authority + single-writer + escalation-reprojection logic
+as pure, deterministic Go (`importance × urgency → effective-priority + not-before`; bounded vs unrestricted
+rescore; the guard that only the Temporal role writes scheduling fields; fake-clock urgency aging) so ITER-0007b's
+live Temporal grafts deployment + wiring onto proven algorithms without re-litigating them. No `Run` struct
+introduced (defers STORY-0035 colliding-Run risk to ITER-0008); single-writer documented process-level and
+orthogonal to laneq's non-exclusive leases. STORY-0064 fully closed; all live/wall-clock/e2e ACs explicitly
+carried to ITER-0007b (cluster Temporal) and ITER-0008 (operator UX).
