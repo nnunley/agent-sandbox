@@ -116,3 +116,21 @@ Build command (reproducible):
     --no-sandbox --accept-flake-config
 
 Next: Commit and close ITER-0006b T0 gate.
+
+--- ADDENDUM (2026-06-23, PAR confirm) ---
+Correction: the real-RPC proof uses `checkPhase` (doCheck=true), NOT installCheckPhase
+(earlier serialize-only attempt was removed). Verified directly via `nix log` of the
+build (store path /nix/store/aj9j22qgjbvrdxavzyqy2vw6dm7sndx0-laneq-grpc-0.4.0):
+
+  checkPhase: pytest -xvs tests/test_grpc_handlers.py tests/test_grpc_status_codes.py
+  (run AFTER postPatch regenerates stubs with grpcio-tools 1.76)
+  ...
+  tests/test_grpc_status_codes.py::...::test_mapper_maps_base_queue_error_to_invalid_argument PASSED
+  ============================= 72 passed in 24.04s ==============================
+  Running phase: pythonImportsCheckPhase
+
+These are REAL grpc.aio handler RPCs (Push/Take/Peek/Park/Defer/SetStatus + NotFound/
+FailedPrecondition/InvalidArgument status-code mapping) exercised against the regenerated
+1.76 stubs under the grpcio 1.76 runtime — proving the packaging (stub-regen + version)
+does not break the augmented server. Build requires `--no-sandbox` ONLY due to the
+unprivileged Incus LXC (loopback + temp SQLite work under a normal Nix sandbox).

@@ -61,8 +61,15 @@ python3Packages.buildPythonApplication {
   # Run the fork's actual gRPC handler tests against the regenerated stubs.
   # This proves the regenerated stubs (grpcio-tools 1.76) are compatible with
   # the server's RPC handlers by running REAL handler logic, not just protobuf
-  # serialization. Tests exercise Push, Take, Peek, and error cases over the
-  # in-process mock gRPC server.
+  # serialization. Tests exercise Push, Take, Peek, and error cases against the
+  # real LaneqServicer (grpc.aio). Verified: 72 passed in ~24s.
+  #
+  # NOTE on building: on the cluster's UNPRIVILEGED Incus LXC, `nix build` must
+  # pass `--no-sandbox` (the LXC cannot set up Nix's sandbox mounts — established
+  # cluster norm, see CLAUDE.md). This is an LXC limitation, NOT a package one:
+  # the checkPhase uses only in-process grpc.aio (127.0.0.1 loopback, available
+  # under a normal Nix sandbox) + a temp SQLite DB, so the package builds under
+  # the default sandbox on a normal NixOS host.
   doCheck = true;
   checkPhase = ''
     echo "Running gRPC handler tests against regenerated stubs..."
