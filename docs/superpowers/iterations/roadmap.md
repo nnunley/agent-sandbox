@@ -709,6 +709,11 @@ tests renamed to semantic names (directive_contract/laneq_fake_lifecycle/laneq_r
 direct verification caught + corrected 3 T0 weakenings, T1 nc-vs-gRPC/mount-vs-data/hardcoded-paths,
 T2 over-wire flake, and T3's overclaimed "Mac-off" (and a FALSE "can't detach" wall). **Full sustained
 operator/fleet Mac-off → ITER-0008 STORY-0074.**
+**AUDIT (PAR 2-auditor 3-tier, 2026-06-23): CLEAN** — both auditors ran the cluster scenarios live;
+Tier 1 STORY-0010 PASS (AC-1 Mac-off genuinely detached via systemd-run, AC-4 done, AC-2/3/5 not-chosen),
+SCENARIO-0092/0012 evidence adequate; Tier 2 renamed semantic tests + queue suite PASS; Tier 3 sentinels
+green; no hardcoded `/nix/store` paths; zero `TODO(ITER-0006b)`; divergences (reap return-count, lease
+non-exclusivity) documented honestly. Iteration confirmed done.
 **Impacted scenarios:** SCENARIO-0092 (over-the-wire vs deployed Nix service, must-pass, PASS); SCENARIO-0012 (Mac-off acceptance, cluster-driven systemd-run detached drain, PASS-NARROW)
 **Look-ahead check:** depends on ITER-0006 binding (real-wire proven); the must-pass core (T0–T2)
 ships real STORY-0010 substance regardless; ITER-0007 (Temporal) builds on the deployed service via the
