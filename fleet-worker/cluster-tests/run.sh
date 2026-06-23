@@ -197,7 +197,7 @@ case "$SCEN" in
     RESULTS_LOG="${HERE}/results/laneq-wire-$(date +%Y-%m-%d).log"
     cd "${HERE}/../../modules/incus-dispatcher" || exit 1
     LANEQ_GRPC_REAL=1 LANEQ_GRPC_ADDR=192.168.86.49:50551 \
-      go test ./queue -run TestScenario0092 -count=1 \
+      go test ./queue -run TestLaneqRealWireLifecycle -count=1 \
       >"${RESULTS_LOG}" 2>&1
     test_rc=$?
     cd - >/dev/null || true

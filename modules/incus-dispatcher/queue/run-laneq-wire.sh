@@ -77,7 +77,7 @@ if [ $READY -ne 1 ]; then
 fi
 
 # Run the test
-echo "Running TestScenario0092 against real laneq server..."
+echo "Running TestLaneqRealWireLifecycle against real laneq server..."
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$TEST_DIR"
 
@@ -85,12 +85,12 @@ export LANEQ_GRPC_REAL=1
 export LANEQ_GRPC_ADDR="${ADDR}"
 
 TEST_OUTPUT=$(mktemp)
-if go test -run TestScenario0092 -v -timeout 5m >"$TEST_OUTPUT" 2>&1; then
-  echo "PASS: TestScenario0092 passed"
+if go test -run TestLaneqRealWireLifecycle -v -timeout 5m >"$TEST_OUTPUT" 2>&1; then
+  echo "PASS: TestLaneqRealWireLifecycle passed"
   cat "$TEST_OUTPUT"
   TEST_RESULT=0
 else
-  echo "FAIL: TestScenario0092 failed"
+  echo "FAIL: TestLaneqRealWireLifecycle failed"
   cat "$TEST_OUTPUT"
   TEST_RESULT=1
 fi

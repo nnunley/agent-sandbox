@@ -55,7 +55,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0042 | D6: Decision log is append-only JSONL format | unit | iteration | `cd modules/incus-dispatcher && go test . -run "DecisionLog|TestRunOnce_PassWritesReapThenDone"` | STORY-0056 |
 | SCENARIO-0043 | D6: Decision log entries contain directive, grade, rule, action, times | integration | iteration | `cd modules/incus-dispatcher && go test . -run DecisionLog` | STORY-0056 |
 | SCENARIO-0044 | D6: Writer interface is swappable (JSONL → tamper-evident without rear | unit | iteration | `cd modules/incus-dispatcher && go test . -run DecisionLog` | STORY-0056 |
-| SCENARIO-0045 | Valid directive with all required fields accepted | unit | iteration | `cd modules/incus-dispatcher && go test ./queue/... -run TestScenario0045` | STORY-0064 |
+| SCENARIO-0045 | Valid directive with all required fields accepted | unit | iteration | `cd modules/incus-dispatcher && go test ./queue/... -run TestDirectiveContract` | STORY-0064 |
 | SCENARIO-0046 | Directive with access_cmd field rejected as malformed | unit | iteration | TBD | STORY-0064 |
 | SCENARIO-0047 | Directive with root field rejected as malformed | unit | iteration | TBD | STORY-0064 |
 | SCENARIO-0048 | Directive missing required field rejected | unit | iteration | TBD | STORY-0064 |
@@ -88,7 +88,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0075 | Graceful container teardown: stop-timeout routes to reaper | process-level | iteration | TBD | STORY-0060 |
 | SCENARIO-0076 | Container backend interface: passes existing contract tests | integration | iteration | `cd modules/incus-dispatcher && go test . -run 'TestGenerateContainerName\|TestTaskValidation\|TestIsLocalPath\|TestRemoteFileRead\|TestContainerNameUniqueness\|TestRunTaskInContainer\|TestDeliverSourceViaClone\|TestRoundTripWithOutputArtifacts'` (integration cases self-skip when incus unreachable) | STORY-0020 |
 | SCENARIO-0077 | Context handoff round-trip: validate spike unblocks feature | integration | cluster-gated (manual) | `bash fleet-worker/spikes/leanctx-handoff-spike.sh` (PASS 2026-06-21: nonce round-trips across two claude -p invocations, no data loss) | STORY-0034 |
-| SCENARIO-0091 | Go gRPC adapter drives laneq through the full directive lifecycle | integration | iteration | `cd modules/incus-dispatcher && go test ./queue/... -run TestScenario0091` | STORY-0002, STORY-0044, STORY-0010 |
+| SCENARIO-0091 | Go gRPC adapter drives laneq through the full directive lifecycle | integration | iteration | `cd modules/incus-dispatcher && go test ./queue/... -run TestLaneqFakeLifecycle` | STORY-0002, STORY-0044, STORY-0010 |
 | SCENARIO-0078 | Prioritization: deadline approaching promotes Q2 to Q1 | unit | iteration | TBD | STORY-0045 |
 | SCENARIO-0079 | Prioritization: no-deadline low-importance stays Q4 (idle-only) | unit | iteration | TBD | STORY-0045 |
 | SCENARIO-0080 | Laneq next: returns highest-importance eligible item only | unit | iteration | TBD | STORY-0045 |

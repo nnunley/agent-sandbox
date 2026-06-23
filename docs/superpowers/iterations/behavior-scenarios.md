@@ -1706,7 +1706,7 @@ gating evidence.
 - Origin schema parsing proven; daemon-sets-it enforcement proven by D1
 
 **Automation status:** automated — PASS (ITER-0006 T4)
-**Execution command:** `cd modules/incus-dispatcher && go test ./queue/... -run TestScenario0045`
+**Execution command:** `cd modules/incus-dispatcher && go test ./queue/... -run TestDirectiveContract`
 
 **Notes on deferred ACs:**
 - AC-15 (temporal projection of effective priority) deferred to ITER-0007
@@ -1715,7 +1715,7 @@ gating evidence.
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:282-301`
-- `modules/incus-dispatcher/queue/scenario0045_test.go` — comprehensive AC-mapped unit test
+- `modules/incus-dispatcher/queue/directive_contract_test.go` — comprehensive AC-mapped unit test
 - `modules/incus-dispatcher/queue/parse.go` — strict ingestion boundary (ParseDirective)
 
 ## SCENARIO-0046 — Directive with access_cmd field rejected as malformed
@@ -3233,7 +3233,7 @@ the same contract holds over the REAL laneq wire (supporting proof, not the CI g
 **Automation status:** automated — PASS (ITER-0006 T3, CI) — CI-native via the in-process fake gRPC server. NOTE:
 SCENARIO-0091 proves the **contract** against a faithful fake; wire-compat against the real Python
 laneq is SCENARIO-0092 (also ITER-0006, via uvx).
-**Execution command:** `cd modules/incus-dispatcher && go test ./queue/... -run TestScenario0091`
+**Execution command:** `cd modules/incus-dispatcher && go test ./queue/... -run TestLaneqFakeLifecycle`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
@@ -3274,9 +3274,9 @@ the `Defer`/`Reprioritize` seam.
 
 **Automation status:** automated (ITER-0006 T6, real-wire via uvx @2d1b59e — PASS).
 Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
-**Execution command:** `cd modules/incus-dispatcher/queue && bash run-laneq-wire.sh` OR `LANEQ_GRPC_REAL=1 LANEQ_GRPC_ADDR=localhost:50051 go test ./... -run TestScenario0092` (requires `uvx` and a reachable real laneq gRPC server at the address).
-**ITER-0006b T2 (over-the-wire vs Nix service):** same `TestScenario0092`, but `LANEQ_GRPC_ADDR` points at the deployed Nix-packaged systemd laneq on `ndn-desktop:<port>` (a real network port from a cluster container), NOT a local uvx server — proving packaging + systemd lifecycle + host-volume persistence + network wire, distinct from the uvx-on-Mac run. Wired as `fleet-worker/cluster-tests/run.sh laneq-wire` in T2.
-**Test harness:** `modules/incus-dispatcher/queue/scenario0092_test.go` (TestScenario0092 with 10 subtests covering priority/fifo/touch+reap+attempts-increment/notbefore/park-excluded-from-reap/lanes/empty/leaselost-stale+missing)
+**Execution command:** `cd modules/incus-dispatcher/queue && bash run-laneq-wire.sh` OR `LANEQ_GRPC_REAL=1 LANEQ_GRPC_ADDR=localhost:50051 go test ./... -run TestLaneqRealWireLifecycle` (requires `uvx` and a reachable real laneq gRPC server at the address).
+**ITER-0006b T2 (over-the-wire vs Nix service):** same `TestLaneqRealWireLifecycle`, but `LANEQ_GRPC_ADDR` points at the deployed Nix-packaged systemd laneq on `ndn-desktop:<port>` (a real network port from a cluster container), NOT a local uvx server — proving packaging + systemd lifecycle + host-volume persistence + network wire, distinct from the uvx-on-Mac run. Wired as `fleet-worker/cluster-tests/run.sh laneq-wire` in T2.
+**Test harness:** `modules/incus-dispatcher/queue/laneq_realwire_lifecycle_test.go` (TestLaneqRealWireLifecycle with 10 subtests covering priority/fifo/touch+reap+attempts-increment/notbefore/park-excluded-from-reap/lanes/empty/leaselost-stale+missing)
 **Runner:** `modules/incus-dispatcher/queue/run-laneq-wire.sh` (starts uvx server with 30s timeout, runs test, tears down via trap; exit 0 on PASS, 1 on FAIL, 2 on SKIP)
 
 **Sources:**
