@@ -45,6 +45,11 @@
       # let-go needs Go 1.26; fall back to default go if the pin is absent.
       goPkg = pkgs.go_1_26 or pkgs.go;
 
+      # --- laneq gRPC package (ITER-0006b T0) -----------------------------------------------
+      # Python gRPC server for laneq queue operations (nnunley/laneq@grpc-binding).
+      # In-build proto stub regen ensures version compatibility with nixpkgs grpcio.
+      laneqGrpc = pkgs.callPackage ./laneq.nix {};
+
       # --- Curated skills bundle (STORY-0077 / STORY-0078) -----------------------------
       # The agent-skills-nix library (discoverCatalog / selectSkills / mkBundle).
       skillsLib = agent-skills-nix.lib.agent-skills;
@@ -89,9 +94,11 @@
       '';
     in {
       # STORY-0078 standalone proof (symlink bundle) + STORY-0077 copy-tree for the golden.
+      # ITER-0006b T0: laneq-grpc package (Python gRPC server).
       packages.${system} = {
         agent-skills-bundle = agentSkillsBundle;
         agent-skills-bundle-etc = agentSkillsBundleEtc;
+        laneq-grpc = laneqGrpc;
       };
 
       devShells.${system}.default = pkgs.mkShell {
