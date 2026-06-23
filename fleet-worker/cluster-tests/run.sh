@@ -4,6 +4,7 @@
 #   bash fleet-worker/cluster-tests/run.sh <scenario>
 #   scenarios: microvm-boot(0029) durable-vm(0004) nspawn-fast(0005)
 #              hardtier(0006) trust-boundary(0007) golden-launch(0003) teardown(0008ac2)
+#              laneq-macoff(0012) — ITER-0006b T3: cluster-driven Mac-off acceptance
 #              laneq-wire(0092) — ITER-0006b T2: LaneqQueue adapter wire-compatibility proof
 #   ITER-0005c image track: golden-full(0065) cleanroom(0066) provider-routing(0067)
 #              skills-path(0068) skills-discovery(0069)
@@ -313,6 +314,22 @@ case "$SCEN" in
     n="$(incus exec "${REMOTE}:${BH}" -- bash -lc "find -L '$store' -name SKILL.md | wc -l" 2>/dev/null | tr -d '[:space:]')"
     echo "$SCEN: bundle ${store} has ${n} SKILL.md"
     assert_true "$([ "$n" = "${GATE_SKILLS_COUNT}" ] && echo 1 || echo 0)" "bundle builds with all ${GATE_SKILLS_COUNT} curated skills"; exit $? ;;
+
+  laneq-macoff|0012)   # ITER-0006b T3 / SCENARIO-0012: cluster-driven Mac-off acceptance.
+                       # Proves the deployed laneq service coordinates autonomously without Mac involvement.
+    # Delegate to the laneq-macoff helper script.
+    RESULTS_LOG="${HERE}/results/laneq-macoff-$(date +%Y-%m-%d).log"
+    bash "${HERE}/laneq-macoff-test.sh" "$RESULTS_LOG" 2>&1 | tee -a "$RESULTS_LOG"
+    test_rc=$?
+    if [ $test_rc -eq 0 ]; then
+      echo "PASS ${SCEN}: Cluster-driven Mac-off proof (log: $RESULTS_LOG)"
+      exit 0
+    else
+      echo "FAIL ${SCEN}: Mac-off test failed (see $RESULTS_LOG)"
+      tail -20 "$RESULTS_LOG" >&2
+      exit 1
+    fi
+    ;;
 
   *) echo "unknown scenario: $SCEN"; exit 64 ;;
 esac

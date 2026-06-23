@@ -6,8 +6,9 @@ import (
 	"time"
 )
 
-// TestScenario0045 proves STORY-0064 AC-1..AC-14: the directive contract schema.
-// This test demonstrates that ParseDirective enforces the strict ingestion boundary:
+// Proves SCENARIO-0045: directive contract schema validation.
+//
+// TestDirectiveContract validates that ParseDirective enforces the strict ingestion boundary:
 // required fields parse; optional fields parse when present; access_cmd and root are
 // rejected; max_attempts is accepted (deprecated but wire-present per AC-12).
 //
@@ -17,7 +18,7 @@ import (
 // AC-2 validation half (template-vs-allowlist + origin authority) is already proven
 // by ITER-0002 D1 ValidateTemplate (policy.go + policy_test.go/scenario_d1_test.go);
 // this test proves only the schema-level half (field presence + parsing).
-func TestScenario0045(t *testing.T) {
+func TestDirectiveContract(t *testing.T) {
 	// AC-1: intent field present + parseable
 	t.Run("AC-1_intent_present_parseable", func(t *testing.T) {
 		d := Directive{

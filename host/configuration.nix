@@ -5,6 +5,7 @@
   imports = [
     ./networking.nix
     ../modules/llm-proxy.nix
+    ../fleet-worker/laneq-service.nix
   ];
 
   # Basic system

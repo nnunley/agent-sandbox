@@ -44,7 +44,9 @@ func setupTestLaneqServer(t *testing.T, clock *fakeClock) (laneqpb.LaneqClient, 
 	return laneqpb.NewLaneqClient(conn), fakeServer
 }
 
-// TestScenario0091 validates the full queue directive lifecycle through the LaneqQueue adapter
+// Proves SCENARIO-0091: LaneqQueue lifecycle with in-process fake server.
+//
+// TestLaneqFakeLifecycle validates the full queue directive lifecycle through the LaneqQueue adapter
 // against a faithful in-process fake laneq gRPC server.
 //
 // Covers:
@@ -61,7 +63,7 @@ func setupTestLaneqServer(t *testing.T, clock *fakeClock) (laneqpb.LaneqClient, 
 // - Lease expiry and Reap
 // - Multi-lane isolation
 // - Threading (parent+child, thread_status)
-func TestScenario0091(t *testing.T) {
+func TestLaneqFakeLifecycle(t *testing.T) {
 
 	// Test 1: Priority ordering (P0 < P1 < P2).
 	t.Run("PriorityOrdering", func(t *testing.T) {

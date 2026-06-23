@@ -13,7 +13,9 @@ import (
 	"github.com/agent-sandbox/incus-dispatcher/queue/laneqpb"
 )
 
-// TestScenario0092 validates the full queue directive lifecycle through the LaneqQueue adapter
+// Proves SCENARIO-0092: LaneqQueue lifecycle with real Python laneq server.
+//
+// TestLaneqRealWireLifecycle validates the full queue directive lifecycle through the LaneqQueue adapter
 // against a REAL Python laneq gRPC server over the wire (not the in-process fake).
 //
 // This test is GATED: if LANEQ_GRPC_REAL != "1", it is skipped.
@@ -35,7 +37,7 @@ import (
 // - Lease expiry and Reap
 // - Multi-lane isolation
 // - Threading (parent+child, thread_status)
-func TestScenario0092(t *testing.T) {
+func TestLaneqRealWireLifecycle(t *testing.T) {
 	// Gate: only run if LANEQ_GRPC_REAL=1
 	if os.Getenv("LANEQ_GRPC_REAL") != "1" {
 		t.Skip("real-wire SCENARIO-0092; set LANEQ_GRPC_REAL=1 and run a laneq gRPC server at " + os.Getenv("LANEQ_GRPC_ADDR"))
