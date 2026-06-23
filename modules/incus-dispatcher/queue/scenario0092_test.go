@@ -252,6 +252,7 @@ func TestScenario0092(t *testing.T) {
 		if err != nil {
 			t.Fatalf("push to-park: %v", err)
 		}
+		time.Sleep(100 * time.Millisecond)  // Ensure directive is persisted before claim
 		d, lease, err := q.Claim("w", 1*time.Second)
 		if err != nil {
 			t.Fatalf("claim to-park: %v", err)
