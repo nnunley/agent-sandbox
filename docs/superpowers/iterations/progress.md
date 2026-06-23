@@ -1,37 +1,44 @@
 # Progress
 
-**Phase:** ITER-0005b DONE + **AUDIT CLEAN** (PAR, 2026-06-22, both auditors CLEAN, high agreement).
-**Iterations:** 7/9 done (ITER-0000/0001/0002/0003/0004/0005/0005b). **Next eligible: ITER-0005c**
-(FULL golden / provider routing / curated skills — gated only on the STORY-0025 benchmark, CLEARED;
-runs on `agent-host`). ITER-0006 BLOCKED (Patrick sync); ITER-0007/0008 pending.
+**Phase:** ITER-0006b DONE + **AUDIT CLEAN** (PAR, 2026-06-23, both auditors CLEAN). laneq productionized
+as a cluster-resident Nix service; Go adapter wire-proven over the network; Mac-off PASS-NARROW.
+**Iterations:** 9/11 done (ITER-0000/0001/0002/0003/0004/0005/0005b/0005c/0006/0006b). **Next pending:
+ITER-0007** (Time plane & Eisenhower prioritization — Temporal). ITER-0008 pending (capstone).
+ITER-0006 Patrick-block CLEARED (substrate = laneq, deployed).
 
-**Sentinel corpus:** all 7 cluster scenarios PASS (golden-launch, durable-vm, nspawn-fast, hardtier,
-trust-boundary, microvm-boot, teardown); harness lib + golden-image + single-source structural tests
-PASS; `go vet` clean; `go test -race ./...` green (incl. live e2e); JOURNEY-0001 green; zero
-`TODO(ITER-0005b)` markers.
+**Sentinel corpus (baseline 2026-06-23, pre-ITER-0007):** `go vet` clean; `go test -race ./...` **283
+green** (incus-dispatcher + queue + llm-proxy); JOURNEY-0001 + JOURNEY-0003 AC-1 sentinels green;
+citation check OK (78/78 cited stories exist). Tree clean.
 
-**ITER-0005b delivered (commits):**
-- T1 fast-tier nspawn substrate + probes (48c7035); T2 NspawnRunner@TierFast (cf7282d);
-  T4 FirecrackerRunner@TierHard + serve factory wiring + graft markers removed (7467bca);
-  T5 golden.nix + fleet-golden image + golden-launch probe (f9e1f65);
-  T6 trust-boundary probe + usable disposable-unit env / isolation correction (b1b22d5).
-- Stories done: STORY-0007/0021/0022/0008/0024/0005 (EPIC-002 5/5; EPIC-001 +0005/0008).
+**ITER-0006b delivered (commits, latest 11fd710):** T0 laneq Nix package (`fleet-worker/laneq.nix`,
+in-build proto stub regen, fork checkPhase 72 grpc tests); T1 systemd `laneq-grpc` on
+ndn-desktop:nix-server:9999 + host-volume SQLite `/srv/laneq` + Nix-wired `laneq-client`; T2
+SCENARIO-0092 over the wire (5/5 deterministic); T3 SCENARIO-0012 Mac-off PASS-NARROW (systemd-run
+detached drain, Mac uninvolved). Real-laneq divergences logged for ITER-0008 (reap return-count;
+leases NOT consumer-exclusive).
 
-**Measured (agent-host, 2026-06-22):** fast tier nspawn 64ms mean / 72ms p99 (gate ≤1000); hard tier
-per-task Firecracker 737ms mean / 909ms p99 (gate ≤2500); durable-VM in-guest unit 16ms mean / 19ms p99;
-teardown 111ms unit-kill (incus-free); golden copy launch ~2.9–3.3s CoW (no live build); trust boundary
-guest kernel 6.12.78 ≠ host 6.8.0-106-generic.
+**ITER-0007 SPLIT (PAR scope review 2026-06-23 — both reviewers REVISE, high agreement, applied):**
+the 13-story Temporal iteration was split, mirroring 0005→0005/b/c and 0006→0006/b:
+- **ITER-0007 (next, CI-provable Eisenhower LOGIC slice, pure Go + fake clock):** STORY-0040 (quadrants),
+  STORY-0045 (projection determinism), STORY-0043 AC-1/AC-3 (urgency math + Q4-idle), STORY-0042/0047
+  (rescore authority validation), STORY-0046 AC-1 (single-writer guard), STORY-0041 AC-3 (laneq.next,
+  done ITER-0006), STORY-0001 AC-3 (single-writer design), + logic portions of split-ins (STORY-0064
+  AC-15/16, 0058 AC-24, 0061 AC-3/0055 AC-7 reprojection, 0002 AC-2, 0044 AC-3 vs mock laneq).
+- **ITER-0007b (cluster, LIVE Temporal):** deploy Temporal on ndn-desktop (Nix+systemd, Task 0 BLOCKING)
+  + STORY-0001 AC-1/AC-2 (durable + restart-survival), STORY-0041 AC-1/AC-2 + 0044 AC-3 (live sole-writer
+  over laneq gRPC), STORY-0043 AC-2 (wall-clock aging), STORY-0046 AC-2, STORY-0047 AC-1, + live split-ins.
+- **Deferred → ITER-0008:** STORY-0035/0036/0037/0038/0039 (provider/budget/thread-aging/multi-repo — NOT
+  time-plane; STORY-0035 Run fields MUST co-define with STORY-0011/0015 Run to avoid the colliding-Run
+  lesson). Operator-experience half of SCENARIO-0087 → ITER-0008.
+- **Boxing-in mitigations applied:** no `Run` struct in ITER-0007 (defer 0035); single-writer is
+  process-level + documented orthogonal to laneq's non-exclusive leases (ITER-0006 finding).
+- **Artifact debt (non-blocking):** EPIC-005 design-doc citations have stale line numbers (doc
+  restructured) — re-anchor in a docs pass during decomposition.
 
-**Substrate decision (evidence-backed):** two-tier — `nspawn --ephemeral` inside the durable Firecracker
-coord VM for trusted lanes; per-task Firecracker for sensitive lanes. Grafted onto ITER-0005's
-`BackendFactory` (Fast→NspawnRunner, Hard→FirecrackerRunner) with no daemon/interface change.
+**Last event:** 2026-06-23 — ITER-0006b confirmed done (audit CLEAN). Bookkeeping reconciled. Ran the
+ITER-0007 pre-iteration scope PAR (2 reviewers → both REVISE); applied the split to roadmap.md
+(ITER-0007 CI-logic + new ITER-0007b cluster + 5 stories → ITER-0008). Citation check OK (78/78).
 
-**Deferred (noted for audit):** STORY-0024 multi-domain provisioning/routing → ITER-0006+; FULL golden /
-skills / provider routing (STORY-0075/0076/0077/0078) → ITER-0005c. ITER-0005's deferred microVM ACs
-(STORY-0004 AC-3, STORY-0017 AC-3/4, STORY-0020 AC-2) substantively proven by this substrate harness.
-
-**Last event:** 2026-06-22 — ITER-0005b complete + PAR audit CLEAN (both auditors, 0 findings).
-ITER-0005c is the next pending iteration.
-
-**On resume:** "continue iterative development" → orchestrator runs `auditing-progress` (PAR, 3-tier) on
-ITER-0005b, then picks ITER-0005c (next pending; ITER-0006 stays Patrick-blocked).
+**On resume:** roadmap split is applied + citation-clean. Next: optional confirming re-review PAR, then
+decompose ITER-0007 (CI-logic slice) into TDD code + evidence tasks and dispatch `implementing-tasks`.
+Baseline already clean (283 -race green, JOURNEY sentinels green).

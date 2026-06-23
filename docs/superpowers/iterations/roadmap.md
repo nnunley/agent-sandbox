@@ -719,31 +719,96 @@ non-exclusivity) documented honestly. Iteration confirmed done.
 ships real STORY-0010 substance regardless; ITER-0007 (Temporal) builds on the deployed service via the
 documented gRPC-only write seam. Full operator/sustained Mac-off → ITER-0008 STORY-0074.
 
-### ITER-0007 — Time plane & Eisenhower prioritization (Temporal)
+### ITER-0007 — Eisenhower prioritization logic (CI-provable slice)
 
-**Stories:** STORY-0001, STORY-0040, STORY-0041, STORY-0042, STORY-0043, STORY-0045, STORY-0046, STORY-0047, STORY-0037, STORY-0035, STORY-0036, STORY-0038, STORY-0039
-**Rationale:** Stand up Temporal as the time plane and single writer; importance×
-urgency projection to effective-priority + not-before; bounded vs unrestricted
-rescore authority; deadline-driven aging; provider/budget/multi-repo scheduling
-policy. Needs laneq's `not-before` (ITER-0006). **Also lands the Temporal-coupled escalation
-ACs split in from ITER-0001 (per PAR): STORY-0055 AC-7 (re-surface stale human-pending escalations),
-STORY-0058 AC-24 (retry re-pushed by Temporal with backoff), STORY-0061 AC-3 (urgency-driven
-resurfacing in priority order; carries SCENARIO-0087).** These graft onto ITER-0001's escalations
-lane + decision log without reworking them — the lane was built as a plain durable FIFO precisely so
-Temporal aging layers on top. **Also lands the substrate ACs deferred from ITER-0006 (PAR 2026-06-22):
-STORY-0044 AC-3 (Temporal sole writer of not_before — becomes the sole caller of the laneq gRPC
-`Defer`/`Reprioritize` seam built in ITER-0006), STORY-0002 AC-2 (deferred/future work lives in
-Temporal until eligible, not in laneq), STORY-0064 AC-15/AC-16 (importance/deadline are Temporal
-projection inputs; agents may only PROPOSE, humans set freely — cross-surface enforcement). These
-graft onto ITER-0006's gRPC seam without rework.**
+**SCOPE DECISION (2026-06-23, PAR scope review — 2 adversarial reviewers → both REVISE, high
+agreement):** the original ITER-0007 (13 stories + 5 split-in ACs, Temporal standup) was split,
+mirroring ITER-0005→0005/0005b/0005c and ITER-0006→0006/0006b. Temporal is a heavyweight NEW external
+dependency (durable workflow engine + server + worker fleet, cluster-resident on ndn-desktop) — its
+deployment + live sole-writer wiring + wall-clock aging + restart-survival are inherently cluster e2e,
+no Mac CI seam. This iteration is the **CI-provable projection/authority logic slice** (pure Go,
+unit/integration with a fake/mock Temporal + the existing laneq adapter). The live-Temporal cluster
+work moves to **ITER-0007b**. Five orthogonal stories (provider/budget/thread-aging/multi-repo) move to
+**ITER-0008**.
+
+**Stories (CI-provable ACs only):** STORY-0040 (full — quadrant mapping), STORY-0045 (full — projection
+determinism), STORY-0043 AC-1/AC-3 (urgency = monotonic f(deadline,now); Q4 never ages — pure math),
+STORY-0042 (full — human-unrestricted/agent-bounded rescore validation), STORY-0047 AC-2/AC-3
+(agent-bounded-rescore rejection logic + privileged→approval routing; AC-3 reuses the ITER-0001
+escalation lane; **AC-1 live human-rescore → ITER-0007b**), STORY-0046 AC-1 (single-writer **guard** test:
+no non-Temporal actor writes effective-priority/not-before), STORY-0041 AC-3 (laneq.next returns
+highest-importance eligible — already proven ITER-0006 SCENARIO-0091, re-asserted here), STORY-0001 AC-3
+(single-writer-constraint design, mock-Temporal). **Logic portions of split-ins:** STORY-0064 AC-15/AC-16
+(directive importance/deadline inputs + agents-propose validation; human-authority already done ITER-0002),
+STORY-0058 AC-24 (retry-backoff projection logic, fake clock), STORY-0061 AC-3 / STORY-0055 AC-7
+(urgency-reprojection logic for stale escalations — the **operator-resurface journey** SCENARIO-0087 →
+ITER-0008), STORY-0002 AC-2 (deferral-holder contract, mock), STORY-0044 AC-3 (Temporal-as-sole-caller
+logic against a mock laneq; live gRPC → ITER-0007b).
+
+**Rationale:** Lock the Eisenhower projection + rescore-authority + single-writer logic as pure,
+deterministic Go (importance×urgency → effective-priority + not-before; bounded vs unrestricted rescore;
+the guard that only the Temporal role writes scheduling fields) so ITER-0007b's live Temporal grafts the
+*deployment + wiring* onto proven logic without re-litigating the algorithm. All CI-provable on the Mac
+with a fake clock + the existing `queue.Queue`/laneq mock.
+
+**Boxing-in mitigations (PAR):** (1) **No `Run` struct here** — the deferred STORY-0035 owned
+Run.provider_instance/budget_snapshot; deferring it to ITER-0008 (alongside STORY-0011/0015's Run shape)
+avoids the colliding-Run definition that PAR flagged twice (the same lesson ITER-0003 learned). (2) The
+single-writer design (STORY-0046 AC-1 / STORY-0001 AC-3) is **process-level** (one Temporal role writes
+the fields), explicitly **orthogonal to laneq lease exclusivity** — it must NOT assume consumer-exclusive
+leases (ITER-0006 proved real laneq leases are non-exclusive); documented so ITER-0008 multi-consumer
+delegation is not boxed in.
+
 **Status:** pending
-**Impacted scenarios:** single-writer-projection; rescore-authority; deadline-aging; budget;
-escalation-resurface (SCENARIO-0087)
-**Look-ahead check:** depends on ITER-0006 not-before; blocks ITER-0008 steering.
+**Impacted scenarios:** SCENARIO-0078 (deadline→Q2/Q1 + Q4-idle projection, **unit/fake-clock**),
+SCENARIO-0057 (agent-bounded rescore rejection, unit/integration), SCENARIO-0082 (authority routing,
+integration — human/agent identity via directive origin from ITER-0002), SCENARIO-0081 (single-writer
+guard, integration + code-review). SCENARIO-0056 (live projection) → ITER-0007b.
+SCENARIO-0087 is split three ways: the **urgency-reprojection LOGIC** (STORY-0061 AC-3 / STORY-0055 AC-7,
+fake clock) is proven HERE; Temporal live re-raise → ITER-0007b; operator/TUI acts-on-resurfaced →
+ITER-0008. **Seam reclassification (PAR):** deadline-aging proofs are fake-clock unit here;
+wall-clock-over-real-time is ITER-0007b.
+**Artifact debt (PAR, non-blocking):** EPIC-005 design-doc citations point at stale line numbers (the
+`2026-06-18-fleet-orchestration-design.md` was restructured; e.g. STORY-0045's 405-409 now lands in the
+queue-substrate section). Re-anchor EPIC-005 citations in a docs pass during decomposition; ACs are
+internally coherent and unaffected.
+**Look-ahead check:** depends on ITER-0006 not-before (done); the projection logic is the graft base for
+ITER-0007b's live Temporal; deferring STORY-0035 + documenting non-exclusive leases keeps ITER-0008
+(Run object, recursive delegation) unblocked.
+
+### ITER-0007b — Temporal time plane: deployment, sole-writer wiring & live aging (cluster)
+
+**SCOPE DECISION (2026-06-23, PAR):** the **cluster-resident live-Temporal slice** split out of ITER-0007.
+Runs on `ndn-desktop`/`agent-host`; no Mac CI seam (mirrors ITER-0005b/0005c, ITER-0006b). Grafts the
+deployed Temporal onto ITER-0007's proven projection logic + ITER-0006's deployed laneq gRPC
+`Defer`/`Reprioritize` seam.
+
+**Stories (live/e2e ACs):** STORY-0001 AC-1 (Temporal plane owns Schedules + durable timers + retry
+backoff) + AC-2 (server+workers on ndn-desktop; **state survives host restart** — e2e), STORY-0041
+AC-1/AC-2 (Temporal is the live sole writer of effective-priority + not-before; re-projects on rescore —
+over the real laneq gRPC seam), STORY-0044 AC-3 (live: Temporal is the sole *caller* of
+Defer/Reprioritize), STORY-0043 AC-2 (Q2→Q1 as deadline nears over **wall-clock** time, no human
+intervention), STORY-0046 AC-2 (concurrent reads consistent under live Temporal), STORY-0047 AC-1 (live: human
+rescore moves an item to any bucket via the deployed Temporal rescore path). **Live portions of split-ins:** STORY-0058 AC-24 (Temporal re-pushes
+retries with backoff durably), STORY-0061 AC-3 / STORY-0055 AC-7 (Temporal re-raises stale escalations as
+urgency rises), STORY-0002 AC-2 (deferred/future work durably held in Temporal until eligible).
+
+**Task 0 (PAR-pattern, BLOCKING):** stand up Temporal on ndn-desktop as a Nix package + systemd service
+(same discipline as laneq in ITER-0006b: pinned, host-volume persistence, readiness probe, deploy doc)
+AND define the cluster verification harness (boot-to-ready sentinel, restart-survival check, a fake-clock
+vs wall-clock decision for the aging proof). The deploy doc MUST restate the **non-exclusive-lease**
+assumption for the sole-writer seam (PAR boxing-in note).
+
+**Status:** pending
+**Impacted scenarios:** SCENARIO-0056 (live single-writer projection + deadline aging), SCENARIO-0001
+(Temporal plane durable + restart survival, e2e), SCENARIO-0081 (live single-writer enforcement). The
+operator-experience half of SCENARIO-0087 (a human/TUI consumer acts on the re-raised escalation) → ITER-0008.
+**Look-ahead check:** depends on ITER-0007 logic + ITER-0006 deployed laneq; Temporal becomes the sole
+writer of the gRPC seam so ITER-0008 steering/delegation builds on a stable time plane.
 
 ### ITER-0008 — Tier-2 coordinator, recursive delegation & operator UX
 
-**Stories:** STORY-0073, STORY-0028, STORY-0012, STORY-0013, STORY-0014, STORY-0026, STORY-0006, STORY-0003, STORY-0009, STORY-0032, STORY-0074, **STORY-0027 AC-3 (operator pause/block/resume from TUI — split in from ITER-0001), STORY-0054 (audit all runs/delegations/mutations + replayability — moved from ITER-0001, folds into STORY-0032's genome/delegation audit), STORY-0016 (versioned execution policies — moved from ITER-0002 PAR: delegation_rules/mutation_allowed gain meaning with recursive delegation here), STORY-0011 (policy-driven worker dispatch — moved from ITER-0002 PAR: needs multiple worker_kinds (post-ITER-0005) + Tier-2 dispatch decisions), STORY-0049 AC-4 (worker-authored child-directive inherits non-privileged provisioning — moved from ITER-0002 PAR: needs the recursive child-directive emit path built here), STORY-0015 (capture artifacts: Run object with run_id/artifact_refs/log_refs — moved from ITER-0003 PAR: build with STORY-0011's Run shape to avoid a colliding/duplicate Run definition)**
+**Stories:** STORY-0073, STORY-0028, STORY-0012, STORY-0013, STORY-0014, STORY-0026, STORY-0006, STORY-0003, STORY-0009, STORY-0032, STORY-0074, **STORY-0027 AC-3 (operator pause/block/resume from TUI — split in from ITER-0001), STORY-0054 (audit all runs/delegations/mutations + replayability — moved from ITER-0001, folds into STORY-0032's genome/delegation audit), STORY-0016 (versioned execution policies — moved from ITER-0002 PAR: delegation_rules/mutation_allowed gain meaning with recursive delegation here), STORY-0011 (policy-driven worker dispatch — moved from ITER-0002 PAR: needs multiple worker_kinds (post-ITER-0005) + Tier-2 dispatch decisions), STORY-0049 AC-4 (worker-authored child-directive inherits non-privileged provisioning — moved from ITER-0002 PAR: needs the recursive child-directive emit path built here), STORY-0015 (capture artifacts: Run object with run_id/artifact_refs/log_refs — moved from ITER-0003 PAR: build with STORY-0011's Run shape to avoid a colliding/duplicate Run definition), STORY-0035 (Run provider_instance/model_id/budget_snapshot — moved from ITER-0007 PAR 2026-06-23: its Run fields MUST be defined with STORY-0011/0015's Run shape, same anti-collision lesson), STORY-0036 (multi-level budget guardrails — moved from ITER-0007 PAR: budget enforcement is a dispatch/resource-allocation concern, not the time plane), STORY-0037 (thread aging + queue classes + stale-thread resurfacing — moved from ITER-0007 PAR: thread-registry/operator concern; pairs with the operator-resurface half of SCENARIO-0087), STORY-0038 (provider instances + escalation routing — moved from ITER-0007 PAR: dispatch routing, composes with STORY-0011 worker_kind), STORY-0039 (multi-repo thread coordination — moved from ITER-0007 PAR: thread-spanning, operationalized with the coordinator/TUI here)**
 **Rationale:** Bidirectional steering (file-feed now), operator TUI for
 thread/worker management (incl. STORY-0027 AC-3 thread pause/block/resume — it needs the TUI built
 here), the full agent/delegation/mutation audit + replay (STORY-0054, alongside STORY-0032 genome
