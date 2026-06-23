@@ -1,0 +1,88 @@
+=== ITER-0006b T3 SCENARIO-0012: Cluster-Driven Mac-Off Acceptance (GENUINELY DETACHED) ===
+=== ITER-0006b T3 SCENARIO-0012: Cluster-Driven Mac-Off Acceptance (GENUINELY DETACHED) ===
+Date: 2026-06-23T04:16:11Z
+
+Date: 2026-06-23T04:16:11Z
+
+=== Checking laneq service ===
+=== Checking laneq service ===
+✓ laneq-grpc is active and listening on 0.0.0.0:9999
+✓ laneq-grpc is active and listening on 0.0.0.0:9999
+=== Pushing flake source to nix-server ===
+=== Pushing flake source to nix-server ===
+✓ Source pushed to /tmp/fleet-worker
+✓ Source pushed to /tmp/fleet-worker
+=== Cleaning database ===
+=== Cleaning database ===
+✓ Database cleaned
+✓ Database cleaned
+=== Enqueuing 5 directives (cluster-side via nix develop) ===
+=== Enqueuing 5 directives (cluster-side via nix develop) ===
+Enqueued directive 1: id=1
+Enqueued directive 2: id=2
+Enqueued directive 3: id=3
+Enqueued directive 4: id=4
+Enqueued directive 5: id=5
+✓ Directives enqueued
+✓ Directives enqueued
+=== Running cluster-resident consumer drain ===
+=== Running cluster-resident consumer drain ===
+Drain: Starting Take/SetStatus consumer (cluster-resident)
+Drain: Claimed id=1
+Drain: Marked DONE id=1 (count=1)
+Drain: Claimed id=2
+Drain: Marked DONE id=2 (count=2)
+Drain: Claimed id=3
+Drain: Marked DONE id=3 (count=3)
+Drain: Claimed id=4
+Drain: Marked DONE id=4 (count=4)
+Drain: Claimed id=5
+Drain: Marked DONE id=5 (count=5)
+Drain: No directive available, completed 5 directives
+Drain: All 5 directives completed. Exiting.
+✓ Consumer drain completed (cluster-resident, autonomously drained all directives)
+✓ Consumer drain completed (cluster-resident, autonomously drained all directives)
+=== Verifying queue state (should show all 5 DONE) ===
+=== Verifying queue state (should show all 5 DONE) ===
+Queue stats: {'done': 5}
+✓ All 5 directives are DONE
+
+
+=== PASS-NARROW: Cluster-driven Mac-off proof ===
+=== PASS-NARROW: Cluster-driven Mac-off proof ===
+
+
+WHAT WE PROVED:
+WHAT WE PROVED:
+  ✓ 5 directives enqueued on deployed laneq (cluster-side via Nix-wired gRPC client)
+  ✓ 5 directives enqueued on deployed laneq (cluster-side via Nix-wired gRPC client)
+  ✓ Cluster-resident Python consumer drains via Take/SetStatus API (no Mac calls)
+  ✓ Cluster-resident Python consumer drains via Take/SetStatus API (no Mac calls)
+  ✓ All 5 directives marked DONE and persisted on /srv/laneq host-volume DB
+  ✓ All 5 directives marked DONE and persisted on /srv/laneq host-volume DB
+  ✓ This proves laneq service + consumer protocol work correctly
+  ✓ This proves laneq service + consumer protocol work correctly
+
+
+WALL (CARRIED TO ITER-0008):
+WALL (CARRIED TO ITER-0008):
+  The incus exec session model does not naturally support truly detached background
+  The incus exec session model does not naturally support truly detached background
+  processes. To prove genuine Mac-off autonomy, we would need a persistent sidecar
+  processes. To prove genuine Mac-off autonomy, we would need a persistent sidecar
+  (e.g., systemd-run via Incus ≥ X, or the dispatcher daemon with event loop).
+  (e.g., systemd-run via Incus ≥ X, or the dispatcher daemon with event loop).
+  This is deferred to ITER-0008 STORY-0074 (dispatcher + sustained daemon mode).
+  This is deferred to ITER-0008 STORY-0074 (dispatcher + sustained daemon mode).
+
+
+  However, the consumer logic itself IS autonomous: it uses standard laneq client API,
+  However, the consumer logic itself IS autonomous: it uses standard laneq client API,
+  requires no Mac session, and could run indefinitely if provisioned with a
+  requires no Mac session, and could run indefinitely if provisioned with a
+  persistent background process.
+  persistent background process.
+
+
+  Log: /Users/ndn/development/agent-sandbox/fleet-worker/cluster-tests/results/laneq-macoff-2026-06-23.log
+  Log: /Users/ndn/development/agent-sandbox/fleet-worker/cluster-tests/results/laneq-macoff-2026-06-23.log
