@@ -4,6 +4,7 @@
 #   bash fleet-worker/cluster-tests/run.sh <scenario>
 #   scenarios: microvm-boot(0029) durable-vm(0004) nspawn-fast(0005)
 #              hardtier(0006) trust-boundary(0007) golden-launch(0003) teardown(0008ac2)
+#              laneq-wire(0092) — ITER-0006b T2: LaneqQueue adapter wire-compatibility proof
 #   ITER-0005c image track: golden-full(0065) cleanroom(0066) provider-routing(0067)
 #              skills-path(0068) skills-discovery(0069)
 #
@@ -166,6 +167,53 @@ case "$SCEN" in
     echo "$SCEN teardown: ${ms} ms (unit-kill, no incus delete)"
     assert_le "$ms" "${GATE_TEARDOWN_MS}" "teardown unit-kill bounded" || rc=1
     exit $rc ;;
+
+  laneq-wire)          # ITER-0006b T2 / SCENARIO-0092: Go LaneqQueue adapter wire-compatible with deployed Nix laneq service.
+    # Set up proxy device on nix-server to expose deployed laneq to the Mac (0.0.0.0:50551 → nix-server:9999).
+    # The Mac is at 192.168.86.49 (host), nix-server is on incus bridge (10.142.129.53).
+    # Mac → 192.168.86.49:50551 → nix-server (proxy device) → nix-server:9999 (laneq service).
+    BH="${BUNDLE_BUILD_HOST:-nix-server}"
+    incus exec "${REMOTE}:${BH}" -- true >/dev/null 2>&1 || { echo "FAIL ${SCEN}: ${BH} unreachable"; exit 1; }
+    incus exec "${REMOTE}:${BH}" -- systemctl is-active laneq-grpc >/dev/null 2>&1 || { echo "FAIL ${SCEN}: laneq-grpc not active on ${BH}"; exit 1; }
+
+    # Remove stale proxy device if it exists.
+    incus config device remove "${REMOTE}:${BH}" laneqwire >/dev/null 2>&1 || true
+
+    # Add proxy device: host port 50551 → nix-server localhost:9999
+    if ! incus config device add "${REMOTE}:${BH}" laneqwire proxy listen=tcp:0.0.0.0:50551 connect=tcp:127.0.0.1:9999 >/dev/null 2>&1; then
+      echo "FAIL ${SCEN}: could not add laneqwire proxy device"; exit 1
+    fi
+    sleep 1  # Wait for proxy to be ready
+
+    # Clean the laneq database for a deterministic test run.
+    incus exec "${REMOTE}:${BH}" -- systemctl stop laneq-grpc >/dev/null 2>&1 || true
+    sleep 1
+    incus exec "${REMOTE}:${BH}" -- bash -c 'rm -f /srv/laneq/laneq.db*' >/dev/null 2>&1 || true
+    incus exec "${REMOTE}:${BH}" -- systemctl start laneq-grpc >/dev/null 2>&1 || true
+    sleep 2
+
+    # Run the wire test from the Mac against the deployed service at 192.168.86.49:50551.
+    # (The test runs on the Mac; it dials through the proxy to the nix-server laneq service.)
+    RESULTS_LOG="${HERE}/results/laneq-wire-$(date +%Y-%m-%d).log"
+    cd "${HERE}/../../modules/incus-dispatcher" || exit 1
+    LANEQ_GRPC_REAL=1 LANEQ_GRPC_ADDR=192.168.86.49:50551 \
+      go test ./queue -run TestScenario0092 -count=1 \
+      >"${RESULTS_LOG}" 2>&1
+    test_rc=$?
+    cd - >/dev/null || true
+
+    # Clean up: remove the proxy device.
+    incus config device remove "${REMOTE}:${BH}" laneqwire >/dev/null 2>&1 || true
+
+    if [ $test_rc -eq 0 ]; then
+      echo "PASS ${SCEN}: Go LaneqQueue wire-compatible with deployed Nix laneq service (log: ${RESULTS_LOG})"
+      exit 0
+    else
+      echo "FAIL ${SCEN}: wire test failed (see ${RESULTS_LOG})"
+      tail -20 "${RESULTS_LOG}" >&2
+      exit 1
+    fi
+    ;;
 
   golden-full|0065)    # STORY-0075 AC-1 / SCENARIO-0065: NixOS golden built once with the FULL
                        # toolchain realized; `incus copy` per task = zero rebuild.
