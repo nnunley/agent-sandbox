@@ -219,7 +219,12 @@ p99 in-guest unit spin-up (SCENARIO-0004 durable-vm). Evidence: cluster harness 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
 
-**Status:** partial:ITER-0006 (AC-4 done; AC-1 → ITER-0006b; AC-2/3/5 not-chosen) — substrate decision
+**Status:** done:ITER-0006b — AC-4 done:ITER-0006 (not-before eligibility); AC-1 done:ITER-0006b
+(Mac-off acceptance, NARROW substrate proof — SCENARIO-0012: the deployed laneq coordinates with a
+cluster-resident consumer draining autonomously via a `systemd-run` detached unit while the Mac is
+uninvolved; host-volume DB persists). AC-2/3/5 = not-chosen decision outcomes (laneq chosen). The FULL
+sustained operator/fleet Mac-off (real dispatcher daemon) is tracked separately as STORY-0074/ITER-0008,
+not an unmet STORY-0010 AC. (Original PAR-revised plan note below.) — substrate decision
 RESOLVED = **laneq** (Python; gRPC binding; Norman is a contributor). AC-4 (not-before eligibility gate)
 done:ITER-0006 via SCENARIO-0091/0092. AC-2/AC-3/AC-5 are **not-chosen decision outcomes** (network-native
 Postgres/NATS / dedicated-host candidates — closed BY the laneq decision, not unmet ACs). The

@@ -693,8 +693,23 @@ real STORY-0010 substance even if the full Mac-off carries):**
   sustained-Mac-off + escalation to **ITER-0008 (STORY-0074, the full Mac-off acceptance)**. Must NOT
   silently carry: deliver either a genuine narrow cluster-autonomous Mac-off proof OR a documented wall.
 
-**Status:** pending
-**Impacted scenarios:** SCENARIO-0092 (NEW evidence — over-the-wire vs Nix service, must-pass); SCENARIO-0012 (Mac-off acceptance, rewritten cluster-driven execution model, carry-eligible)
+**Status:** done:ITER-0006b (cluster, 2026-06-23) — STORY-0010 closed. Delivered: T0 laneq Nix package
+(`fleet-worker/laneq.nix` buildPythonPackage on the `nnunley/laneq@2d1b59e` fork, in-build proto stub
+regen with grpcio-tools 1.76, checkPhase runs the fork's 72 grpc.aio tests — real-RPC proof, NOT a
+serialize-tautology); T1 deploy (systemd `laneq-grpc` on ndn-desktop:nix-server:9999, SQLite on Incus
+host volume `/srv/laneq`, deploy doc with the Temporal-sole-writer note; serves real gRPC + data
+survives restart) + a Nix-wired `laneq-client` env (python3.withPackages — NO hardcoded store paths);
+T2 SCENARIO-0092 over the wire (Go adapter ↔ deployed service via an incus proxy, 5/5 deterministic
+after fixing a ParkDurability lease-expiry flake); T3 SCENARIO-0012 Mac-off **PASS-NARROW** (cluster
+consumer drains autonomously via a `systemd-run` detached unit, Mac uninvolved, DB persists). Scenario
+tests renamed to semantic names (directive_contract/laneq_fake_lifecycle/laneq_realwire_lifecycle, keep
+`// Proves SCENARIO-NNNN`). Default `go test -race ./...` green (283; gated 0092 skipped); zero
+`TODO(ITER-0006b)`. **Real-laneq divergences logged:** reap() return-count differs from the fake
+(effect hard-asserted via Attempts==1); leases NOT consumer-exclusive (no token enforcement). PAR +
+direct verification caught + corrected 3 T0 weakenings, T1 nc-vs-gRPC/mount-vs-data/hardcoded-paths,
+T2 over-wire flake, and T3's overclaimed "Mac-off" (and a FALSE "can't detach" wall). **Full sustained
+operator/fleet Mac-off → ITER-0008 STORY-0074.**
+**Impacted scenarios:** SCENARIO-0092 (over-the-wire vs deployed Nix service, must-pass, PASS); SCENARIO-0012 (Mac-off acceptance, cluster-driven systemd-run detached drain, PASS-NARROW)
 **Look-ahead check:** depends on ITER-0006 binding (real-wire proven); the must-pass core (T0–T2)
 ships real STORY-0010 substance regardless; ITER-0007 (Temporal) builds on the deployed service via the
 documented gRPC-only write seam. Full operator/sustained Mac-off → ITER-0008 STORY-0074.

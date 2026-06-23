@@ -567,3 +567,50 @@ CI-native fake-based gate (0091), a directive-contract unit proof (0045), a `--q
 becomes the sole writer of the gRPC Defer/Reprioritize seam in ITER-0007. **Logged divergence for
 ITER-0008:** real laneq leases are NOT consumer-exclusive (no per-consumer token enforcement on
 Touch/Done) — the fake is stricter; multi-consumer delegation must not assume exclusivity.
+
+## ITER-0006b — laneq Nix package + cluster deploy + Mac-off acceptance
+
+**Completed:** 2026-06-23
+
+**Stories delivered:** STORY-0010 (done:ITER-0006b) — AC-1 (Mac-off acceptance, NARROW substrate proof)
+done; AC-4 done in ITER-0006; AC-2/AC-3/AC-5 = not-chosen decision outcomes (laneq chosen). The FULL
+sustained operator/fleet Mac-off (dispatcher daemon) is tracked as STORY-0074/ITER-0008.
+
+**Tasks executed:** T0 — laneq Nix package (`fleet-worker/laneq.nix`, `buildPythonApplication`→
+`buildPythonPackage` on the `nnunley/laneq@2d1b59e` fork; in-build proto stub regen with grpcio-tools
+1.76; `checkPhase` runs the fork's 72 real grpc.aio handler tests against the regenerated stubs —
+hash reproducible; built on nix-server with `--no-sandbox` per the unprivileged-LXC norm). T1 — deploy
+(`fleet-worker/laneq-service.nix` systemd `laneq-grpc` on ndn-desktop:nix-server:9999, SQLite on Incus
+host volume `/srv/laneq`; `docs/plans/2026-06-23-laneq-deploy.md` with the Temporal-sole-writer note;
+a Nix-wired `laneq-client` env via `python3.withPackages` so clients/probes resolve deps through Nix —
+NO hardcoded store paths). T2 — SCENARIO-0092 over the wire (`run.sh laneq-wire`: Go `LaneqQueue`
+adapter ↔ the deployed Nix service through an incus proxy 192.168.86.49:50551→:9999, full lifecycle,
+5/5 deterministic after fixing a ParkDurability lease-expiry flake). T3 — SCENARIO-0012 Mac-off
+PASS-NARROW (`run.sh laneq-macoff`: enqueue cluster-side, drain via a `systemd-run --collect` DETACHED
+unit that runs under PID1 independent of the Mac, all done + host-volume DB persists, autonomous
+completion). Scenario tests renamed to semantic names (`directive_contract_test.go`/
+`laneq_fake_lifecycle_test.go`/`laneq_realwire_lifecycle_test.go`, each `// Proves SCENARIO-NNNN`).
+Each task ran the two-stage PAR + direct orchestrator verification; caught + corrected: 3 T0
+real-RPC-proof weakenings (listens → serialize-tautology → real 72-test grpc.aio), T1 nc-vs-gRPC +
+mount-vs-data + hardcoded-store-path probes, T2 over-the-wire ParkDurability flake (1s lease expiring
+across RPCs before Park), and T3's overclaimed "Mac-off" (Mac-session-dependent drain) PLUS a FALSE
+"incus can't detach" wall (disproven — systemd-run works).
+
+**Scenarios:** SCENARIO-0092 (`laneq_realwire_lifecycle_test.go` / `run.sh laneq-wire`) — over-the-wire
+vs the deployed Nix service, PASS (deterministic). SCENARIO-0012 (`run.sh laneq-macoff`) — cluster-driven
+Mac-off, PASS-NARROW (autonomous systemd-run detached drain). SCENARIO-0091/0045 renamed to semantic
+test names (unchanged behavior). Real-laneq divergences documented: reap() return-count differs from the
+fake (effect hard-asserted via Attempts==1); leases are NOT consumer-exclusive (no token enforcement).
+
+**Sentinel corpus results:** baseline clean (JOURNEY-0001 + JOURNEY-0003 AC-1 green). Post-iteration:
+`go test -race ./...` green (283; gated SCENARIO-0092 skipped in the default run); `go vet` clean;
+JOURNEY-0001 + JOURNEY-0003 AC-1 sentinels green; zero `TODO(ITER-0006b)`; cluster `run.sh laneq-wire`
++ `run.sh laneq-macoff` PASS.
+
+**Summary:** Productionized laneq as a cluster-resident service: a Nix package of the augmented fork
+(gRPC binding + parked + requeue_count), a systemd deployment on ndn-desktop with a host-volume SQLite
+DB, and a Nix-wired client env (no hardcoded store paths). Proved the Go adapter wire-compatible with
+the deployed service over a real network hop (SCENARIO-0092), and proved the substrate coordinates
+autonomously with the Mac uninvolved via a systemd-run detached drain (SCENARIO-0012 PASS-NARROW). The
+full sustained operator/fleet Mac-off (dispatcher daemon + event loop) is deferred to ITER-0008
+STORY-0074. ITER-0007 (Temporal) builds on the deployed service via the documented gRPC-only write seam.
