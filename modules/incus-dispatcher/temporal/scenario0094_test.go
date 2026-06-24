@@ -310,3 +310,101 @@ func TestScenario0094_AgentWithinBoundedRescore(t *testing.T) {
 		"workflow accepted in-bounds rescore (Low→Medium), invoked activity (Reprioritize: %d, Defer: %d)",
 		len(fakeQueue.ReprioritizeCalls), len(fakeQueue.DeferCalls))
 }
+
+// TestScenario0094_AgentDownwardRescore tests that an agent can rescore DOWNWARD within bounds
+// (e.g., High → Medium, a 1-tier down jump).
+//
+// This rounds out the authority matrix: agent-bounded allows both upward (Low→Medium) and
+// downward (High→Medium) rescores as long as tierDiff is in [-1, 1]. Proves the negative-tierDiff
+// path is exercised and accepted.
+func TestScenario0094_AgentDownwardRescore(t *testing.T) {
+	suite := testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+
+	// Register the workflow and activity
+	env.RegisterWorkflow(PriorityWorkflow)
+
+	fakeQueue := &FakeReprojector{}
+	activities := &Activities{Queue: fakeQueue}
+	env.RegisterActivity(activities.ReprojectActivity)
+
+	// Setup: directive with High importance and a deadline 7 days out.
+	startNow := env.Now()
+	deadline := startNow.Add(7 * 24 * time.Hour)
+
+	// Agent actor (bounded authority: can rescore down by 1 tier)
+	agent := Actor{
+		Role: ActorRoleAgent,
+		ID:   "agent-downward",
+	}
+
+	// In-bounds downward rescore request: High → Medium (1-tier down, allowed)
+	rescoreSignal := RescoreSignal{
+		Actor:              agent,
+		ProposedImportance: ImportanceMedium,
+	}
+
+	// Register a delayed callback to send the downward rescore signal.
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(RescoreSignalName, rescoreSignal)
+	}, 1*time.Second)
+
+	input := PriorityWorkflowInput{
+		DirectiveID: "test-directive-agent-downward",
+		Importance:  ImportanceHigh,
+		Deadline:    &deadline,
+	}
+
+	// Execute the workflow
+	env.ExecuteWorkflow(PriorityWorkflow, input)
+
+	// Verify the workflow completed without error
+	if !env.IsWorkflowCompleted() {
+		t.Fatalf("workflow did not complete")
+	}
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("workflow failed: %v", err)
+	}
+
+	// SCENARIO-0094 Observable 1: Query confirms the downward rescore was accepted.
+	var finalImportance Importance
+	queryFuture, err := env.QueryWorkflow(CurrentImportanceQuery)
+	if err != nil {
+		t.Fatalf("failed to start query currentImportance: %v", err)
+	}
+	err = queryFuture.Get(&finalImportance)
+	if err != nil {
+		t.Fatalf("failed to get query result: %v", err)
+	}
+	if finalImportance != ImportanceMedium {
+		t.Fatalf("downward rescore was NOT accepted: query currentImportance=%d; expected ImportanceMedium=%d",
+			finalImportance, ImportanceMedium)
+	}
+	t.Logf("✓ Query confirms: currentImportance changed to Medium (downward rescore accepted)")
+
+	// SCENARIO-0094 Observable 2: The ReprojectActivity was invoked.
+	if len(fakeQueue.ReprioritizeCalls) == 0 {
+		t.Fatalf("Reprioritize was never called; expected ≥1 call for downward rescore re-projection")
+	}
+	if len(fakeQueue.DeferCalls) == 0 {
+		t.Fatalf("Defer was never called; expected ≥1 call for setting eligibility after downward rescore")
+	}
+
+	// SCENARIO-0094 Observable 3: The Reprioritize call used the Medium-level importance (NORMAL).
+	foundMediumImportance := false
+	for _, call := range fakeQueue.ReprioritizeCalls {
+		if call.ID == input.DirectiveID && call.Importance == queue.ImportanceNormal {
+			foundMediumImportance = true
+			t.Logf("✓ Downward rescore applied: Reprioritize called with importance=%v (Medium tier)", call.Importance)
+			break
+		}
+	}
+	if !foundMediumImportance {
+		t.Fatalf("no downward rescore re-projection found: expected Reprioritize with Medium importance, "+
+			"got calls: %v", fakeQueue.ReprioritizeCalls)
+	}
+
+	t.Logf("✓ SCENARIO-0094 (agent downward rescore): "+
+		"workflow accepted downward rescore (High→Medium), invoked activity (Reprioritize: %d, Defer: %d)",
+		len(fakeQueue.ReprioritizeCalls), len(fakeQueue.DeferCalls))
+}

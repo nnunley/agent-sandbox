@@ -166,10 +166,11 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 			nextCheckDuration = 6 * time.Hour
 		}
 
-		// Create a timer for the next aging check.
-		// Note: if a rescore signal fires first, this timer is abandoned (left to expire naturally).
-		// This is acceptable; a new timer will be created on the next loop iteration.
-		timerFuture := workflow.NewTimer(ctx, nextCheckDuration)
+		// Create a cancellable timer context for the next aging check.
+		// If a rescore signal fires first, we'll cancel the timer to prevent
+		// unbounded history accumulation in long-lived workflows.
+		timerCtx, cancelTimer := workflow.WithCancel(ctx)
+		timerFuture := workflow.NewTimer(timerCtx, nextCheckDuration)
 
 		// Use a Selector to wait on BOTH the aging timer and incoming rescore signals.
 		// The selector fires when EITHER the timer expires OR a signal arrives.
@@ -204,9 +205,11 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 				// No immediate activity invocation here; we let the loop detect the change.
 			} else if escalationRequired {
 				// Rescore was out of bounds and requires approval/escalation.
+				// Log the reason for C4's escalation handler and live operators to see.
+				workflow.GetLogger(ctx).Warn("rescore rejected: escalation required",
+					"directiveID", input.DirectiveID, "actor", signal.Actor.ID,
+					"current", currentImportance, "proposed", signal.ProposedImportance, "reason", err)
 				// TODO(ITER-0007b C4): Route to escalation approval queue, implement durable retry.
-				// For now, we silently reject the rescore (no write) and leave this seam for C4.
-				_ = err // Capture error for potential logging in C4's escalation handler.
 			} else {
 				// Other validation errors; treat as rejection (no write).
 			}
@@ -215,6 +218,14 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 
 		// Wait for either the timer or a signal (whichever comes first).
 		selector.Select(ctx)
+
+		// Cancel the aging timer if it hasn't fired yet.
+		// No-op if the timer already fired (selector won due to timer completion).
+		// Prevents unbounded history accumulation when signals frequently win the race.
+		// NOTE: For very-long-lived directives with high signal volume, the production mitigation
+		// is workflow.ContinueAsNew when workflow.GetInfo(ctx).GetContinueAsNewSuggested() is true.
+		// That's an E1/live concern — not in C3 scope.
+		cancelTimer()
 
 		// Advance the workflow's "now" for the next iteration.
 		now = workflow.Now(ctx)
