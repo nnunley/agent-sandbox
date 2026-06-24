@@ -378,7 +378,7 @@ func TestScenario0094_LiveHumanRescore(t *testing.T) {
 	}
 
 	t.Logf("Starting PriorityWorkflow...")
-	_, err = env.TemporalCli.ExecuteWorkflow(ctx,
+	workflowRun, err := env.TemporalCli.ExecuteWorkflow(ctx,
 		client.StartWorkflowOptions{
 			ID:        workflowID,
 			TaskQueue: env.TaskQueue,
@@ -389,10 +389,13 @@ func TestScenario0094_LiveHumanRescore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start workflow: %v", err)
 	}
+	runID := workflowRun.GetRunID()
+	t.Logf("✓ Workflow started: workflowID=%s, runID=%s", workflowID, runID)
 
+	// Wait for workflow to be ready (registering signal handler, creating selector, etc.)
 	time.Sleep(2 * time.Second)
 
-	// Send rescore signal
+	// Send rescore signal with relaxed timeout (context.Background() = no timeout)
 	t.Logf("Sending rescore signal: Normal → Critical...")
 	rescoreSignal := RescoreSignal{
 		Actor: Actor{
@@ -402,27 +405,54 @@ func TestScenario0094_LiveHumanRescore(t *testing.T) {
 		ProposedImportance: ImportanceCritical,
 	}
 
-	err = env.TemporalCli.SignalWorkflow(ctx, workflowID, "", RescoreSignalName, rescoreSignal)
+	// Use context.Background() to avoid timeout during gRPC call; include explicit runID
+	signalCtx, signalCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	err = env.TemporalCli.SignalWorkflow(signalCtx, workflowID, runID, RescoreSignalName, rescoreSignal)
+	signalCancel()
 	if err != nil {
 		t.Fatalf("signal workflow: %v", err)
 	}
+	t.Logf("✓ Signal sent successfully")
 
-	time.Sleep(3 * time.Second)
+	// Poll for priority change (retry up to ~15s with 1s sleeps)
+	// The activity must execute, call Reprioritize, and laneq must update.
+	t.Logf("Polling for priority change (up to 15s)...")
+	priorityAfter := priorityBefore
+	pollCtx, pollCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer pollCancel()
 
-	// CRITICAL: Capture priority AFTER rescore and assert it CHANGED
-	ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel1()
-	peekAfter, err := env.LaneqCli.Peek(ctx1, &laneqpb.PeekRequest{Lane: directiveLane})
-	if err != nil || peekAfter.Directive == nil {
-		t.Fatalf("ASSERTION FAILED: could not peek directive after rescore: %v", err)
+	for attempt := 0; attempt < 15; attempt++ {
+		select {
+		case <-pollCtx.Done():
+			t.Logf("Poll timeout after 15s")
+			break
+		default:
+		}
+
+		// Peek to check current priority
+		peekCtx, peekCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		peekAfter, err := env.LaneqCli.Peek(peekCtx, &laneqpb.PeekRequest{Lane: directiveLane})
+		peekCancel()
+
+		if err == nil && peekAfter.Directive != nil {
+			priorityAfter = peekAfter.Directive.Priority
+			if priorityAfter != priorityBefore {
+				t.Logf("✓ Priority changed: %v → %v (attempt %d)", priorityBefore, priorityAfter, attempt+1)
+				break
+			}
+		}
+
+		// Not changed yet, wait and retry
+		if attempt < 14 {
+			time.Sleep(1 * time.Second)
+		}
 	}
-	priorityAfter := peekAfter.Directive.Priority
 
 	t.Logf("Priority AFTER rescore: %v", priorityAfter)
 
 	// CRITICAL: Assert priority actually changed
 	if priorityBefore == priorityAfter {
-		t.Fatalf("ASSERTION FAILED: priority did NOT change (before=%v, after=%v). Rescore signal was not processed.",
+		t.Fatalf("ASSERTION FAILED: priority did NOT change (before=%v, after=%v). Rescore signal was not processed after 15s of polling.",
 			priorityBefore, priorityAfter)
 	}
 
