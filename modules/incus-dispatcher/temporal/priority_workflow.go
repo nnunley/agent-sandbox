@@ -8,6 +8,16 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// RescoreSignalName is the name of the rescore signal that can be sent to a PriorityWorkflow.
+const RescoreSignalName = "rescore"
+
+// RescoreSignal is the payload for a rescore request sent to a PriorityWorkflow.
+// It contains the actor making the request and the proposed new importance level.
+type RescoreSignal struct {
+	Actor              Actor
+	ProposedImportance Importance
+}
+
 // workflowActivityOptions sets sensible defaults for activities in the priority workflow.
 // Start-to-close timeout of 30s is sufficient for gRPC calls to laneq.
 // RetryPolicy ensures transient laneq gRPC errors are retried, making scheduling writes durable.
@@ -40,18 +50,26 @@ type ReprojectRequest struct {
 
 // PriorityWorkflow is a durable Temporal workflow that ages a directive's priority
 // over time and writes the result into laneq through the ReprojectActivity sole-writer seam.
+// The workflow ALSO handles rescore signals from external actors (human or agent).
 //
 // The workflow:
 // 1. Takes serializable input (DirectiveID, Importance, Deadline).
 // 2. Uses workflow.Now(ctx) for ALL time reads (never time.Now()).
 // 3. Uses the pure-Go projection functions (ComputeUrgency, ComputeQuadrant, ComputeEffectivePriority).
-// 4. Loops: compute the current quadrant; sleep on a DURABLE Temporal timer until the next
-//    re-projection point (a sensible interval before the deadline, or until the deadline);
-//    when the timer fires, recompute urgency→quadrant→effective-priority; if the projection
-//    changed, invoke ReprojectActivity to persist it.
-// 5. Terminate the loop once the item reaches Q1 or the deadline has passed.
+// 4. Maintains a mutable currentImportance (initialized from input.Importance; updated on successful rescore).
+// 5. Loops: compute the current quadrant using currentImportance; use a Selector to wait on BOTH:
+//    - an aging timer (next re-projection point), or
+//    - an incoming rescore signal.
+//    On timer: recompute urgency→quadrant→effective-priority; if the projection changed,
+//    invoke ReprojectActivity to persist it.
+//    On signal: validate the rescore with ValidateRescoreRequest. If allowed (human or agent within bounds),
+//    update currentImportance, recompute projection, and invoke ReprojectActivity (same sole-writer seam).
+//    If NOT allowed (agent out of bounds): reject silently (no write); escalation routing is deferred to C4.
+// 6. Terminate the loop once the item reaches Q1 or the deadline has passed.
 //
-// Linked to STORY-0043 (urgency + quadrant aging) and STORY-0044 (sole-writer seam).
+// Linked to STORY-0043 (urgency + quadrant aging), STORY-0044 (sole-writer seam),
+// STORY-0047 (human rescore), SCENARIO-0057/0082 (agent-bounded rescore),
+// and SCENARIO-0094 (rescore signal path).
 func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 	// Set activity options with a reasonable timeout for gRPC calls to laneq
 	ctx = workflow.WithActivityOptions(ctx, workflowActivityOptions)
@@ -63,20 +81,26 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 		return nil
 	}
 
+	// Initialize currentImportance from input; this is MUTABLE and updated by rescore signals.
+	currentImportance := input.Importance
+
 	// Compute the initial quadrant at workflow start time.
 	// This is the directive's starting projection; we track changes from this point.
 	initialUrgency := ComputeUrgency(input.Deadline, now)
-	lastQuadrant := ComputeQuadrant(input.Importance, initialUrgency)
-	lastEffectivePriority := ComputeEffectivePriority(input.Importance, lastQuadrant)
+	lastQuadrant := ComputeQuadrant(currentImportance, initialUrgency)
+	lastEffectivePriority := ComputeEffectivePriority(currentImportance, lastQuadrant)
 
 	// Allocate the activity reference once (reused for all activity invocations in the loop).
 	activities := &Activities{}
 
+	// Set up the rescore signal channel (non-buffered; we'll consume it in the loop).
+	rescoreSignalChannel := workflow.GetSignalChannel(ctx, RescoreSignalName)
+
 	for {
 		// Recompute urgency and quadrant at the current workflow time
 		urgency := ComputeUrgency(input.Deadline, now)
-		quadrant := ComputeQuadrant(input.Importance, urgency)
-		effectivePriority := ComputeEffectivePriority(input.Importance, quadrant)
+		quadrant := ComputeQuadrant(currentImportance, urgency)
+		effectivePriority := ComputeEffectivePriority(currentImportance, quadrant)
 
 		// If the projection changed (quadrant or priority), invoke the ReprojectActivity
 		if quadrant != lastQuadrant || effectivePriority != lastEffectivePriority {
@@ -84,11 +108,9 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 			notBefore := now
 
 			// Invoke the sole-writer activity to persist the projection.
-			// Use workflow.ExecuteActivity with the activity struct method reference.
-			// The activity is registered as Activities.ReprojectActivity.
 			req := ReprojectRequest{
 				DirectiveID:       input.DirectiveID,
-				Importance:        input.Importance,
+				Importance:        currentImportance,
 				Quadrant:          quadrant,
 				EffectivePriority: effectivePriority,
 				NotBefore:         notBefore,
@@ -129,13 +151,55 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 			nextCheckDuration = 6 * time.Hour
 		}
 
-		// Sleep on a durable Temporal timer (deterministic, auto-advanced in tests)
-		err := workflow.Sleep(ctx, nextCheckDuration)
-		if err != nil {
-			return fmt.Errorf("timer failed: %w", err)
-		}
+		// Create a timer for the next aging check
+		timerFuture := workflow.NewTimer(ctx, nextCheckDuration)
 
-		// Advance the workflow's "now" for the next iteration
+		// Use a Selector to wait on BOTH the aging timer and incoming rescore signals.
+		// The selector fires when EITHER the timer expires OR a signal arrives.
+		// We'll loop the selector until one of these happens, then process the result.
+		selector := workflow.NewSelector(ctx)
+		selector.AddFuture(timerFuture, func(f workflow.Future) {
+			// Timer fired; we'll advance the workflow's "now" and continue the loop.
+		})
+
+		// Add the rescore signal channel to the selector. When a signal arrives,
+		// we'll process the rescore request.
+		selector.AddReceive(rescoreSignalChannel, func(c workflow.ReceiveChannel, more bool) {
+			if !more {
+				// Channel closed (unlikely in normal operation, but handle it gracefully).
+				return
+			}
+
+			// Receive the signal (non-blocking because the selector triggered).
+			var signal RescoreSignal
+			c.Receive(ctx, &signal)
+
+			// Validate the rescore request with the current importance and deadline.
+			allowed, escalationRequired, err := ValidateRescoreRequest(
+				signal.Actor, currentImportance, signal.ProposedImportance, input.Deadline,
+			)
+
+			if allowed {
+				// Rescore is allowed; update currentImportance and the workflow will
+				// recompute the projection on the next loop iteration.
+				currentImportance = signal.ProposedImportance
+				// NOTE: The re-projection happens at the top of the loop.
+				// No immediate activity invocation here; we let the loop detect the change.
+			} else if escalationRequired {
+				// Rescore was out of bounds and requires approval/escalation.
+				// TODO(ITER-0007b C4): Route to escalation approval queue, implement durable retry.
+				// For now, we silently reject the rescore (no write) and leave this seam for C4.
+				_ = err // Capture error for potential logging in C4's escalation handler.
+			} else {
+				// Other validation errors; treat as rejection (no write).
+			}
+			// Loop will continue and check for projection changes on next iteration.
+		})
+
+		// Wait for either the timer or a signal (whichever comes first).
+		selector.Select(ctx)
+
+		// Advance the workflow's "now" for the next iteration.
 		now = workflow.Now(ctx)
 	}
 }

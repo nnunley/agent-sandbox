@@ -3348,8 +3348,8 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - laneq reflects the new effective_priority immediately (read-back via laneq.next / Reprioritize)
 - The change is durable (survives a Temporal restart — links to SCENARIO-0001 durability)
 
-**Automation status:** pending (live: needs deployed Temporal; logic basis done:ITER-0007 authority.go)
-**Execution command:** TBD — set in ITER-0007b (cluster harness drives the live rescore path)
+**Automation status:** CI/testsuite logic basis done in ITER-0007b C3 (workflow signal path with validation→sole-writer write for human unrestricted / agent-bounded); live durability (Temporal restart) deferred to E1
+**Execution command:** CI: `go test -race ./temporal/ -run "TestScenario0094"` (3 tests: human unrestricted, agent OOB rejection, agent in-bounds). Live (E1): cluster harness drives deployed-Temporal rescore path with durability proof
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:409`
