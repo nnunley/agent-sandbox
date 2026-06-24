@@ -259,7 +259,11 @@ func TestScenario0081ConcurrentReadersAndTemporalWriteBothFields(t *testing.T) {
 		priorities := []int{3000, 3100, 3200}
 		for i, priority := range priorities {
 			time.Sleep(10 * time.Millisecond)
-			// Temporal writer updates both fields together (same conceptual transaction)
+			// The single Temporal writer updates both fields. NOTE: SetEffectivePriority
+			// and SetNotBefore are SEPARATE critical sections (the getters also lock
+			// independently), so this is NOT a cross-field atomic transaction. AC-2 only
+			// requires that each field is read without tearing — not that a reader sees a
+			// correlated (priority, notBefore) pair from the same write.
 			err1 := gd.SetEffectivePriority(WriterRoleTemporal, priority)
 			err2 := gd.SetNotBefore(WriterRoleTemporal, times[i])
 			if err1 != nil || err2 != nil {
@@ -270,8 +274,10 @@ func TestScenario0081ConcurrentReadersAndTemporalWriteBothFields(t *testing.T) {
 
 	wg.Wait()
 
-	// Verify all reads got valid value combinations
-	// Valid states: (3000, t0), (3100, t1), (3200, t2)
+	// Verify each field independently observed a value that was actually written
+	// (no torn/garbage reads). Cross-field pairing is intentionally NOT asserted:
+	// the two getters lock independently, so a reader may legitimately observe
+	// priority and notBefore from different writes — that is consistent under AC-2.
 	validPriorities := map[int]bool{3000: true, 3100: true, 3200: true}
 	validNotBefores := map[int64]bool{
 		times[0].UnixNano(): true,
