@@ -3109,9 +3109,8 @@ automated via mock-Temporal; AC-1 live human-rescore-to-any-bucket → ITER-0007
 - it ranks higher in escalations lane by urgency
 - human reviewer will see it before new low-urgency escalations
 
-**Automation status:** partial:ITER-0007 (urgency-reprojection LOGIC for stale escalations automated via
-fake-clock; Temporal live re-raise → ITER-0007b; operator/TUI acts-on-resurfaced journey → ITER-0008)
-**Execution command:** `cd modules/incus-dispatcher && go test -race -run 'TestOperatorScenario0087' ./temporal/`
+**Automation status:** CI/testsuite logic basis done in ITER-0007b C4 (durable EscalationWorkflow + ReprojectActivity sole-writer seam; re-raise via workflow.GetLogger for D6 decision log); live durability (Temporal restart + cluster re-raise) deferred to E1
+**Execution command:** CI: `cd modules/incus-dispatcher && go test -race './temporal/' -run 'TestEscalationWorkflow_ReRaiseOnThresholdCross'` (durable Temporal re-raise logic basis + operator/TUI acts-on-resurfaced journey → E1)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:413-415`
@@ -3353,3 +3352,64 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:409`
+
+## SCENARIO-0115 — Durable retry re-push with exponential backoff
+
+**Kind:** contract
+**Proof seam:** integration
+**Owning stories:** STORY-0058 (AC-24)
+
+**Preconditions:**
+- A directive is in a pending-retry state (transient failure occurred)
+- Temporal workflow is managing the retry schedule
+
+**Action:**
+- RetryWorkflow (or integration with PriorityWorkflow retry path) recomputes next-retry time using RetryBackoff(attempt)
+- Workflow invokes ReprojectActivity with Defer, setting notBefore = now + RetryBackoff(attempt)
+- Each retry increases the backoff exponentially (1s → 2s → 4s → ... → 60s cap)
+
+**Expected observables:**
+- Each failed attempt records a Defer call with notBefore = now + exponentially-increasing duration
+- The backoff schedule matches the documented formula: base 1s × 2^attempt, capped at 60s
+- Attempt N is re-pushed at least RetryBackoff(N) in the future (no premature re-push)
+- Retries are durable (survive Temporal restart); only happen via ReprojectActivity (sole-writer seam)
+- Retry backoff prevents thundering herd on transient failures
+
+**Automation status:** CI/testsuite logic basis done in ITER-0007b C4 (RetryBackoff pure helper + integration with future RetryWorkflow); live Temporal durability (restart survival) deferred to E1
+**Execution command:** CI: `cd modules/incus-dispatcher && go test -race './temporal/' -run 'TestRetryBackoff'` (pure backoff schedule validation)
+
+**Sources:**
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:413-415`
+- STORY-0058 AC-24 (retry re-push with backoff)
+- JOURNEY-0001 (complete one-shot lifecycle with retry seam)
+
+## SCENARIO-0116 — Deferred work held durable in Temporal until eligible
+
+**Kind:** contract
+**Proof seam:** integration
+**Owning stories:** STORY-0002 (AC-2)
+
+**Preconditions:**
+- A directive is scheduled for future eligibility (e.g., next-slot scheduling, dependency await)
+- Temporal workflow holds the deferral timer until notBefore
+
+**Action:**
+- DeferWorkflow receives directive ID and notBefore time
+- Workflow sleeps until notBefore arrives (durable Temporal timer, not system sleep)
+- When timer fires, ReprojectActivity is invoked with Defer(id, notBefore=now)
+
+**Expected observables:**
+- Before timer fires: directive is NOT eligible in laneq (not-before is in future)
+- Workflow holds durable; no CPU spinning or polling
+- When timer fires: exactly one ReprojectActivity.Defer call records the eligibility
+- notBefore is set to the workflow's advanced time (item eligible at wake-up)
+- Defer(notBefore=past/now) makes item eligible for next Claim (vs. deferred indefinitely)
+- Item is held by Temporal, not by laneq blocking (laneq sees not_before < now → eligible)
+
+**Automation status:** CI/testsuite logic basis done in ITER-0007b C4 (DeferWorkflow + FakeReprojector captures Defer timing); live durability (Temporal container restart) deferred to E1
+**Execution command:** CI: `cd modules/incus-dispatcher && go test -race './temporal/' -run 'TestDeferWorkflow'` (durable defer-until-eligible timer validation)
+
+**Sources:**
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
+- STORY-0002 AC-2 (durable defer-until-eligible)
+- STORY-0044 AC-2 (sole-writer seam via Defer)
