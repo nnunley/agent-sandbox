@@ -11,7 +11,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | JOURNEY-0005 | Mac-off: autonomous grading without human feedback | e2e | sentinel | TBD | STORY-0074 |
 | JOURNEY-0006 | Mac-off: low-cost escalations proceed autonomously, privileged in esca | e2e | sentinel | TBD | STORY-0074 |
 | JOURNEY-0007 | Mac-off: successor resumes via handoff without replay | e2e | sentinel | TBD | STORY-0074 |
-| SCENARIO-0001 | Dispatcher recovers mid-flight after Mac host restart | e2e | iteration | TBD | STORY-0001, STORY-0006 |
+| SCENARIO-0001 | Dispatcher recovers mid-flight after Mac host restart | e2e | iteration | Live (E1): `bash modules/incus-dispatcher/temporal/run-temporal-live.sh` (TestScenario0001_LiveRestartSurvivalPartA: DeferWorkflow persisted + accessible over gRPC) | STORY-0001, STORY-0006 |
 | SCENARIO-0002 | Dispatcher drains queue with deterministic coordination | integration | iteration | TBD | STORY-0003 |
 | SCENARIO-0003 | Worker launches from golden image without live build | integration | iteration | `bash fleet-worker/cluster-tests/run.sh golden-launch` | STORY-0005 |
 | SCENARIO-0004 | Durable micro-VM stays up across multiple task executions | process-level | iteration | `bash fleet-worker/cluster-tests/run.sh durable-vm` | STORY-0007, STORY-0008 |
@@ -66,7 +66,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0053 | Pass grading leads to done state | process-level | iteration | TBD | STORY-0058 |
 | SCENARIO-0054 | Fail grading triggers retry with same worker | process-level | iteration | `cd modules/incus-dispatcher && go test . -run TestRunOnce_RequeueEmitsFreshHandoff` | STORY-0058 |
 | SCENARIO-0055 | Template validation rejects unauthorized template | integration | iteration | TBD | STORY-0050 |
-| SCENARIO-0056 | Q2 item promoted to Q1 as deadline nears | integration | iteration | TBD | STORY-0043, STORY-0041 |
+| SCENARIO-0056 | Q2 item promoted to Q1 as deadline nears | integration | iteration | CI: `cd modules/incus-dispatcher && go test -race -run 'TestScenario0056' ./temporal/` (done:ITER-0007b C2, time-skip proof) | Live (E1): `bash modules/incus-dispatcher/temporal/run-temporal-live.sh` (TestScenario0056_LiveWallClockAging: real wall-clock timer fire + laneq gRPC) | STORY-0043, STORY-0041 |
 | SCENARIO-0057 | Agent rescore beyond bound is rejected; human rescore succeeds | integration | iteration | `cd modules/incus-dispatcher && go test -race -run 'TestScenario0057' ./temporal/` (done:ITER-0007, mock-Temporal) | STORY-0042 |
 | SCENARIO-0058 | No-deadline low-importance item never runs while higher-tier work exis | process-level | iteration | TBD | STORY-0043, STORY-0041 |
 | SCENARIO-0059 | Rescore operation is the unified gateway for all priority changes | integration | iteration | TBD | STORY-0041, STORY-0042 |
@@ -92,7 +92,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0078 | Prioritization: deadline approaching promotes Q2 to Q1 | unit | iteration | `cd modules/incus-dispatcher && go test -race -run 'TestScenario0078' ./temporal/` (done:ITER-0007) | STORY-0045 |
 | SCENARIO-0079 | Prioritization: no-deadline low-importance stays Q4 (idle-only) | unit | iteration | TBD | STORY-0045 |
 | SCENARIO-0080 | Laneq next: returns highest-importance eligible item only | unit | iteration | TBD | STORY-0045 |
-| SCENARIO-0081 | Single-writer: only Temporal writes effective priority | integration | iteration | `cd modules/incus-dispatcher && go test -race -run 'TestScenario0081\|TestMultipleDirectivesIndependent' ./temporal/` (guard done:ITER-0007; live AC-2 → ITER-0007b) | STORY-0046 |
+| SCENARIO-0081 | Single-writer: only Temporal writes effective priority | integration | iteration | CI: `cd modules/incus-dispatcher && go test -race -run 'TestScenario0081\|TestMultipleDirectivesIndependent' ./temporal/` (guard done:ITER-0007; concurrent-read done:ITER-0007b C5) | Live (E1): `bash modules/incus-dispatcher/temporal/run-temporal-live.sh` (TestScenario0081_LiveConcurrentReads: 5 readers vs live Temporal writer over gRPC) | STORY-0046 |
 | SCENARIO-0082 | Rescore authority: human can move item to any bucket | integration | iteration | `cd modules/incus-dispatcher && go test -race -run 'TestScenario0082' ./temporal/` (routing done:ITER-0007; live AC-1 → ITER-0007b) | STORY-0047 |
 | SCENARIO-0083 | Rescore authority: agent rescore beyond bound rejected | unit | iteration | TBD | STORY-0047 |
 | SCENARIO-0084 | Rescore authority: privileged rescore routed to approval | integration | iteration | TBD | STORY-0047 |
@@ -102,3 +102,5 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0088 | Mac-off: human-only escalations queue durably for Mac return | e2e | iteration | TBD | STORY-0074 |
 | SCENARIO-0089 | Isolation tier declared by template selects the backend (D1) | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0089` | STORY-0023 |
 | SCENARIO-0090 | Worker NixOS config is a single declarative source (patterns captured) | integration | iteration | `bash fleet-worker/tests/single-source.test.sh` | STORY-0017 |
+| SCENARIO-0093 | Single caller: only deployed Temporal calls laneq Defer/Reprioritize | integration | iteration | CI: `cd modules/incus-dispatcher && go test -race -run 'TestScenario0093' ./temporal/` (done:ITER-0007b C2, sole-writer seam) | Live (E1): `bash modules/incus-dispatcher/temporal/run-temporal-live.sh` (TestScenario0093_LiveSoleCallerStructure: Temporal workflow gRPC calls to laneq) | STORY-0044 |
+| SCENARIO-0094 | Live human rescore via deployed Temporal moves item to any bucket | integration | iteration | CI: `go test -race ./temporal/ -run "TestScenario0094"` (done:ITER-0007b C3, signal+validation+sole-write) | Live (E1): `bash modules/incus-dispatcher/temporal/run-temporal-live.sh` (TestScenario0094_LiveHumanRescore: signals live workflow, laneq reflects priority change) | STORY-0047 |
