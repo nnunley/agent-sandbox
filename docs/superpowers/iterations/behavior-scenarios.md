@@ -2053,9 +2053,9 @@ to deadline-prioritization/STORY-0045 — corrected to SCENARIO-0054.)
 - No human intervention required
 - Item is now eligible for provisioning
 
-**Automation status:** CI/testsuite logic basis done:ITER-0007b C2 (Temporal Go SDK `testsuite.TestWorkflowEnvironment` with automatic time-skipping; workflow ages Q2→Q1, activity records Reprioritize + Defer calls). Live wall-clock proof (genuine aging on deployed cluster) deferred to task E1. **Aging-proof decision (PAR 2026-06-23): compressed real-wall-clock** — "Time advances 1.5 days" will be realized LIVE by setting the deadline a few seconds out and letting a real Temporal timer fire on actual wall-clock on the deployed cluster.
+**Automation status:** Workflow-driven Q2→Q1 aging proof done:ITER-0007b C2 via Temporal Go SDK `testsuite.TestWorkflowEnvironment` with automatic time-skipping. Test sets deadline 7 days out (Q2 at t=0), executes workflow, testsuite auto-skips through durable timers (~42h, 31h intervals), workflow detects urgency cross 0.5 threshold and ages to Q1, invokes ReprojectActivity to write Reprioritize + Defer. Live wall-clock/restart proof (genuine aging + durability across service restart) deferred to task E1.
 **Execution command (CI):** `cd modules/incus-dispatcher && go test -race -run 'TestScenario0056' ./temporal/`
-**Execution command (live, E1):** TBD — set in ITER-0007b cluster harness (deploy Temporal → enqueue near-deadline directive → assert Q2→Q1 + laneq.next reflects it after the live timer fires)
+**Execution command (live, E1):** TBD — set in ITER-0007b cluster harness (deploy Temporal → enqueue near-deadline directive → assert Q2→Q1 + laneq.next reflects it; restart service, assert promotion persists)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:245, 266-268`
