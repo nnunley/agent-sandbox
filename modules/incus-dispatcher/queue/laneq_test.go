@@ -803,3 +803,140 @@ func TestLaneqDirectiveBodyRoundTrip(t *testing.T) {
 		t.Errorf("Grade=%v, want oracle-v1", claimed.Grade)
 	}
 }
+
+// TestReprioritize verifies that Reprioritize maps to the laneq gRPC RPC correctly.
+func TestReprioritize(t *testing.T) {
+	tests := []struct {
+		name       string
+		id         string
+		importance Importance
+		resp       *laneqpb.ReprioritizeResponse
+		err        error
+		wantErr    bool
+	}{
+		{
+			name:       "success",
+			id:         "d-123",
+			importance: ImportanceHigh,
+			resp: &laneqpb.ReprioritizeResponse{
+				Id:       "d-123",
+				Priority: laneqpb.Priority_PRIORITY_P0,
+			},
+			err:     nil,
+			wantErr: false,
+		},
+		{
+			name:       "not found",
+			id:         "d-missing",
+			importance: ImportanceLow,
+			resp:       nil,
+			err:        status.Error(codes.NotFound, "directive not found"),
+			wantErr:    true,
+		},
+		{
+			name:       "rpc error",
+			id:         "d-456",
+			importance: ImportanceNormal,
+			resp:       nil,
+			err:        status.Error(codes.Internal, "database error"),
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &mockLaneqClientWithReprioritize{
+				reprioritizeResp: tt.resp,
+				reprioritizeErr:  tt.err,
+			}
+			q := NewLaneqQueue(mock, "default")
+
+			err := q.Reprioritize(tt.id, tt.importance)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Reprioritize() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if len(mock.reprioritizeCalls) != 1 {
+				t.Fatalf("expected 1 call to Reprioritize, got %d", len(mock.reprioritizeCalls))
+			}
+
+			call := mock.reprioritizeCalls[0]
+			if call.req.Id != tt.id {
+				t.Errorf("Reprioritize call: Id = %q, want %q", call.req.Id, tt.id)
+			}
+			if call.req.Priority != importanceToProto(tt.importance) {
+				t.Errorf("Reprioritize call: Priority = %v, want %v", call.req.Priority, importanceToProto(tt.importance))
+			}
+		})
+	}
+}
+
+// mockLaneqClientWithReprioritize extends mockLaneqClient with Reprioritize support.
+type mockLaneqClientWithReprioritize struct {
+	reprioritizeResp *laneqpb.ReprioritizeResponse
+	reprioritizeErr  error
+	reprioritizeCalls []reprioritizeCall
+}
+
+type reprioritizeCall struct {
+	req *laneqpb.ReprioritizeRequest
+}
+
+func (m *mockLaneqClientWithReprioritize) Reprioritize(ctx context.Context, in *laneqpb.ReprioritizeRequest, opts ...grpc.CallOption) (*laneqpb.ReprioritizeResponse, error) {
+	m.reprioritizeCalls = append(m.reprioritizeCalls, reprioritizeCall{in})
+	return m.reprioritizeResp, m.reprioritizeErr
+}
+
+// Stub out all other methods so it implements laneqpb.LaneqClient.
+func (m *mockLaneqClientWithReprioritize) Push(ctx context.Context, in *laneqpb.PushRequest, opts ...grpc.CallOption) (*laneqpb.PushResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) Take(ctx context.Context, in *laneqpb.TakeRequest, opts ...grpc.CallOption) (*laneqpb.TakeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) Peek(ctx context.Context, in *laneqpb.PeekRequest, opts ...grpc.CallOption) (*laneqpb.PeekResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) Show(ctx context.Context, in *laneqpb.ShowRequest, opts ...grpc.CallOption) (*laneqpb.ShowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) Listing(ctx context.Context, in *laneqpb.ListingRequest, opts ...grpc.CallOption) (*laneqpb.ListingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) SetStatus(ctx context.Context, in *laneqpb.SetStatusRequest, opts ...grpc.CallOption) (*laneqpb.SetStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) Defer(ctx context.Context, in *laneqpb.DeferRequest, opts ...grpc.CallOption) (*laneqpb.DeferResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) Touch(ctx context.Context, in *laneqpb.TouchRequest, opts ...grpc.CallOption) (*laneqpb.TouchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) Reap(ctx context.Context, in *laneqpb.ReapRequest, opts ...grpc.CallOption) (*laneqpb.ReapResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) Stats(ctx context.Context, in *laneqpb.StatsRequest, opts ...grpc.CallOption) (*laneqpb.StatsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) ThreadStatus(ctx context.Context, in *laneqpb.ThreadStatusRequest, opts ...grpc.CallOption) (*laneqpb.ThreadStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) Park(ctx context.Context, in *laneqpb.ParkRequest, opts ...grpc.CallOption) (*laneqpb.ParkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}
+
+func (m *mockLaneqClientWithReprioritize) Unpark(ctx context.Context, in *laneqpb.UnparkRequest, opts ...grpc.CallOption) (*laneqpb.UnparkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "")
+}

@@ -348,6 +348,23 @@ func (q *LaneqQueue) Park(lease Lease) error {
 	return nil
 }
 
+// Reprioritize changes the priority of a directive by ID.
+// Used by Temporal workflows to update directive priority based on urgency changes.
+// Returns an error if the directive is not found or if the RPC fails.
+func (q *LaneqQueue) Reprioritize(id string, importance Importance) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := q.client.Reprioritize(ctx, &laneqpb.ReprioritizeRequest{
+		Id:       id,
+		Priority: importanceToProto(importance),
+	})
+	if err != nil {
+		return fmt.Errorf("reprioritize: gRPC error: %w", err)
+	}
+
+	return nil
+}
 // Reap reclaims expired leases (requeues them). Returns the count reclaimed.
 func (q *LaneqQueue) Reap() (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
