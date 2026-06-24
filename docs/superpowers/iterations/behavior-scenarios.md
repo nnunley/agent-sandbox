@@ -3375,8 +3375,8 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - Retries are durable (survive Temporal restart); only happen via ReprojectActivity (sole-writer seam)
 - Retry backoff prevents thundering herd on transient failures
 
-**Automation status:** CI/testsuite logic basis done in ITER-0007b C4 (RetryBackoff pure helper + integration with future RetryWorkflow); live Temporal durability (restart survival) deferred to E1
-**Execution command:** CI: `cd modules/incus-dispatcher && go test -race './temporal/' -run 'TestRetryBackoff'` (pure backoff schedule validation)
+**Automation status:** CI/testsuite integration logic basis done in ITER-0007b C4 (RetryWorkflow durable re-push via sole-writer Defer seam; exponential backoff verified via FakeReprojector delta assertions); live Temporal durability (restart survival) deferred to E1
+**Execution command:** CI: `cd modules/incus-dispatcher && go test -race './temporal/' -run 'TestRetryWorkflow_BackoffRePush'` (durable retry re-push with consecutive Defer delta validation matching RetryBackoff schedule)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:413-415`

@@ -80,6 +80,7 @@ func NewWorker(ctx context.Context, cfg WorkerConfig, q queue.Queue) (*Worker, e
 // Register registers workflow and activity definitions with the worker.
 func (w *Worker) Register() {
 	w.worker.RegisterWorkflow(PriorityWorkflow)
+	w.worker.RegisterWorkflow(RetryWorkflow)
 	w.worker.RegisterWorkflow(EscalationWorkflow)
 	w.worker.RegisterWorkflow(DeferWorkflow)
 	w.worker.RegisterActivity(w.activities.ReprojectActivity)
