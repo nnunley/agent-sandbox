@@ -2053,12 +2053,9 @@ to deadline-prioritization/STORY-0045 — corrected to SCENARIO-0054.)
 - No human intervention required
 - Item is now eligible for provisioning
 
-**Automation status:** pending → ITER-0007b. **Aging-proof decision (PAR 2026-06-23): compressed real-wall-clock**
-— "Time advances 1.5 days" is realized LIVE by setting the deadline a few seconds out and letting a real Temporal
-timer fire on actual wall-clock (genuine wall-clock aging per STORY-0043 AC-2, but cluster-runnable in seconds),
-NOT a fake/injected clock (that was ITER-0007's CI proof, SCENARIO-0078).
-**Execution command:** TBD — set in ITER-0007b cluster harness (deploy Temporal → enqueue near-deadline directive →
-assert Q2→Q1 + laneq.next reflects it after the live timer fires)
+**Automation status:** CI/testsuite logic basis done:ITER-0007b C2 (Temporal Go SDK `testsuite.TestWorkflowEnvironment` with automatic time-skipping; workflow ages Q2→Q1, activity records Reprioritize + Defer calls). Live wall-clock proof (genuine aging on deployed cluster) deferred to task E1. **Aging-proof decision (PAR 2026-06-23): compressed real-wall-clock** — "Time advances 1.5 days" will be realized LIVE by setting the deadline a few seconds out and letting a real Temporal timer fire on actual wall-clock on the deployed cluster.
+**Execution command (CI):** `cd modules/incus-dispatcher && go test -race -run 'TestScenario0056' ./temporal/`
+**Execution command (live, E1):** TBD — set in ITER-0007b cluster harness (deploy Temporal → enqueue near-deadline directive → assert Q2→Q1 + laneq.next reflects it after the live timer fires)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:245, 266-268`
@@ -3324,8 +3321,9 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - The single-caller invariant is verifiable (call origin = Temporal worker role) — process-level discipline,
   NOT lease exclusivity (laneq leases are non-exclusive; SCENARIO-0092)
 
-**Automation status:** pending (live: needs deployed Temporal + laneq; logic basis done:ITER-0007 GuardedDirective)
-**Execution command:** TBD — set in ITER-0007b (cluster harness asserts Defer/Reprioritize call origin)
+**Automation status:** CI/testsuite logic basis done:ITER-0007b C2 (fake Reprojector injected into activity; workflow makes zero direct queue calls; all writes go through activity sole-writer seam). Live cluster proof of call-origin verification deferred to task E1.
+**Execution command (CI):** `cd modules/incus-dispatcher && go test -race -run 'TestScenario0093' ./temporal/`
+**Execution command (live, E1):** TBD — set in ITER-0007b cluster harness (asserts Defer/Reprioritize call origin)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:409`

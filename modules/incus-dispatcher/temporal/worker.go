@@ -6,7 +6,8 @@ import (
 
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
-	"go.temporal.io/sdk/workflow"
+
+	"github.com/agent-sandbox/incus-dispatcher/queue"
 )
 
 // WorkerConfig holds configuration for the Temporal worker.
@@ -21,13 +22,15 @@ type WorkerConfig struct {
 
 // Worker encapsulates the Temporal worker and client.
 type Worker struct {
-	client client.Client
-	worker worker.Worker
-	config WorkerConfig
+	client     client.Client
+	worker     worker.Worker
+	config     WorkerConfig
+	activities *Activities
 }
 
 // NewWorker creates a new Temporal worker with the given configuration.
-func NewWorker(ctx context.Context, cfg WorkerConfig) (*Worker, error) {
+// If q is nil, a default Activities struct with nil Queue is used (tests must inject a fake).
+func NewWorker(ctx context.Context, cfg WorkerConfig, q queue.Queue) (*Worker, error) {
 	if cfg.TemporalAddress == "" {
 		cfg.TemporalAddress = "127.0.0.1:7233"
 	}
@@ -50,17 +53,33 @@ func NewWorker(ctx context.Context, cfg WorkerConfig) (*Worker, error) {
 	// Create worker.
 	w := worker.New(c, cfg.TaskQueue, worker.Options{})
 
+	// Create activities with the provided queue (or nil for testing).
+	// Tests inject a fake Reprojector; production uses a *LaneqQueueWrapper that adapts
+	// *queue.LaneqQueue to the Reprojector interface.
+	var reprojector Reprojector
+	if q != nil {
+		// If q is a *queue.LaneqQueue, wrap it to satisfy Reprojector.
+		if lq, ok := q.(*queue.LaneqQueue); ok {
+			reprojector = &LaneqQueueWrapper{queue: lq}
+		}
+	}
+
+	activities := &Activities{
+		Queue: reprojector,
+	}
+
 	return &Worker{
-		client: c,
-		worker: w,
-		config: cfg,
+		client:     c,
+		worker:     w,
+		config:     cfg,
+		activities: activities,
 	}, nil
 }
 
 // Register registers workflow and activity definitions with the worker.
 func (w *Worker) Register() {
 	w.worker.RegisterWorkflow(PriorityWorkflow)
-	// Activities will be registered here as they are defined.
+	w.worker.RegisterActivity(w.activities.ReprojectActivity)
 }
 
 // Start starts the worker.
@@ -80,11 +99,3 @@ func (w *Worker) Client() client.Client {
 	return w.client
 }
 
-// PriorityWorkflow is a stub workflow that will be implemented in C2.
-// For now, it's a placeholder that the worker skeleton can register.
-func PriorityWorkflow(ctx workflow.Context) error {
-	// TODO: Implement PriorityWorkflow in C2.
-	// This will schedule timers based on urgency/deadline and re-project
-	// priority into laneq via Reprioritize.
-	return nil
-}

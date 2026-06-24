@@ -54,9 +54,11 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 		return nil
 	}
 
-	// Track the last projected quadrant so we can detect changes
-	lastQuadrant := QuadrantQ4
-	lastEffectivePriority := 0
+	// Compute the initial quadrant at workflow start time.
+	// This is the directive's starting projection; we track changes from this point.
+	initialUrgency := ComputeUrgency(input.Deadline, now)
+	lastQuadrant := ComputeQuadrant(input.Importance, initialUrgency)
+	lastEffectivePriority := ComputeEffectivePriority(input.Importance, lastQuadrant)
 
 	for {
 		// Recompute urgency and quadrant at the current workflow time
@@ -110,15 +112,17 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 		}
 
 		// Calculate the next re-projection point
-		// Strategy: check again at 1/4 of the time remaining, or at least 1 minute apart
+		// Strategy: check again at 1/4 of the time remaining, bounded between 1 minute and 6 hours.
+		// In production with live Temporal, the 6-hour cap is reasonable; testsuite auto-advances
+		// timers so the duration doesn't affect test runtime.
 		timeRemaining := input.Deadline.Sub(now)
 		nextCheckDuration := timeRemaining / 4
 		if nextCheckDuration < time.Minute {
 			nextCheckDuration = time.Minute
 		}
-		if nextCheckDuration > 24*time.Hour {
-			// For very far-out deadlines, check daily
-			nextCheckDuration = 24 * time.Hour
+		if nextCheckDuration > 6*time.Hour {
+			// For very far-out deadlines, check every 6 hours
+			nextCheckDuration = 6 * time.Hour
 		}
 
 		// Sleep on a durable Temporal timer (deterministic, auto-advanced in tests)

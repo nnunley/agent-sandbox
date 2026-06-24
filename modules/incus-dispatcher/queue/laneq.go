@@ -365,6 +365,30 @@ func (q *LaneqQueue) Reprioritize(id string, importance Importance) error {
 
 	return nil
 }
+
+// Defer sets the not-before eligibility time for a directive by ID (lease-free).
+// Used by Temporal workflows to make a directive eligible (by setting notBefore to now
+// or earlier) or defer it until a future time.
+// Unlike Requeue, this does NOT require a lease (no consumer context).
+// Returns an error if the directive is not found or if the RPC fails.
+//
+// This is the SOLE public path for Temporal to update not-before; it mirrors the
+// Defer RPC call inside Requeue (laneq.go:278-289) but is exposed as a lease-free
+// public method for the ReprojectActivity sole-writer seam (STORY-0044 AC-3).
+func (q *LaneqQueue) Defer(id string, notBefore time.Time) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := q.client.Defer(ctx, &laneqpb.DeferRequest{
+		Id:        id,
+		UntilUnix: ptrInt64(notBefore.Unix()),
+	})
+	if err != nil {
+		return fmt.Errorf("defer: gRPC error: %w", err)
+	}
+
+	return nil
+}
 // Reap reclaims expired leases (requeues them). Returns the count reclaimed.
 func (q *LaneqQueue) Reap() (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
