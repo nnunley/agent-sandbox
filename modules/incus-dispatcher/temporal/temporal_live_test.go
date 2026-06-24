@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,6 +82,33 @@ func SetupTemporalLive(t *testing.T) *TemporalLiveEnv {
 		temporalCli.Close()
 		laneqConn.Close()
 		t.Fatalf("Temporal health check failed after retries at %s", temporalAddr)
+	}
+
+	// Additional stability check: ensure gRPC API is truly ready by attempting a describe on a non-existent workflow.
+	// After restart, health check may pass but gRPC connections might still be unstable.
+	// Retry until we can successfully complete a gRPC call without RST_STREAM errors.
+	stableCtx, stableCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stableCancel()
+
+	stable := false
+	for attempt := 0; attempt < 10; attempt++ {
+		testCtx, testCancel := context.WithTimeout(stableCtx, 5*time.Second)
+		_, err := temporalCli.DescribeWorkflowExecution(testCtx, "stability-test-nonexistent", "test-runid")
+		testCancel()
+
+		// We expect an error (workflow doesn't exist), but NOT an RST_STREAM error
+		if err != nil && !strings.Contains(err.Error(), "RST_STREAM") {
+			stable = true
+			break
+		}
+		if attempt < 9 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+	if !stable {
+		temporalCli.Close()
+		laneqConn.Close()
+		t.Fatalf("Temporal gRPC API did not stabilize after restart at %s", temporalAddr)
 	}
 
 	// Create Worker with live laneq queue as the Reprojector
@@ -272,6 +300,10 @@ func TestScenario0001_LiveRestartSurvival(t *testing.T) {
 			t.Fatalf("STALE STATE FILE: nonce is zero (no freshness guard)")
 		}
 		t.Logf("State recovered: workflowID=%s, runID=%s, nonce=%d", state.WorkflowID, state.RunID, state.Nonce)
+
+		// After restart, wait a bit more for Temporal gRPC connections to fully stabilize
+		t.Logf("Waiting for Temporal to fully stabilize post-restart...")
+		time.Sleep(5 * time.Second)
 
 		ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel1()
