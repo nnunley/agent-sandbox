@@ -44,7 +44,7 @@ func TestScenario0094_HumanRescoreUnrestricted(t *testing.T) {
 		ID:   "operator",
 	}
 
-	// Rescore request: Medium → Critical (Q3 → Q1 via importance bump)
+	// Rescore request: Medium → Critical (Q4 → Q2 via importance bump)
 	rescoreSignal := RescoreSignal{
 		Actor:              human,
 		ProposedImportance: ImportanceCritical,
@@ -96,6 +96,23 @@ func TestScenario0094_HumanRescoreUnrestricted(t *testing.T) {
 		t.Fatalf("no rescore re-projection found: expected Reprioritize with Critical importance, "+
 			"got calls: %v", fakeQueue.ReprioritizeCalls)
 	}
+
+	// SCENARIO-0094 Observable 3: Query confirms the rescore was accepted (currentImportance changed to Critical).
+	// This proves signal delivery and acceptance in the workflow's deterministic state.
+	var finalImportance Importance
+	queryFuture, err := env.QueryWorkflow(CurrentImportanceQuery)
+	if err != nil {
+		t.Fatalf("failed to start query currentImportance: %v", err)
+	}
+	err = queryFuture.Get(&finalImportance)
+	if err != nil {
+		t.Fatalf("failed to get query result: %v", err)
+	}
+	if finalImportance != ImportanceCritical {
+		t.Fatalf("human rescore was NOT accepted: query currentImportance=%d; expected ImportanceCritical=%d",
+			finalImportance, ImportanceCritical)
+	}
+	t.Logf("✓ Query confirms: currentImportance changed to Critical (rescore accepted)")
 
 	t.Logf("✓ SCENARIO-0094 (human rescore unrestricted): workflow accepted rescore via signal, "+
 		"updated priority, invoked sole-writer activity (Reprioritize: %d, Defer: %d)",
@@ -161,35 +178,39 @@ func TestScenario0094_AgentRescoreBounded(t *testing.T) {
 		t.Fatalf("workflow failed: %v", err)
 	}
 
-	// SCENARIO-0094 / SCENARIO-0057 Observable: The out-of-bounds rescore was REJECTED.
-	// Expected: ZERO Reprioritize and Defer calls resulted from the out-of-bounds signal
-	// (the no-write rejection seam is working).
-	//
-	// Note: C2 may have invoked the activity for aging transitions (e.g., Low→Medium as deadline nears).
-	// We must assert that NONE of those calls use the proposed Critical importance.
+	// SCENARIO-0094 / SCENARIO-0057 Observable 1: Verify signal was delivered and processed.
+	// Query the workflow's live currentImportance to confirm the rescore signal was received
+	// and that the rejection was applied (importance stayed Low).
+	var finalImportance Importance
+	queryFuture2, err2 := env.QueryWorkflow(CurrentImportanceQuery)
+	if err2 != nil {
+		t.Fatalf("failed to start query currentImportance: %v", err2)
+	}
+	err2 = queryFuture2.Get(&finalImportance)
+	if err2 != nil {
+		t.Fatalf("failed to get query result: %v", err2)
+	}
+	if finalImportance != ImportanceLow {
+		t.Fatalf("rescore signal was NOT rejected: query currentImportance=%d; expected ImportanceLow=%d "+
+			"(signal must be delivered + importance must stay unchanged on rejection)",
+			finalImportance, ImportanceLow)
+	}
+	t.Logf("✓ Rescore signal delivered and rejected: currentImportance stayed at Low")
+
+	// SCENARIO-0094 / SCENARIO-0057 Observable 2: Verify no writes occurred from rejected rescore.
+	// Every Reprioritize call for this directive must use queue.ImportanceLow.
+	// Aging a Low item only maps to queue.ImportanceLow; an accepted illegal rescore would produce Normal/High.
 	for _, call := range fakeQueue.ReprioritizeCalls {
-		if call.ID == input.DirectiveID && call.Importance == queue.ImportanceHigh {
-			// We found a call with Critical/High importance. If this came from the rescore signal,
-			// the rejection failed. To be strict, we can check the timing: the signal arrives at 1s,
-			// and aging checks occur at longer intervals. However, the testsuite may auto-advance
-			// in a way that conflates timings. For this test, we'll be lenient and just assert
-			// that if the importance IS High, it must NOT be because of the rescore signal (i.e.,
-			// it could only be from aging, which means the rescore was rejected).
-			//
-			// Actually, let's be stricter: if there are ANY Reprioritize calls at all, they should
-			// correspond to aging transitions (e.g., Low or Medium), NOT the proposed Critical.
-			// The cleanest assertion: the directive should NEVER have had its importance bumped to
-			// Critical via a rescore. We can check the recorded Importance values; they should match
-			// the result of aging (Low→Medium or stays Low), not the proposed Critical.
+		if call.ID == input.DirectiveID && call.Importance != queue.ImportanceLow {
 			t.Fatalf("agent out-of-bounds rescore was NOT rejected: found Reprioritize call "+
-				"with Critical importance (queue.ImportanceHigh); expected rejection (no Critical bump)")
+				"with importance=%q; every call for Low item must be ImportanceLow=%q (aging never bumps Low→Critical)."+
+				"Non-Low importance proves the rejected rescore was applied (FAILURE)",
+				call.Importance, queue.ImportanceLow)
 		}
 	}
-
-	t.Logf("✓ SCENARIO-0094 / SCENARIO-0057 (agent rescore bounded): "+
-		"out-of-bounds Low→Critical signal was rejected; "+
-		"no writes from illegal rescore (Reprioritize calls: %d, Defer calls: %d)",
-		len(fakeQueue.ReprioritizeCalls), len(fakeQueue.DeferCalls))
+	t.Logf("✓ SCENARIO-0094 / SCENARIO-0057 (agent rescore bounded): out-of-bounds Low→Critical "+
+		"signal was delivered, validated, and rejected; currentImportance stayed Low; "+
+		"all Reprioritize calls use ImportanceLow (no illegal write occurred)")
 }
 
 // TestScenario0094_AgentWithinBoundedRescore tests that an agent in-bounds rescore
@@ -268,6 +289,22 @@ func TestScenario0094_AgentWithinBoundedRescore(t *testing.T) {
 		t.Fatalf("no in-bounds rescore re-projection found: expected Reprioritize with Medium importance, "+
 			"got calls: %v", fakeQueue.ReprioritizeCalls)
 	}
+
+	// SCENARIO-0094 Observable 3: Query confirms the in-bounds rescore was accepted (currentImportance changed to Medium).
+	var finalImportance Importance
+	queryFuture3, err3 := env.QueryWorkflow(CurrentImportanceQuery)
+	if err3 != nil {
+		t.Fatalf("failed to start query currentImportance: %v", err3)
+	}
+	err3 = queryFuture3.Get(&finalImportance)
+	if err3 != nil {
+		t.Fatalf("failed to get query result: %v", err3)
+	}
+	if finalImportance != ImportanceMedium {
+		t.Fatalf("in-bounds rescore was NOT accepted: query currentImportance=%d; expected ImportanceMedium=%d",
+			finalImportance, ImportanceMedium)
+	}
+	t.Logf("✓ Query confirms: currentImportance changed to Medium (rescore accepted)")
 
 	t.Logf("✓ SCENARIO-0094 (agent rescore within bounds): "+
 		"workflow accepted in-bounds rescore (Low→Medium), invoked activity (Reprioritize: %d, Defer: %d)",

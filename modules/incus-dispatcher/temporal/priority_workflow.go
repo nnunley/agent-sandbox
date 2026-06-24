@@ -11,6 +11,11 @@ import (
 // RescoreSignalName is the name of the rescore signal that can be sent to a PriorityWorkflow.
 const RescoreSignalName = "rescore"
 
+// CurrentImportanceQuery is the name of the query that exposes the workflow's live currentImportance.
+// Used by operators (tests, E1 cluster) to verify that a rescore signal was processed and accepted/rejected.
+// Query handler returns the current Importance value (updated by rescore signals or aging).
+const CurrentImportanceQuery = "currentImportance"
+
 // RescoreSignal is the payload for a rescore request sent to a PriorityWorkflow.
 // It contains the actor making the request and the proposed new importance level.
 type RescoreSignal struct {
@@ -96,6 +101,16 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 	// Set up the rescore signal channel (non-buffered; we'll consume it in the loop).
 	rescoreSignalChannel := workflow.GetSignalChannel(ctx, RescoreSignalName)
 
+	// Register a query handler to expose the live currentImportance.
+	// This allows external actors (operators, E1 cluster) to verify that a rescore signal
+	// was processed and whether it was accepted (importance changed) or rejected (stayed same).
+	// The handler closes over the mutable currentImportance variable.
+	if err := workflow.SetQueryHandler(ctx, CurrentImportanceQuery, func() (Importance, error) {
+		return currentImportance, nil
+	}); err != nil {
+		return err
+	}
+
 	for {
 		// Recompute urgency and quadrant at the current workflow time
 		urgency := ComputeUrgency(input.Deadline, now)
@@ -151,7 +166,9 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 			nextCheckDuration = 6 * time.Hour
 		}
 
-		// Create a timer for the next aging check
+		// Create a timer for the next aging check.
+		// Note: if a rescore signal fires first, this timer is abandoned (left to expire naturally).
+		// This is acceptable; a new timer will be created on the next loop iteration.
 		timerFuture := workflow.NewTimer(ctx, nextCheckDuration)
 
 		// Use a Selector to wait on BOTH the aging timer and incoming rescore signals.
