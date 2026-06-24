@@ -6,6 +6,7 @@
     ./networking.nix
     ../modules/llm-proxy.nix
     ../fleet-worker/laneq-service.nix
+    ../fleet-worker/temporal-service.nix
   ];
 
   # Basic system

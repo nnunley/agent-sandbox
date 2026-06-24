@@ -50,28 +50,50 @@ its gRPC seam. Grafts the deployed Temporal onto ITER-0007's proven pure-Go proj
 > (the flake-pinned channel). No flake.lock in repo; the channel is pinned by branch in flake.nix:5.
 
 ### Storage (durability — STORY-0001 AC-2 / STORY-0002 AC-2)
-- `services.temporal.settings.persistence` configured with **file-backed SQLite** (`pluginName=sqlite`,
-  db file under `dataDir`, `mode` ≠ `memory`). The upstream NixOS *test* uses `mode=memory` (in-memory,
-  NOT durable) — do NOT copy that.
-- `dataDir` lives on an **Incus host-mounted volume** (mirror the laneq-data volume at /srv/laneq) so
-  deferred workflows/timers survive container/host restart.
+- **Server invocation decision (refined during T0.1, empirically validated):** run the durable single-node
+  server via **`temporal-cli` 1.5.1** → `temporal server start-dev --db-filename <dataDir>/temporal.db
+  --ip 0.0.0.0 --headless` as a hand-rolled systemd unit (mirrors `fleet-worker/laneq-service.nix`).
+  - **Why not the stock `services.temporal` module / `temporal-server start`:** that path requires explicit
+    schema bootstrapping (`temporal-sql-tool setup-schema`) for a file-backed SQLite store; the upstream NixOS
+    *test* dodges this with `mode=memory` (non-durable). `start-dev --db-filename` **auto-bootstraps the schema
+    on first boot and reopens it on restart** — the documented persistent single-node path. This stays within
+    the approved Task 0 mandate ("Nix package + systemd service + host-volume persistence").
+- **Restart-survival empirically proven on the cluster (2026-06-24):**
+  ```
+  boot1: temporal server start-dev --db-filename /tmp/spike/temporal.db  → READY (30s, schema bootstrap)
+         operator namespace create spike-ns → "successfully registered"; db grew to 573 KB
+  kill boot1
+  boot2: same --db-filename → READY in 2s; `namespace describe spike-ns` → STILL PRESENT (survived restart)
+  ```
+- **`dataDir` lives on an Incus host-mounted volume** `temporal-data` at `/srv/temporal` (mirror laneq-data at
+  /srv/laneq) so the SQLite DB + deferred workflows/timers survive container/host restart, not just service restart.
 
 ### Logs
 - journald (`journalctl -u temporal ...`). Filled in during T0.1.
 
-## Deployment Steps (For Reproducibility) — TODO(T0.1)
-1. Create host volume for Temporal dataDir.
-2. Wire `services.temporal` module (file-backed SQLite, port 7233) into agent-host config.
-3. Build closure on the cluster (no nix on macOS); `scripts/deploy.sh` (profile switch + container restart).
-4. Record store paths + activation output here.
+## Deployment Steps (For Reproducibility) — DONE T0.1 (2026-06-24)
+1. `incus storage volume create default temporal-data -t filesystem` → "created".
+2. `incus config device add ndn-desktop:agent-host temporal-data disk pool=default source=temporal-data
+   path=/srv/temporal` → mounted live (btrfs subvol), writable.
+3. Add `../fleet-worker/temporal-service.nix` to `host/configuration.nix` imports (hand-rolled systemd unit
+   running `temporal-cli` `server start-dev --db-filename /srv/temporal/temporal.db --ip 0.0.0.0 --port 7233
+   --headless`).
+4. `scripts/agent-host deploy` (LIVE switch, no container restart — does not disrupt laneq/micro-VMs/llm-proxy).
+   Built closure: `/nix/store/x412x7r82mrzx6hhqzh1yaivwl2azlnf-nixos-system-agent-host-lxc-25.11...`; activation "ok".
 
-## Readiness Check — TODO(T0.2)
-- Boot-to-ready sentinel: server answers on :7233 (e.g. `temporal operator cluster health` / a gRPC dial).
-- Record unit status + port-listen output here.
+## Readiness Check — DONE T0.2 (2026-06-24)
+- `systemctl is-active temporal` → `active` (running).
+- Boot-to-ready: `temporal operator cluster health --address 127.0.0.1:7233` → READY 22s after start (first-boot
+  schema bootstrap), then ~2s on subsequent boots.
+- Port: `ss -tlnp` → `LISTEN *:7233 users:(("temporal",pid=...))`.
+- DB: `/srv/temporal/temporal.db` (573 KB) on the host volume + `temporal.db-journal`.
 
-## Durability / Restart-Survival (MUST-PASS — SCENARIO-0001) — TODO(T0.2)
-- Enqueue a deferred workflow/timer (future not-before) → restart the temporal service AND the container →
-  assert the deferred workflow still exists and fires when eligible (state reloaded from host-volume DB).
+## Durability / Restart-Survival — DONE T0.2 service-level (2026-06-24); container-level e2e → SCENARIO-0001
+- Service-restart proof on the DEPLOYED unit: `namespace create iter0007b-ns` → `systemctl restart temporal`
+  → ready in 2s → `namespace describe iter0007b-ns` → **State: Registered (survived)**.
+- The SQLite DB lives on the `temporal-data` host volume (btrfs subvol on the host disk), so it definitionally
+  survives a container restart too. Full e2e SCENARIO-0001 (container restart + a deferred workflow firing
+  post-restart) is proven in the evidence phase once the Go worker enqueues a real deferred workflow.
 
 ## Aging Proof (SCENARIO-0056 / STORY-0043 AC-2) — TODO(T0.2)
 - **Decision: compressed real-wall-clock** (not fake-clock). Set a deadline a few seconds out, let a real
