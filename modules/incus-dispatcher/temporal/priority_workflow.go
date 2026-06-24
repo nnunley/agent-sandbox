@@ -4,13 +4,22 @@ import (
 	"fmt"
 	"time"
 
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
 // workflowActivityOptions sets sensible defaults for activities in the priority workflow.
 // Start-to-close timeout of 30s is sufficient for gRPC calls to laneq.
+// RetryPolicy ensures transient laneq gRPC errors are retried, making scheduling writes durable.
 var workflowActivityOptions = workflow.ActivityOptions{
 	StartToCloseTimeout: 30 * time.Second,
+	RetryPolicy: &temporal.RetryPolicy{
+		InitialInterval:    1 * time.Second,
+		BackoffCoefficient: 2.0,
+		MaximumInterval:    1 * time.Minute,
+		// MaximumAttempts = 0 (default) means unlimited retries with exponential backoff.
+		// This ensures sole-writer Reprioritize/Defer RPCs survive transient laneq unavailability.
+	},
 }
 
 // PriorityWorkflowInput is the input to the PriorityWorkflow.
@@ -60,6 +69,9 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 	lastQuadrant := ComputeQuadrant(input.Importance, initialUrgency)
 	lastEffectivePriority := ComputeEffectivePriority(input.Importance, lastQuadrant)
 
+	// Allocate the activity reference once (reused for all activity invocations in the loop).
+	activities := &Activities{}
+
 	for {
 		// Recompute urgency and quadrant at the current workflow time
 		urgency := ComputeUrgency(input.Deadline, now)
@@ -71,10 +83,9 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 			// Set notBefore to the current workflow time (make item eligible now).
 			notBefore := now
 
-			// Invoke the sole-writer activity to persist the projection
+			// Invoke the sole-writer activity to persist the projection.
 			// Use workflow.ExecuteActivity with the activity struct method reference.
 			// The activity is registered as Activities.ReprojectActivity.
-			activities := &Activities{}
 			req := ReprojectRequest{
 				DirectiveID:       input.DirectiveID,
 				Importance:        input.Importance,

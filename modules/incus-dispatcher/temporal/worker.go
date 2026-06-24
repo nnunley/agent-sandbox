@@ -31,6 +31,18 @@ type Worker struct {
 // NewWorker creates a new Temporal worker with the given configuration.
 // If q is nil, a default Activities struct with nil Queue is used (tests must inject a fake).
 func NewWorker(ctx context.Context, cfg WorkerConfig, q queue.Queue) (*Worker, error) {
+	// Validate queue early: if a non-nil queue is provided, it must implement Reprojector.
+	// This fails fast instead of silently leaving Queue=nil (which would fail at activity runtime).
+	var reprojector Reprojector
+	if q != nil {
+		// *queue.LaneqQueue implements Reprojector directly.
+		var ok bool
+		reprojector, ok = q.(Reprojector)
+		if !ok {
+			return nil, fmt.Errorf("queue %T does not implement Reprojector (expected *queue.LaneqQueue)", q)
+		}
+	}
+
 	if cfg.TemporalAddress == "" {
 		cfg.TemporalAddress = "127.0.0.1:7233"
 	}
@@ -52,17 +64,6 @@ func NewWorker(ctx context.Context, cfg WorkerConfig, q queue.Queue) (*Worker, e
 
 	// Create worker.
 	w := worker.New(c, cfg.TaskQueue, worker.Options{})
-
-	// Create activities with the provided queue (or nil for testing).
-	// Production: q is *queue.LaneqQueue which directly satisfies Reprojector.
-	// Tests inject a fake Reprojector for isolated testing.
-	var reprojector Reprojector
-	if q != nil {
-		// *queue.LaneqQueue implements Reprojector directly.
-		if lq, ok := q.(Reprojector); ok {
-			reprojector = lq
-		}
-	}
 
 	activities := &Activities{
 		Queue: reprojector,

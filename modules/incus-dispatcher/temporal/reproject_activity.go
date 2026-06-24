@@ -57,11 +57,11 @@ func (a *Activities) ReprojectActivity(ctx context.Context, req ReprojectRequest
 		return fmt.Errorf("reproject activity: queue dependency is nil")
 	}
 
-	// Map the computed quadrant/importance to a queue.Importance for Reprioritize.
-	// This bridge converts temporal.Importance tier (0-3) back to queue.Importance strings.
-	// The exact mapping depends on the quadrant and importance level.
-	// For now, use a simple strategy: pass through the importance tier.
-	// In production, this could be refined based on the quadrant and strategic priority rules.
+	// Map the computed temporal.Importance tier to a queue.Importance for the Reprioritize RPC.
+	// tierToQueueImportance performs a lossy conversion: both ImportanceCritical and ImportanceHigh
+	// map to queue.ImportanceHigh (laneq's top priority P0), because laneq has no Critical tier.
+	// Finer urgency differentiation between critical and high is carried by the Eisenhower
+	// quadrant and not-before time, not the laneq priority enum.
 	queueImportance := tierToQueueImportance(req.Importance)
 
 	// Call Reprioritize to update the directive's priority in laneq
@@ -79,10 +79,20 @@ func (a *Activities) ReprojectActivity(ctx context.Context, req ReprojectRequest
 
 // tierToQueueImportance converts a temporal Importance tier (0-3) to a queue.Importance string.
 // This is the inverse of ImportanceStringToTier.
+//
+// NOTE: ImportanceCritical and ImportanceHigh both map to queue.ImportanceHigh.
+// This is a lossy conversion because laneq's priority model has only three tiers
+// (High/P0, Normal/P1, Low/P2), while the temporal Importance scale has four (Critical, High, Medium, Low).
+// This is SAFE because:
+// - Critical and High directives both reach laneq's top priority level (P0).
+// - Finer urgency differentiation is preserved by the Eisenhower quadrant and not-before time.
+// - The quadrant/urgency axis determines "do now" (Q1), "schedule" (Q2), "delegate" (Q3), or
+//   "idle-only" (Q4), which is the meaningful scheduling signal for the daemon.
+// - This mirroring matches queue/laneq.go's importanceToProto, which also collapses Critical→High.
 func tierToQueueImportance(tier Importance) queue.Importance {
 	switch tier {
 	case ImportanceCritical:
-		return queue.ImportanceHigh // Map critical → high (queue has no critical)
+		return queue.ImportanceHigh // Map critical → high (laneq has no Critical tier; both reach P0)
 	case ImportanceHigh:
 		return queue.ImportanceHigh
 	case ImportanceMedium:
