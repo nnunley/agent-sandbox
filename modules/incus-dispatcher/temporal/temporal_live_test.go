@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"go.temporal.io/sdk/client"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/agent-sandbox/incus-dispatcher/queue"
 	"github.com/agent-sandbox/incus-dispatcher/queue/laneqpb"
@@ -66,14 +68,20 @@ func SetupTemporalLive(t *testing.T) *TemporalLiveEnv {
 	}
 	_ = temporalCli.CancelWorkflow(ctx, "temporal-live-ping", testWorkflowRun.GetRunID())
 
-	// Get laneq client (we'll use it directly)
-	client := laneqpb.NewLaneqClient(nil) // Will be replaced with real connection in env return
+	// Dial the live laneq gRPC server (insecure; loopback inside the container).
+	laneqConn, err := grpc.NewClient(laneqAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		temporalCli.Close()
+		t.Fatalf("dial laneq at %s: %v", laneqAddr, err)
+	}
+	laneqCli := laneqpb.NewLaneqClient(laneqConn)
 
 	return &TemporalLiveEnv{
 		TemporalAddr: temporalAddr,
 		LaneqAddr:    laneqAddr,
 		TemporalCli:  temporalCli,
-		LaneqCli:     client,
+		LaneqCli:     laneqCli,
+		LaneqConn:    laneqConn,
 		TaskQueue:    "priority-workflow-live",
 		WorkerConfig: WorkerConfig{
 			TemporalAddress: temporalAddr,
@@ -87,6 +95,9 @@ func SetupTemporalLive(t *testing.T) *TemporalLiveEnv {
 func (env *TemporalLiveEnv) Cleanup() {
 	if env.TemporalCli != nil {
 		env.TemporalCli.Close()
+	}
+	if conn, ok := env.LaneqConn.(*grpc.ClientConn); ok && conn != nil {
+		conn.Close()
 	}
 }
 

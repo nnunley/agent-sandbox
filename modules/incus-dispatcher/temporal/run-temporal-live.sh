@@ -104,10 +104,17 @@ export LANEQ_LIVE_ADDR="${LANEQ_ADDR}"
 # First, run all tests EXCEPT the restart-survival test
 echo "  Running non-restart scenario tests..."
 if incus exec "$INCUS_CONTAINER" -- env TEMPORAL_LIVE=1 TEMPORAL_LIVE_ADDR="${TEMPORAL_ADDR}" LANEQ_LIVE_ADDR="${LANEQ_ADDR}" \
-	"$REMOTE_TEST_BIN" -test.run 'TestScenario(056|081|093|094)_Live|TestTemporal.*Reachability' -test.v -test.timeout 5m >"$TEST_OUTPUT" 2>&1; then
+	"$REMOTE_TEST_BIN" -test.run 'TestScenario(0056|0081|0093|0094)_Live|TestTemporal.*Reachability' -test.v -test.timeout 5m >"$TEST_OUTPUT" 2>&1; then
 	echo "✓ Non-restart tests passed"
+	grep -E 'no tests to run|PASS|FAIL|---' "$TEST_OUTPUT" || true
 else
 	echo "WARN: Some non-restart tests failed (continuing to restart cycle)"
+	cat "$TEST_OUTPUT"
+fi
+# Guard against a silently-empty run (regex matched nothing).
+if grep -q 'no tests to run' "$TEST_OUTPUT"; then
+	echo "FAIL: non-restart test selector matched no tests"
+	exit 1
 fi
 cat "$TEST_OUTPUT"
 
