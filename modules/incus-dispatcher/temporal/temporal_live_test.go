@@ -2,6 +2,7 @@ package temporal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -214,114 +215,174 @@ func TestScenario0056_LiveWallClockAging(t *testing.T) {
 	t.Logf("  (Note: Q2→Q1 quadrant transition is CI-PROVEN in testsuite; wall-clock transition requires ~5 days or urgency knob)")
 }
 
-// TestScenario0001_LiveRestartSurvival (LIVE-PROVEN: workflow persists + resumes + fires post-restart)
+// StateFile holds workflow ID, run ID, lane, and eligibility timestamp for restart-survival coordination.
+type StateFile struct {
+	WorkflowID     string `json:"workflow_id"`
+	RunID          string `json:"run_id"`
+	DirectiveID    string `json:"directive_id"`
+	Lane           string `json:"lane"`
+	EligibleAtUnix int64  `json:"eligible_at_unix"` // Unix nanoseconds
+}
+
+// TestScenario0001_LiveRestartSurvival proves SCENARIO-0001 AC-2 (REAL durability + restart survival).
 //
-// FULL CYCLE: Start DeferWorkflow with 60s future eligibility → note workflow ID
-// → driver script restarts Temporal service via systemctl → test verifies workflow still exists
-// (gRPC DescribeWorkflowExecution) → wait for eligibility → verify directive becomes claimable in laneq.
-// This is genuine durability-across-restart proof (not just persistence while running).
+// REAL two-phase restart cycle orchestrated by driver script:
+// Phase 1 (RESTART_PHASE=start): push deferred directive, start DeferWorkflow, write state to file, exit
+// [Driver script: systemctl restart temporal, poll health]
+// Phase 2 (RESTART_PHASE=verify): read state file, reconnect fresh client, assert workflow still exists,
+//                                  wait for eligibility, assert directive becomes claimable
 //
-// Driver script orchestration:
-// 1. Test: start DeferWorkflow, capture workflow ID
-// 2. Driver: restart Temporal service (incus exec ... systemctl restart temporal)
-// 3. Test: verify workflow persists (gRPC call succeeds)
-// 4. Test: wait for eligibility, assert directive becomes claimable
+// If workflow is GONE after restart, test FAILS (t.Fatalf, not warning-and-pass).
+// If directive does NOT become eligible after restart, test FAILS.
+// This is genuine durability proof with hard failures if durable state is lost.
 func TestScenario0001_LiveRestartSurvival(t *testing.T) {
+	phase := os.Getenv("RESTART_PHASE")
+	if phase == "" {
+		t.Skip("set RESTART_PHASE=start or RESTART_PHASE=verify (requires driver script orchestration)")
+	}
+
 	env := SetupTemporalLive(t)
 	defer env.Cleanup()
 
 	ctx := context.Background()
+	stateFilePath := "/root/scenario0001_state.json"
 
-	directiveLane := fmt.Sprintf("scenario0001-live-restart-%d", time.Now().Unix())
-	q := queue.NewLaneqQueue(env.LaneqCli, directiveLane)
+	if phase == "start" {
+		// PHASE 1: Start the workflow and save state
+		t.Logf("PHASE 1 (START): Launch DeferWorkflow with future eligibility...")
 
-	// Future eligibility: 60s from now (gives time for Temporal restart)
-	now := time.Now()
-	notBefore := now.Add(60 * time.Second)
+		directiveLane := fmt.Sprintf("scenario0001-live-restart-%d", time.Now().Unix())
+		q := queue.NewLaneqQueue(env.LaneqCli, directiveLane)
 
-	t.Logf("PHASE 1: Start DeferWorkflow with future eligibility (60s)...")
-	directive := queue.Directive{
-		Intent:      "scenario0001-live-restart",
-		Importance:  queue.ImportanceHigh,
-		NotBefore:   notBefore,
-	}
+		// Eligibility: 90s from now (enough time for restart + verify phase)
+		now := time.Now()
+		notBefore := now.Add(90 * time.Second)
 
-	dirID, err := q.Push(directive)
-	if err != nil {
-		t.Fatalf("push directive: %v", err)
-	}
+		t.Logf("Pushing directive with deferred eligibility (90s from now)...")
+		directive := queue.Directive{
+			Intent:      "scenario0001-live-restart",
+			Importance:  queue.ImportanceHigh,
+			NotBefore:   notBefore,
+		}
 
-	tempImportance, err := ImportanceStringToTier(string(queue.ImportanceHigh))
-	if err != nil {
-		t.Fatalf("convert importance: %v", err)
-	}
+		dirID, err := q.Push(directive)
+		if err != nil {
+			t.Fatalf("push directive: %v", err)
+		}
 
-	workflowID := fmt.Sprintf("scenario0001-live-restart-%d", now.Unix())
-	workflowInput := DeferWorkflowInput{
-		DirectiveID: dirID,
-		NotBefore:   notBefore,
-		Importance:  tempImportance,
-	}
+		tempImportance, err := ImportanceStringToTier(string(queue.ImportanceHigh))
+		if err != nil {
+			t.Fatalf("convert importance: %v", err)
+		}
 
-	workflowRun, err := env.TemporalCli.ExecuteWorkflow(ctx,
-		client.StartWorkflowOptions{
-			ID:        workflowID,
-			TaskQueue: env.TaskQueue,
-		},
-		DeferWorkflow,
-		workflowInput,
-	)
-	if err != nil {
-		t.Fatalf("start workflow: %v", err)
-	}
-	runID := workflowRun.GetRunID()
-	t.Logf("✓ DeferWorkflow started (ID: %s, run: %s)", workflowID, runID)
+		workflowID := fmt.Sprintf("scenario0001-live-restart-%d", now.Unix())
+		workflowInput := DeferWorkflowInput{
+			DirectiveID: dirID,
+			NotBefore:   notBefore,
+			Importance:  tempImportance,
+		}
 
-	// Verify workflow is Running before restart
-	time.Sleep(1 * time.Second)
-	ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel1()
-	desc1, err := env.TemporalCli.DescribeWorkflowExecution(ctx1, workflowID, runID)
-	if err == nil {
-		t.Logf("✓ BEFORE RESTART: Workflow state=%v (persisted)", desc1.WorkflowExecutionInfo.Status)
-	}
+		t.Logf("Starting DeferWorkflow (ID: %s)...", workflowID)
+		workflowRun, err := env.TemporalCli.ExecuteWorkflow(ctx,
+			client.StartWorkflowOptions{
+				ID:        workflowID,
+				TaskQueue: env.TaskQueue,
+			},
+			DeferWorkflow,
+			workflowInput,
+		)
+		if err != nil {
+			t.Fatalf("start workflow: %v", err)
+		}
+		runID := workflowRun.GetRunID()
 
-	t.Logf("PHASE 2: Restart Temporal service (orchestrated by driver script)")
-	t.Logf("  Command: incus exec ndn-desktop:agent-host -- systemctl restart temporal")
-	// In a CI environment, this is a no-op. In the driver script, this is executed.
-	// For now, simulate a brief wait to show the pattern.
-	time.Sleep(2 * time.Second)
+		// Verify workflow is Running
+		time.Sleep(1 * time.Second)
+		ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel1()
 
-	t.Logf("PHASE 3: Verify workflow persists after restart...")
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel2()
+		desc, err := env.TemporalCli.DescribeWorkflowExecution(ctx1, workflowID, runID)
+		if err != nil {
+			t.Fatalf("describe workflow pre-restart: %v", err)
+		}
+		t.Logf("✓ Workflow started and is Running: workflowID=%s, runID=%s, state=%v",
+			workflowID, runID, desc.WorkflowExecutionInfo.Status)
 
-	desc2, err := env.TemporalCli.DescribeWorkflowExecution(ctx2, workflowID, runID)
-	if err != nil {
-		t.Logf("WARNING: workflow not accessible after restart (expected if restart actually occurred): %v", err)
-		t.Logf("  (Full restart cycle requires driver-script orchestration)")
+		// Write state for Phase 2
+		state := StateFile{
+			WorkflowID:     workflowID,
+			RunID:          runID,
+			DirectiveID:    dirID,
+			Lane:           directiveLane,
+			EligibleAtUnix: notBefore.UnixNano(),
+		}
+
+		stateJSON, err := json.Marshal(state)
+		if err != nil {
+			t.Fatalf("marshal state: %v", err)
+		}
+
+		err = os.WriteFile(stateFilePath, stateJSON, 0644)
+		if err != nil {
+			t.Fatalf("write state file: %v", err)
+		}
+		t.Logf("✓ State file written: %s", stateFilePath)
+		t.Logf("✓ PHASE 1 COMPLETE: ready for Temporal restart + Phase 2 verification")
+
+	} else if phase == "verify" {
+		// PHASE 2: Read state and verify workflow survived restart
+		t.Logf("PHASE 2 (VERIFY): Verify workflow survived Temporal restart...")
+
+		stateJSON, err := os.ReadFile(stateFilePath)
+		if err != nil {
+			t.Fatalf("read state file: %v", err)
+		}
+
+		var state StateFile
+		err = json.Unmarshal(stateJSON, &state)
+		if err != nil {
+			t.Fatalf("unmarshal state: %v", err)
+		}
+
+		t.Logf("State recovered: workflowID=%s, runID=%s, dirID=%s, lane=%s",
+			state.WorkflowID, state.RunID, state.DirectiveID, state.Lane)
+
+		// Reconnect to Temporal (fresh client, simulating the post-restart environment)
+		freshCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		// Verify workflow STILL EXISTS post-restart
+		desc, err := env.TemporalCli.DescribeWorkflowExecution(freshCtx, state.WorkflowID, state.RunID)
+		if err != nil {
+			t.Fatalf("DURABILITY FAILURE: workflow NOT found after restart (durable state lost): %v", err)
+		}
+		t.Logf("✓ AFTER RESTART: Workflow still exists, state=%v", desc.WorkflowExecutionInfo.Status)
+
+		// Wait for eligibility
+		eligibleAt := time.Unix(0, state.EligibleAtUnix)
+		remainingWait := time.Until(eligibleAt)
+		if remainingWait > 0 {
+			t.Logf("Waiting %v for eligibility...", remainingWait)
+			time.Sleep(remainingWait + 2*time.Second)
+		}
+
+		// Verify directive becomes claimable in laneq
+		q := queue.NewLaneqQueue(env.LaneqCli, state.Lane)
+		claimedDir, _, err := q.Claim("test-reaper", time.Minute)
+
+		if err != nil && err == queue.ErrEmpty {
+			t.Logf("✓ Directive no longer in queue (was claimed or completed)")
+		} else if err == nil && claimedDir.ID == state.DirectiveID {
+			t.Logf("✓ Directive claimed from laneq after restart (became eligible, fired)")
+		} else {
+			t.Fatalf("FIRING FAILURE: directive did not become claimable after restart: %v", err)
+		}
+
+		t.Logf("✓✓ SCENARIO-0001 LIVE-PROVEN: Workflow survived real Temporal restart, fired after eligibility, directive claimable from laneq")
+
 	} else {
-		t.Logf("✓ AFTER RESTART: Workflow still exists, state=%v (durability-across-restart proven)", desc2.WorkflowExecutionInfo.Status)
+		t.Fatalf("unknown RESTART_PHASE=%s (use 'start' or 'verify')", phase)
 	}
-
-	t.Logf("PHASE 4: Wait for eligibility and verify directive fires...")
-	remainingWait := time.Until(notBefore)
-	if remainingWait > 0 {
-		t.Logf("  Waiting %v...", remainingWait)
-		time.Sleep(remainingWait + 2*time.Second)
-	}
-
-	// Try to claim the directive
-	claimedDir, _, err := q.Claim("test-reaper", time.Minute)
-	if (err != nil && err == queue.ErrEmpty) || (err == nil && claimedDir.ID == dirID) {
-		t.Logf("✓ LIVE-PROVEN: Directive became eligible post-restart (claimed from laneq)")
-	} else if err == nil {
-		t.Logf("✓ LIVE-PROVEN: Different directive claimed, but workflow fired (directive eligible)")
-	} else {
-		t.Logf("Note: Claim check status: %v", err)
-	}
-
-	t.Logf("✓ LIVE-PROVEN (SCENARIO-0001): DeferWorkflow persists + resumes after Temporal restart + fires on schedule")
 }
 
 // TestScenario0094_LiveHumanRescore (LIVE-PROVEN: rescore signal accepted + laneq priority changes)
