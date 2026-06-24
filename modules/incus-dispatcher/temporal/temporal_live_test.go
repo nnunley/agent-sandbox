@@ -16,7 +16,7 @@ import (
 	"github.com/agent-sandbox/incus-dispatcher/queue/laneqpb"
 )
 
-// TemporalLiveEnv holds references to the live Temporal client and laneq gRPC client.
+// TemporalLiveEnv holds references to the live Temporal client, laneq gRPC client, and worker.
 type TemporalLiveEnv struct {
 	TemporalAddr  string
 	LaneqAddr     string
@@ -25,9 +25,10 @@ type TemporalLiveEnv struct {
 	LaneqConn     interface{} // *grpc.ClientConn
 	TaskQueue     string
 	WorkerConfig  WorkerConfig
+	Worker        *Worker
 }
 
-// SetupTemporalLive connects to live Temporal and laneq, verifies reachability.
+// SetupTemporalLive connects to live Temporal and laneq, starts a Worker, verifies reachability.
 func SetupTemporalLive(t *testing.T) *TemporalLiveEnv {
 	if os.Getenv("TEMPORAL_LIVE") != "1" {
 		t.Skip("live-cluster tests; set TEMPORAL_LIVE=1")
@@ -43,38 +44,73 @@ func SetupTemporalLive(t *testing.T) *TemporalLiveEnv {
 		laneqAddr = "127.0.0.1:9999"
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	// Dial the live laneq gRPC server first (insecure; loopback inside the container).
+	laneqConn, err := grpc.NewClient(laneqAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial laneq at %s: %v", laneqAddr, err)
+	}
+	laneqCli := laneqpb.NewLaneqClient(laneqConn)
 
+	// Create Temporal client
 	temporalCli, err := client.Dial(client.Options{
 		HostPort: temporalAddr,
 	})
 	if err != nil {
+		laneqConn.Close()
 		t.Fatalf("dial Temporal at %s: %v", temporalAddr, err)
 	}
 
-	// Verify Temporal is reachable by executing a trivial workflow
-	testWorkflowRun, err := temporalCli.ExecuteWorkflow(ctx,
-		client.StartWorkflowOptions{
-			ID:        "temporal-live-ping",
-			TaskQueue: "default",
-		},
-		func(ctx context.Context) error { return nil },
-		nil,
-	)
-	if err != nil {
-		temporalCli.Close()
-		t.Fatalf("Temporal at %s unreachable: %v", temporalAddr, err)
-	}
-	_ = temporalCli.CancelWorkflow(ctx, "temporal-live-ping", testWorkflowRun.GetRunID())
+	// Robust health check: retry ~10× with 1s sleeps until Temporal is ready
+	healthCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	// Dial the live laneq gRPC server (insecure; loopback inside the container).
-	laneqConn, err := grpc.NewClient(laneqAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	var healthy bool
+	for attempt := 0; attempt < 10; attempt++ {
+		_, err := temporalCli.CheckHealth(healthCtx, &client.CheckHealthRequest{})
+		if err == nil {
+			healthy = true
+			break
+		}
+		if attempt < 9 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+	if !healthy {
+		temporalCli.Close()
+		laneqConn.Close()
+		t.Fatalf("Temporal health check failed after retries at %s", temporalAddr)
+	}
+
+	// Create Worker with live laneq queue as the Reprojector
+	// The worker will execute workflows and use the live laneq for Defer/Reprioritize calls
+	taskQueue := "priority-workflow-live"
+	workerConfig := WorkerConfig{
+		TemporalAddress: temporalAddr,
+		TaskQueue:       taskQueue,
+		Namespace:       "default",
+	}
+
+	// Create a LaneqQueue with a generic lane name (the activity will write by directive ID via RPCs,
+	// which are lane-agnostic, so a single queue can serve directives across lanes).
+	// For the worker, we use a dummy lane name since Reprioritize/Defer take directive IDs, not lanes.
+	q := queue.NewLaneqQueue(laneqCli, "worker-lane")
+
+	w, err := NewWorker(healthCtx, workerConfig, q)
 	if err != nil {
 		temporalCli.Close()
-		t.Fatalf("dial laneq at %s: %v", laneqAddr, err)
+		laneqConn.Close()
+		t.Fatalf("create worker: %v", err)
 	}
-	laneqCli := laneqpb.NewLaneqClient(laneqConn)
+
+	// Register workflows and activities
+	w.Register()
+
+	// Start the worker
+	if err := w.Start(healthCtx); err != nil {
+		temporalCli.Close()
+		laneqConn.Close()
+		t.Fatalf("start worker: %v", err)
+	}
 
 	return &TemporalLiveEnv{
 		TemporalAddr: temporalAddr,
@@ -82,17 +118,17 @@ func SetupTemporalLive(t *testing.T) *TemporalLiveEnv {
 		TemporalCli:  temporalCli,
 		LaneqCli:     laneqCli,
 		LaneqConn:    laneqConn,
-		TaskQueue:    "priority-workflow-live",
-		WorkerConfig: WorkerConfig{
-			TemporalAddress: temporalAddr,
-			TaskQueue:       "priority-workflow-live",
-			Namespace:       "default",
-		},
+		TaskQueue:    taskQueue,
+		WorkerConfig: workerConfig,
+		Worker:       w,
 	}
 }
 
-// Cleanup closes the Temporal client and laneq connection.
+// Cleanup stops the worker, closes the Temporal client and laneq connection.
 func (env *TemporalLiveEnv) Cleanup() {
+	if env.Worker != nil {
+		_ = env.Worker.Stop(context.Background())
+	}
 	if env.TemporalCli != nil {
 		env.TemporalCli.Close()
 	}
