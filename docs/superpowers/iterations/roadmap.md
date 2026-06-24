@@ -798,16 +798,59 @@ rescore moves an item to any bucket via the deployed Temporal rescore path). **L
 retries with backoff durably), STORY-0061 AC-3 / STORY-0055 AC-7 (Temporal re-raises stale escalations as
 urgency rises), STORY-0002 AC-2 (deferred/future work durably held in Temporal until eligible).
 
-**Task 0 (PAR-pattern, BLOCKING):** stand up Temporal on ndn-desktop as a Nix package + systemd service
-(same discipline as laneq in ITER-0006b: pinned, host-volume persistence, readiness probe, deploy doc)
-AND define the cluster verification harness (boot-to-ready sentinel, restart-survival check, a fake-clock
-vs wall-clock decision for the aging proof). The deploy doc MUST restate the **non-exclusive-lease**
-assumption for the sole-writer seam (PAR boxing-in note).
+**Resolved design decisions (PAR scope review, 2026-06-23 — verified against nixpkgs/cluster):**
+- **Temporal package & service:** use the UPSTREAM `services.temporal` NixOS module (`temporal` **1.29.4**,
+  pinned `nixos-25.11` — confirmed available; module options `enable`/`package`/`settings`/`dataDir`). It runs
+  the full `temporal-server` (gRPC frontend :7233). No hand-rolled `buildGoModule` needed.
+  *(Availability verified 2026-06-23 on the cluster against the pinned channel: `nix eval --raw
+  github:NixOS/nixpkgs/nixos-25.11#temporal.version` → `1.29.4`; module at
+  `nixos/modules/services/cluster/temporal/default.nix`, wired in `module-list.nix:494`.)*
+- **Durable persistence (STORY-0001 AC-2):** the upstream NixOS *test* uses in-memory SQLite (`mode=memory`,
+  NOT durable). ITER-0007b MUST configure `settings.persistence` with **file-backed SQLite** (`pluginName=sqlite`,
+  db file under `dataDir`, `mode≠memory`) on an **Incus host-mounted volume** (mirror laneq-data at /srv/laneq),
+  so deferred workflows/timers survive container/host restart.
+- **Sole-writer enforcement model (boxing-in answer):** laneq leases are **non-exclusive** (SCENARIO-0092: server
+  keys leases by directive id, no per-consumer token). The sole-writer guarantee is therefore **process-level
+  disciplined-client** (exactly one Temporal worker role calls `Defer`/`Reprioritize`), NOT lease/RBAC exclusivity.
+  This is orthogonal to ITER-0008 multi-consumer delegation and MUST be stated upfront in the deploy doc.
+- **Aging proof = compressed real-wall-clock (not fake-clock, not multi-day):** SCENARIO-0056/STORY-0043 AC-2
+  ("over wall-clock time") is proven LIVE by setting a deadline a few seconds out and letting a real Temporal
+  timer fire on actual wall-clock, then asserting Q2→Q1 + laneq reflects it. This is genuine wall-clock aging
+  (real time advances) but cluster-runnable in seconds — distinct from ITER-0007's fake-clock CI proof.
+- **Temporal worker is Go:** the worker uses the Temporal Go SDK and imports ITER-0007's `temporal/projection.go`
+  /`writer.go`/`authority.go`/`escalate.go` directly (same language); it calls the laneq Go gRPC client.
+
+**Task 0 (PAR-pattern, BLOCKING) — decomposed:**
+- **T0.1 — Deploy:** `services.temporal` module wired into the agent-host NixOS config (file-backed SQLite on a
+  host volume, readiness probe on :7233), shipped via `scripts/deploy.sh`. Mirror laneq discipline.
+- **T0.2 — Cluster verification harness:** boot-to-ready sentinel (server answers on :7233), restart-survival
+  check (enqueue deferred workflow → restart service/container → assert it reloads & still fires), and the
+  compressed-wall-clock aging probe scaffold.
+- **T0.3 — Deploy doc (COMMITTED deliverable, not optional):** `docs/plans/2026-06-23-iter0007b-temporal-deploy.md`
+  — **stub committed at scope-approval time (2026-06-23)** with the sole-writer contract already written; T0.1/T0.2
+  fill in deployment steps + readiness output. Contains container/service/volume/readiness/durability steps AND,
+  prominently upfront, the **sole-writer seam contract**:
+  Temporal writes scheduling fields ONLY via gRPC `Defer`/`Reprioritize` (never direct laneq DB), enforced by
+  process-level discipline, **non-exclusive-lease** assumption restated for ITER-0008.
+
+**Story sequencing:** T0 (deploy + harness + doc) is a hard gate. STORY-0001 AC-1 (Temporal owns
+schedules/timers/backoff) is provable at the **integration** seam once the worker exists; STORY-0001 AC-2
+(restart survival), STORY-0043 AC-2 (wall-clock aging), STORY-0046 AC-2 (concurrent reads), STORY-0047 AC-1
+(human rescore), STORY-0044 AC-3 (sole caller) all depend on the LIVE deployed Temporal → run **after** the T0 gate.
+
+**GATE for ITER-0008 (no carries permitted):** STORY-0041 AC-1/AC-2 (live sole writer) + STORY-0044 AC-3
+(Temporal sole caller of Defer/Reprioritize) are gating for ITER-0008 dispatch/delegation work. If either slips
+or carries, ITER-0008 cannot proceed — the time plane would not be stable.
 
 **Status:** pending
-**Impacted scenarios:** SCENARIO-0056 (live single-writer projection + deadline aging), SCENARIO-0001
-(Temporal plane durable + restart survival, e2e), SCENARIO-0081 (live single-writer enforcement). The
-operator-experience half of SCENARIO-0087 (a human/TUI consumer acts on the re-raised escalation) → ITER-0008.
+**Impacted scenarios:** SCENARIO-0056 (live single-writer projection + compressed-wall-clock deadline aging,
+integration), SCENARIO-0001 (Temporal plane durable + restart survival, e2e), SCENARIO-0081 (live concurrent-read
+consistency under single writer, integration), **SCENARIO-0093 (NEW — Temporal is the sole live caller of laneq
+`Defer`/`Reprioritize`; STORY-0044 AC-3, integration)**, **SCENARIO-0094 (NEW — live human rescore via deployed
+Temporal moves an item to any bucket; STORY-0047 AC-1, integration)**. The operator-experience half of
+SCENARIO-0087 (a human/TUI consumer acts on the re-raised escalation) → ITER-0008.
+**Artifact-debt note (non-blocking):** EPIC-005/EPIC-008 cards for STORY-0055 AC-7, STORY-0061 AC-3, STORY-0002
+AC-2 read as single ACs but are split logic(ITER-0007)/live(ITER-0007b)/operator(ITER-0008); annotate on a docs pass.
 **Look-ahead check:** depends on ITER-0007 logic + ITER-0006 deployed laneq; Temporal becomes the sole
 writer of the gRPC seam so ITER-0008 steering/delegation builds on a stable time plane.
 

@@ -310,6 +310,11 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 **Proof seam:** e2e
 **Owning stories:** STORY-0001, STORY-0006
 
+**AC mapping (ITER-0007b):** STORY-0001 **AC-1** (Temporal *owns* durable Schedules/timers/retry-backoff) is
+proved at the **integration** seam by the live worker firing a timer / re-pushing a retry — *before any restart*
+(the authority/ownership assertion). STORY-0001 **AC-2** (*survives host restart*) is proved by the restart+reload
+half of this scenario (the durability assertion). Run the AC-1 timer-ownership check first, then the AC-2 restart check.
+
 **Preconditions:**
 - Temporal plane holds durable scheduling state on ndn-desktop
 - Coordinator daemon is running on live micro-VM
@@ -328,8 +333,11 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - No work is lost or duplicated
 - Decision log shows continuous timeline
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** pending → ITER-0007b. **Restart-survival harness (PAR 2026-06-23):** deploy Temporal with
+file-backed SQLite on an Incus host volume → enqueue a deferred workflow/timer (future not-before) → restart the
+temporal systemd service AND the container → assert the deferred workflow still exists and fires when eligible
+(state reloaded from the host-volume DB, not lost). Proves STORY-0001 AC-2 + STORY-0002 AC-2 durable hold.
+**Execution command:** TBD — set in ITER-0007b cluster harness (restart-survival check, T0.2)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:31-37,60-61`
@@ -2045,8 +2053,12 @@ to deadline-prioritization/STORY-0045 — corrected to SCENARIO-0054.)
 - No human intervention required
 - Item is now eligible for provisioning
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** pending → ITER-0007b. **Aging-proof decision (PAR 2026-06-23): compressed real-wall-clock**
+— "Time advances 1.5 days" is realized LIVE by setting the deadline a few seconds out and letting a real Temporal
+timer fire on actual wall-clock (genuine wall-clock aging per STORY-0043 AC-2, but cluster-runnable in seconds),
+NOT a fake/injected clock (that was ITER-0007's CI proof, SCENARIO-0078).
+**Execution command:** TBD — set in ITER-0007b cluster harness (deploy Temporal → enqueue near-deadline directive →
+assert Q2→Q1 + laneq.next reflects it after the live timer fires)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:245, 266-268`
@@ -3289,3 +3301,57 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
+
+## SCENARIO-0093 — Single caller: only deployed Temporal calls laneq Defer/Reprioritize
+
+**Kind:** contract
+**Proof seam:** integration
+**Owning stories:** STORY-0044 (AC-3)
+
+**Preconditions:**
+- Deployed Temporal server is running on the cluster (ITER-0007b Task 0)
+- laneq gRPC server is live with a directive carrying a deadline
+- The Temporal worker holds the sole writer role for scheduling fields
+
+**Action:**
+- The Temporal worker projects (importance, urgency) → effective_priority + not-before
+- The worker is the only process configured with the laneq Defer/Reprioritize client role
+- A non-Temporal actor (a plain dispatcher path) attempts to mutate scheduling fields directly
+
+**Expected observables:**
+- Temporal-originated Defer/Reprioritize calls succeed and laneq reflects the new not-before/priority
+- The non-Temporal path does NOT invoke Defer/Reprioritize (no direct scheduling-field writes outside Temporal)
+- The single-caller invariant is verifiable (call origin = Temporal worker role) — process-level discipline,
+  NOT lease exclusivity (laneq leases are non-exclusive; SCENARIO-0092)
+
+**Automation status:** pending (live: needs deployed Temporal + laneq; logic basis done:ITER-0007 GuardedDirective)
+**Execution command:** TBD — set in ITER-0007b (cluster harness asserts Defer/Reprioritize call origin)
+
+**Sources:**
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:409`
+
+## SCENARIO-0094 — Live human rescore via deployed Temporal moves item to any bucket
+
+**Kind:** contract
+**Proof seam:** integration
+**Owning stories:** STORY-0047 (AC-1)
+
+**Preconditions:**
+- Deployed Temporal server is running on the cluster (ITER-0007b Task 0)
+- A directive sits in some quadrant (e.g., Q2) with its effective_priority owned by Temporal
+- A human-authority rescore is issued through the deployed Temporal rescore path
+
+**Action:**
+- Human (unrestricted authority) issues a rescore to a target bucket (e.g., Q1, or Critical)
+- Temporal applies the rescore via its sole-writer path and persists to laneq over the gRPC seam
+
+**Expected observables:**
+- The item moves to the requested bucket without restriction (human authority is unbounded; cf. IsHumanUnrestricted)
+- laneq reflects the new effective_priority immediately (read-back via laneq.next / Reprioritize)
+- The change is durable (survives a Temporal restart — links to SCENARIO-0001 durability)
+
+**Automation status:** pending (live: needs deployed Temporal; logic basis done:ITER-0007 authority.go)
+**Execution command:** TBD — set in ITER-0007b (cluster harness drives the live rescore path)
+
+**Sources:**
+- `docs/plans/2026-06-18-fleet-orchestration-design.md:409`
