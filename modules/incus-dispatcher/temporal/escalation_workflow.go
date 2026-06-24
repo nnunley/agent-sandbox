@@ -72,6 +72,9 @@ func EscalationWorkflow(ctx workflow.Context, input EscalationWorkflowInput) err
 
 		// If the quadrant changed (escalation triggered and raised urgency), invoke the activity
 		if quadrant != lastQuadrant {
+			// NOTE(ITER-0008): This re-raise is AUTONOMOUS + time-driven (driven by urgency crossing threshold,
+			// logged via workflow.GetLogger). The coordinator audit log should distinguish these autonomous
+			// re-raises from operator-triggered (TUI) re-raises.
 			// Log the ladder transition (deterministic, for D6 decision log)
 			workflow.GetLogger(ctx).Warn("escalation re-raised: quadrant transition",
 				"directiveID", input.DirectiveID,
@@ -86,11 +89,9 @@ func EscalationWorkflow(ctx workflow.Context, input EscalationWorkflowInput) err
 
 			// Invoke the sole-writer activity to persist the re-raised priority
 			req := ReprojectRequest{
-				DirectiveID:       input.DirectiveID,
-				Importance:        input.Importance,
-				Quadrant:          quadrant,
-				EffectivePriority: priority,
-				NotBefore:         notBefore,
+				DirectiveID: input.DirectiveID,
+				Importance:  input.Importance,
+				NotBefore:   notBefore,
 			}
 
 			err := workflow.ExecuteActivity(ctx, activities.ReprojectActivity, req).Get(ctx, nil)
@@ -112,15 +113,8 @@ func EscalationWorkflow(ctx workflow.Context, input EscalationWorkflowInput) err
 		}
 
 		// Calculate the next re-check point
-		// Check at a reasonable interval (e.g., 1/4 of time remaining, 1 minute to 6 hours)
 		timeRemaining := input.Deadline.Sub(now)
-		nextCheckDuration := timeRemaining / 4
-		if nextCheckDuration < time.Minute {
-			nextCheckDuration = time.Minute
-		}
-		if nextCheckDuration > 6*time.Hour {
-			nextCheckDuration = 6 * time.Hour
-		}
+		nextCheckDuration := nextCheckInterval(timeRemaining)
 
 		// Sleep until the next check point
 		err = workflow.Sleep(ctx, nextCheckDuration)

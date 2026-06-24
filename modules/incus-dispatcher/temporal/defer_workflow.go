@@ -44,11 +44,9 @@ func DeferWorkflow(ctx workflow.Context, input DeferWorkflowInput) error {
 		// Already eligible; invoke the activity to persist the current time as notBefore
 		activities := &Activities{}
 		req := ReprojectRequest{
-			DirectiveID:       input.DirectiveID,
-			Importance:        input.Importance,
-			Quadrant:          ComputeQuadrant(input.Importance, 0), // No deadline context; use base quadrant
-			EffectivePriority: ComputeEffectivePriority(input.Importance, ComputeQuadrant(input.Importance, 0)),
-			NotBefore:         now,
+			DirectiveID: input.DirectiveID,
+			Importance:  input.Importance,
+			NotBefore:   now,
 		}
 		err := workflow.ExecuteActivity(ctx, activities.ReprojectActivity, req).Get(ctx, nil)
 		if err != nil {
@@ -58,6 +56,9 @@ func DeferWorkflow(ctx workflow.Context, input DeferWorkflowInput) error {
 	}
 
 	// Sleep until the not-before time arrives
+	// NOTE(ITER-0008): For far-future not-before times, the single long-lived workflow's history
+	// is a live-Temporal concern. The production mitigation is workflow.NewContinueAsNewError
+	// when GetContinueAsNewSuggested() — an E1/live concern, not implemented here.
 	err := workflow.Sleep(ctx, timeUntilEligible)
 	if err != nil {
 		return fmt.Errorf("defer sleep failed: %w", err)
@@ -69,11 +70,9 @@ func DeferWorkflow(ctx workflow.Context, input DeferWorkflowInput) error {
 	// Invoke the sole-writer activity to mark the directive as eligible at the current time
 	activities := &Activities{}
 	req := ReprojectRequest{
-		DirectiveID:       input.DirectiveID,
-		Importance:        input.Importance,
-		Quadrant:          ComputeQuadrant(input.Importance, 0), // No deadline context; use base quadrant
-		EffectivePriority: ComputeEffectivePriority(input.Importance, ComputeQuadrant(input.Importance, 0)),
-		NotBefore:         now, // Set notBefore to current time (now eligible)
+		DirectiveID: input.DirectiveID,
+		Importance:  input.Importance,
+		NotBefore:   now, // Set notBefore to current time (now eligible)
 	}
 
 	err = workflow.ExecuteActivity(ctx, activities.ReprojectActivity, req).Get(ctx, nil)

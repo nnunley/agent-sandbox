@@ -37,6 +37,20 @@ var workflowActivityOptions = workflow.ActivityOptions{
 	},
 }
 
+// nextCheckInterval returns the durable-timer interval for the next aging/escalation re-check:
+// a quarter of the time remaining, clamped to [1 minute, 6 hours].
+// Used by PriorityWorkflow and EscalationWorkflow to determine when to recompute projections.
+func nextCheckInterval(remaining time.Duration) time.Duration {
+	interval := remaining / 4
+	if interval < time.Minute {
+		return time.Minute
+	}
+	if interval > 6*time.Hour {
+		return 6 * time.Hour
+	}
+	return interval
+}
+
 // PriorityWorkflowInput is the input to the PriorityWorkflow.
 type PriorityWorkflowInput struct {
 	DirectiveID string
@@ -45,12 +59,11 @@ type PriorityWorkflowInput struct {
 }
 
 // ReprojectRequest is the input to the ReprojectActivity.
+// Only DirectiveID, Importance, and NotBefore are used by ReprojectActivity.Defer/Reprioritize.
 type ReprojectRequest struct {
-	DirectiveID      string
-	Importance       Importance
-	Quadrant         Quadrant
-	EffectivePriority int
-	NotBefore        time.Time
+	DirectiveID string
+	Importance  Importance
+	NotBefore   time.Time
 }
 
 // PriorityWorkflow is a durable Temporal workflow that ages a directive's priority
@@ -124,11 +137,9 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 
 			// Invoke the sole-writer activity to persist the projection.
 			req := ReprojectRequest{
-				DirectiveID:       input.DirectiveID,
-				Importance:        currentImportance,
-				Quadrant:          quadrant,
-				EffectivePriority: effectivePriority,
-				NotBefore:         notBefore,
+				DirectiveID: input.DirectiveID,
+				Importance:  currentImportance,
+				NotBefore:   notBefore,
 			}
 
 			err := workflow.ExecuteActivity(ctx, activities.ReprojectActivity, req).Get(ctx, nil)
@@ -153,18 +164,8 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 		}
 
 		// Calculate the next re-projection point
-		// Strategy: check again at 1/4 of the time remaining, bounded between 1 minute and 6 hours.
-		// In production with live Temporal, the 6-hour cap is reasonable; testsuite auto-advances
-		// timers so the duration doesn't affect test runtime.
 		timeRemaining := input.Deadline.Sub(now)
-		nextCheckDuration := timeRemaining / 4
-		if nextCheckDuration < time.Minute {
-			nextCheckDuration = time.Minute
-		}
-		if nextCheckDuration > 6*time.Hour {
-			// For very far-out deadlines, check every 6 hours
-			nextCheckDuration = 6 * time.Hour
-		}
+		nextCheckDuration := nextCheckInterval(timeRemaining)
 
 		// Create a cancellable timer context for the next aging check.
 		// If a rescore signal fires first, we'll cancel the timer to prevent

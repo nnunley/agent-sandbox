@@ -103,11 +103,9 @@ func RetryWorkflow(ctx workflow.Context, input RetryWorkflowInput) error {
 
 		// Invoke the sole-writer activity to defer the directive
 		req := ReprojectRequest{
-			DirectiveID:       input.DirectiveID,
-			Importance:        input.Importance,
-			Quadrant:          ComputeQuadrant(input.Importance, 0), // No deadline context; use base quadrant
-			EffectivePriority: ComputeEffectivePriority(input.Importance, ComputeQuadrant(input.Importance, 0)),
-			NotBefore:         notBefore, // Defer until backoff elapses
+			DirectiveID: input.DirectiveID,
+			Importance:  input.Importance,
+			NotBefore:   notBefore, // Defer until backoff elapses
 		}
 
 		err := workflow.ExecuteActivity(ctx, activities.ReprojectActivity, req).Get(ctx, nil)
@@ -136,6 +134,11 @@ func RetryWorkflow(ctx workflow.Context, input RetryWorkflowInput) error {
 	workflow.GetLogger(ctx).Warn("retry workflow exhausted max attempts",
 		"directiveID", input.DirectiveID,
 		"maxAttempts", input.MaxAttempts)
+
+	// TODO(ITER-0008): on retry exhaustion, hand off to the escalation ladder
+	// (STORY-0058 AC-3 stronger-worker rung) via the coordinator.
+	// Current behavior: the directive remains in laneq and becomes eligible again when its
+	// not-before passes (the daemon/coordinator re-claims it). It is not silently held forever.
 
 	return nil
 }
