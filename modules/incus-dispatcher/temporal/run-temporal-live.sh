@@ -184,6 +184,8 @@ else
 fi
 
 # Phase 3: Verify workflow survived restart
+# Extra settle time: let Temporal stabilize more thoroughly before verifying
+sleep 5
 echo ""
 echo "PHASE 3: Verify workflow survived restart and fire after eligibility..."
 if ! incus exec "$INCUS_CONTAINER" -- env TEMPORAL_LIVE=1 TEMPORAL_LIVE_ADDR="${TEMPORAL_ADDR}" LANEQ_LIVE_ADDR="${LANEQ_ADDR}" RESTART_PHASE=verify \
