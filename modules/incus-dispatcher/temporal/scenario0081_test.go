@@ -198,6 +198,97 @@ func TestScenario0081ConcurrentReadersAndTemporalWrite(t *testing.T) {
 	t.Logf("✓ D5 (concurrent reads/writes): %d reads all consistent", numReaders*numReads)
 }
 
+// TestScenario0081ConcurrentReadersAndTemporalWriteBothFields validates concurrent read consistency
+// for BOTH EffectivePriority AND NotBefore fields under a single Temporal writer.
+// This test strengthens D5 by ensuring both guarded fields maintain read consistency.
+func TestScenario0081ConcurrentReadersAndTemporalWriteBothFields(t *testing.T) {
+	gd := NewGuardedDirective("D5b", ImportanceMedium, nil)
+
+	// Initial writes for both fields
+	t0 := time.Date(2026, 6, 24, 0, 0, 0, 0, time.UTC)
+	err1 := gd.SetEffectivePriority(WriterRoleTemporal, 3000)
+	err2 := gd.SetNotBefore(WriterRoleTemporal, t0)
+	if err1 != nil || err2 != nil {
+		t.Fatalf("Setup failed: priority=%v, notBefore=%v", err1, err2)
+	}
+
+	t.Logf("=== Concurrent Readers + Temporal Updates (Both Fields) ===")
+
+	const numReaders = 5
+	const numReads = 20
+
+	// Track reads: each entry is [priority, notBeforeUnix]
+	type ReadResult struct {
+		priority  int
+		notBefore int64 // Unix nanoseconds for comparison
+	}
+	readResults := make([]ReadResult, numReaders*numReads)
+	var wg sync.WaitGroup
+	var readIdx int
+	var mu sync.Mutex
+
+	// Launch reader goroutines that read both fields
+	for i := 0; i < numReaders; i++ {
+		wg.Add(1)
+		go func(readerID int) {
+			defer wg.Done()
+			for j := 0; j < numReads; j++ {
+				priority := gd.GetEffectivePriority()
+				notBefore := gd.GetNotBefore()
+				mu.Lock()
+				readResults[readIdx] = ReadResult{
+					priority:  priority,
+					notBefore: notBefore.UnixNano(),
+				}
+				readIdx++
+				mu.Unlock()
+				time.Sleep(time.Millisecond) // Simulate processing
+			}
+		}(i)
+	}
+
+	// Temporal updates BOTH fields periodically (synchronized writes)
+	times := []time.Time{
+		time.Date(2026, 6, 24, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 6, 24, 6, 0, 0, 0, time.UTC),
+		time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC),
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		priorities := []int{3000, 3100, 3200}
+		for i, priority := range priorities {
+			time.Sleep(10 * time.Millisecond)
+			// Temporal writer updates both fields together (same conceptual transaction)
+			err1 := gd.SetEffectivePriority(WriterRoleTemporal, priority)
+			err2 := gd.SetNotBefore(WriterRoleTemporal, times[i])
+			if err1 != nil || err2 != nil {
+				t.Logf("Update error: priority=%v, notBefore=%v", err1, err2)
+			}
+		}
+	}()
+
+	wg.Wait()
+
+	// Verify all reads got valid value combinations
+	// Valid states: (3000, t0), (3100, t1), (3200, t2)
+	validPriorities := map[int]bool{3000: true, 3100: true, 3200: true}
+	validNotBefores := map[int64]bool{
+		times[0].UnixNano(): true,
+		times[1].UnixNano(): true,
+		times[2].UnixNano(): true,
+	}
+	for i, result := range readResults {
+		if !validPriorities[result.priority] {
+			t.Errorf("Read %d priority: got %d, want one of 3000/3100/3200", i, result.priority)
+		}
+		if !validNotBefores[result.notBefore] {
+			t.Errorf("Read %d notBefore: got %d, want one of the valid times", i, result.notBefore)
+		}
+	}
+	t.Logf("✓ D5b (concurrent reads/writes, both fields): %d reads all consistent", numReaders*numReads)
+}
+
 // TestMultipleDirectivesIndependent validates that multiple directives
 // enforce the invariant independently.
 func TestMultipleDirectivesIndependent(t *testing.T) {

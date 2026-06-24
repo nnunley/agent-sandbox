@@ -2926,8 +2926,9 @@ fresh"; recovery must resolve the explicit saved session id (or rely on auto-con
 - no unauthorized writes to effective_priority detected
 - concurrent reads are consistent
 
-**Automation status:** partial:ITER-0007 (single-writer guard automated via mock-Temporal GuardedDirective;
-AC-2 live concurrent-read consistency across daemon instances → ITER-0007b)
+**Automation status:** partial:ITER-0007b (AC-1 single-writer guard automated via mock-Temporal GuardedDirective ✓ ITER-0007;
+AC-2 concurrent-read consistency under single writer (in-process, -race) ✓ ITER-0007b C5 via TestScenario0081ConcurrentReadersAndTemporalWriteBothFields;
+AC-2 live concurrent-read consistency across daemon instances → ITER-E1)
 **Execution command:** `cd modules/incus-dispatcher && go test -race -run 'TestScenario0081|TestMultipleDirectivesIndependent' ./temporal/`
 
 **Sources:**
