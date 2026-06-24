@@ -3109,8 +3109,8 @@ automated via mock-Temporal; AC-1 live human-rescore-to-any-bucket → ITER-0007
 - it ranks higher in escalations lane by urgency
 - human reviewer will see it before new low-urgency escalations
 
-**Automation status:** CI/testsuite logic basis done in ITER-0007b C4 (durable EscalationWorkflow + ReprojectActivity sole-writer seam; re-raise via workflow.GetLogger for D6 decision log); live durability (Temporal restart + cluster re-raise) deferred to E1
-**Execution command:** CI: `cd modules/incus-dispatcher && go test -race './temporal/' -run 'TestEscalationWorkflow_ReRaiseOnThresholdCross'` (durable Temporal re-raise logic basis + operator/TUI acts-on-resurfaced journey → E1)
+**Automation status:** CI/testsuite integration logic basis done in ITER-0007b C4 (durable EscalationWorkflow proves re-raise is autonomously TIME-DRIVEN: Defer notBefore fires ~3 days into time-skip when urgency crosses threshold, not at t0; sole-writer seam via ReprojectActivity; deterministic logging via workflow.GetLogger for D6); live durability (Temporal restart + cluster re-raise) deferred to E1
+**Execution command:** CI: `cd modules/incus-dispatcher && go test -race './temporal/' -run 'TestEscalationWorkflow_ReRaiseOnThresholdCross'` (asserts notBefore ≥ 2 days after start, proving re-raise fires when urgency crossed, not vacuously at t0)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:413-415`
