@@ -60,18 +60,20 @@ func SetupTemporalLive(t *testing.T) *TemporalLiveEnv {
 		t.Fatalf("dial Temporal at %s: %v", temporalAddr, err)
 	}
 
-	// Robust health check: retry ~10× with 1s sleeps until Temporal is ready
+	// Robust health check: retry ~15× with 1s sleeps until Temporal is ready and namespace is available.
+	// After a restart, the server comes up quickly but the default namespace may not be immediately ready,
+	// causing "Namespace default is not found" errors. Extended retry ensures both server and namespace are initialized.
 	healthCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	var healthy bool
-	for attempt := 0; attempt < 10; attempt++ {
+	for attempt := 0; attempt < 15; attempt++ {
 		_, err := temporalCli.CheckHealth(healthCtx, &client.CheckHealthRequest{})
 		if err == nil {
 			healthy = true
 			break
 		}
-		if attempt < 9 {
+		if attempt < 14 {
 			time.Sleep(1 * time.Second)
 		}
 	}
