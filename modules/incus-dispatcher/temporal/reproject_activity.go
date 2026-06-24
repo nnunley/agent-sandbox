@@ -15,14 +15,10 @@ import (
 // This interface is the core of the sole-writer seam contract (STORY-0044 AC-3, SCENARIO-0093):
 // Only the Temporal workflow role calls these methods. The interface enables testing via
 // injection of a fake Reprojector while the real implementation is *queue.LaneqQueue.
-//
-// The interface uses interface{} for importance to avoid circular import of queue types;
-// the actual type is queue.Importance (a string).
 type Reprojector interface {
 	// Reprioritize changes the priority of a directive by ID.
 	// Used to update directive priority based on urgency changes.
-	// importance is of type queue.Importance.
-	Reprioritize(id string, importance interface{}) error
+	Reprioritize(id string, importance queue.Importance) error
 
 	// Defer sets the not-before eligibility time for a directive by ID.
 	// Defers the directive until the specified time (UTC).
@@ -69,9 +65,7 @@ func (a *Activities) ReprojectActivity(ctx context.Context, req ReprojectRequest
 	queueImportance := tierToQueueImportance(req.Importance)
 
 	// Call Reprioritize to update the directive's priority in laneq
-	// Note: Reprojector.Reprioritize takes interface{} for importance to avoid circular imports.
-	// We pass it as interface{} even though the real implementation expects queue.Importance.
-	if err := a.Queue.Reprioritize(req.DirectiveID, interface{}(queueImportance)); err != nil {
+	if err := a.Queue.Reprioritize(req.DirectiveID, queueImportance); err != nil {
 		return fmt.Errorf("reproject: reprioritize failed for %s: %w", req.DirectiveID, err)
 	}
 
@@ -98,27 +92,4 @@ func tierToQueueImportance(tier Importance) queue.Importance {
 	default:
 		return queue.ImportanceNormal
 	}
-}
-
-// LaneqQueueWrapper adapts *queue.LaneqQueue to satisfy the Reprojector interface.
-// This wrapper is needed because Reprojector.Reprioritize takes interface{} (to avoid
-// circular imports), while LaneqQueue.Reprioritize takes queue.Importance directly.
-type LaneqQueueWrapper struct {
-	queue *queue.LaneqQueue
-}
-
-// Reprioritize implements Reprojector.Reprioritize by casting interface{} to queue.Importance.
-func (w *LaneqQueueWrapper) Reprioritize(id string, importance interface{}) error {
-	// Cast interface{} to queue.Importance.
-	// The caller (ReprojectActivity) always passes a queue.Importance, so this is safe.
-	imp, ok := importance.(queue.Importance)
-	if !ok {
-		return fmt.Errorf("reprioritize: invalid importance type %T", importance)
-	}
-	return w.queue.Reprioritize(id, imp)
-}
-
-// Defer implements Reprojector.Defer by delegating to the wrapped LaneqQueue.
-func (w *LaneqQueueWrapper) Defer(id string, notBefore time.Time) error {
-	return w.queue.Defer(id, notBefore)
 }

@@ -68,15 +68,8 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 
 		// If the projection changed (quadrant or priority), invoke the ReprojectActivity
 		if quadrant != lastQuadrant || effectivePriority != lastEffectivePriority {
-			// Compute notBefore: for Q1 promotion, make it eligible immediately (notBefore = now).
-			// For other transitions, we could use a different strategy, but Q2→Q1 is the key case.
+			// Set notBefore to the current workflow time (make item eligible now).
 			notBefore := now
-			if quadrant == QuadrantQ1 {
-				notBefore = now // Make it immediately eligible for Q1
-			} else {
-				// For Q2, Q3, Q4 transitions, keep it at current time
-				notBefore = now
-			}
 
 			// Invoke the sole-writer activity to persist the projection
 			// Use workflow.ExecuteActivity with the activity struct method reference.

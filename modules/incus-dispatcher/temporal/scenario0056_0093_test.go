@@ -5,12 +5,13 @@ import (
 	"time"
 
 	"go.temporal.io/sdk/testsuite"
+	"github.com/agent-sandbox/incus-dispatcher/queue"
 )
 
 // ReprioritizeCall records a call to Reprioritize with its arguments.
 type ReprioritizeCall struct {
 	ID         string
-	Importance interface{} // queue.Importance
+	Importance queue.Importance
 }
 
 // DeferCall records a call to Defer with its arguments.
@@ -30,7 +31,7 @@ type FakeReprojector struct {
 	Err               error // If set, all calls return this error
 }
 
-func (f *FakeReprojector) Reprioritize(id string, importance interface{}) error {
+func (f *FakeReprojector) Reprioritize(id string, importance queue.Importance) error {
 	if f.Err != nil {
 		return f.Err
 	}
@@ -93,17 +94,17 @@ func TestScenario0056_Q2ToQ1Promotion(t *testing.T) {
 
 	// Setup: deadline relative to the testsuite's simulated clock.
 	// Use env.Now() to get the environment's current time, then add 7 days.
-	envNow := env.Now()
-	deadline := envNow.Add(7 * 24 * time.Hour) // 7 days out in simulated time
+	startNow := env.Now()
+	deadline := startNow.Add(7 * 24 * time.Hour) // 7 days out in simulated time
 
 	// Verify the initial projection (at t=0) is Q2
-	initialUrgency := ComputeUrgency(&deadline, envNow)
+	initialUrgency := ComputeUrgency(&deadline, startNow)
 	initialQuadrant := ComputeQuadrant(ImportanceHigh, initialUrgency)
 	if initialQuadrant != QuadrantQ2 {
 		t.Fatalf("test setup error: 7-day deadline should start in Q2, got %v (urgency: %.3f)",
 			initialQuadrant, initialUrgency)
 	}
-	t.Logf("Initial state verified: Q2 (urgency: %.3f, env.Now: %v)", initialUrgency, envNow)
+	t.Logf("Initial state verified: Q2 (urgency: %.3f, env.Now: %v)", initialUrgency, startNow)
 
 	input := PriorityWorkflowInput{
 		DirectiveID: "test-directive-q2-q1",
@@ -114,6 +115,9 @@ func TestScenario0056_Q2ToQ1Promotion(t *testing.T) {
 	// Execute the workflow. The testsuite's env will auto-skip time when the workflow
 	// calls workflow.Sleep(); the workflow's workflow.Now(ctx) will march forward.
 	env.ExecuteWorkflow(PriorityWorkflow, input)
+
+	// Capture the end time to bracket the execution window
+	endNow := env.Now()
 
 	// Verify no panic or error in the workflow itself
 	if !env.IsWorkflowCompleted() {
@@ -136,38 +140,43 @@ func TestScenario0056_Q2ToQ1Promotion(t *testing.T) {
 
 	// SCENARIO-0056 Observable 2: The Reprioritize call used a Q1-level importance (HIGH).
 	// This proves the promotion actually RAISED priority (the core aging behavior).
+	// Expected: tierToQueueImportance(ImportanceHigh) == queue.ImportanceHigh
 	foundHighImportance := false
 	for _, call := range fakeQueue.ReprioritizeCalls {
-		if call.ID == input.DirectiveID {
-			// The importance should be queue.ImportanceHigh (the Q1 tier).
-			// In the current implementation, tierToQueueImportance(ImportanceHigh) == queue.ImportanceHigh.
-			t.Logf("Reprioritize call: ID=%s, importance=%v", call.ID, call.Importance)
-			if call.Importance != nil {
-				foundHighImportance = true // Accept that a promotion write occurred
-				break
-			}
+		if call.ID == input.DirectiveID && call.Importance == queue.ImportanceHigh {
+			foundHighImportance = true
+			t.Logf("✓ Priority promotion: Reprioritize called with importance=%v (Q1 tier)", call.Importance)
+			break
 		}
 	}
 	if !foundHighImportance {
-		t.Fatalf("no Reprioritize call found with promotion importance for directive ID %s",
-			input.DirectiveID)
+		actualImportance := queue.Importance("")
+		for _, call := range fakeQueue.ReprioritizeCalls {
+			if call.ID == input.DirectiveID {
+				actualImportance = call.Importance
+				break
+			}
+		}
+		t.Fatalf("no Q2→Q1 promotion found: Reprioritize called with importance=%v; expected %v",
+			actualImportance, queue.ImportanceHigh)
 	}
-	t.Logf("✓ Priority promotion: Reprioritize called with promotion-level importance")
 
-	// SCENARIO-0056 Observable 3: The Defer call set notBefore to make item eligible.
-	// We can't directly compare against "workflow's now at write time" without instrumenting
-	// further, but we can verify the call was made (the activity will have recorded the
-	// notBefore value passed by the workflow, which was set to workflow.Now(ctx) at promotion time).
+	// SCENARIO-0056 Observable 3: The Defer call set notBefore within the simulated execution window.
+	// This proves notBefore was set to the workflow's advanced "now" (item is eligible),
+	// not a zero/garbage value, and that real time-skipping occurred.
 	foundDeferCall := false
 	for _, call := range fakeQueue.DeferCalls {
 		if call.ID == input.DirectiveID {
 			foundDeferCall = true
-			// The notBefore should be a valid time (not zero).
-			if call.NotBefore.IsZero() {
-				t.Errorf("Defer notBefore is zero; expected a valid time")
-			} else {
-				t.Logf("✓ Eligibility set: Defer called with notBefore=%v", call.NotBefore)
+			// Assert notBefore is within the simulated execution window [startNow, endNow].
+			// The workflow sets notBefore = workflow.Now(ctx) at write time, which advances
+			// as the testsuite skips through sleep durations.
+			if call.NotBefore.Before(startNow) || call.NotBefore.After(endNow) {
+				t.Fatalf("Defer notBefore %v not within simulated execution window [%v, %v]; "+
+					"eligibility not set to advanced workflow-now", call.NotBefore, startNow, endNow)
 			}
+			t.Logf("✓ Eligibility set: Defer called with notBefore=%v (within window [%v, %v])",
+				call.NotBefore, startNow, endNow)
 			break
 		}
 	}

@@ -54,13 +54,13 @@ func NewWorker(ctx context.Context, cfg WorkerConfig, q queue.Queue) (*Worker, e
 	w := worker.New(c, cfg.TaskQueue, worker.Options{})
 
 	// Create activities with the provided queue (or nil for testing).
-	// Tests inject a fake Reprojector; production uses a *LaneqQueueWrapper that adapts
-	// *queue.LaneqQueue to the Reprojector interface.
+	// Production: q is *queue.LaneqQueue which directly satisfies Reprojector.
+	// Tests inject a fake Reprojector for isolated testing.
 	var reprojector Reprojector
 	if q != nil {
-		// If q is a *queue.LaneqQueue, wrap it to satisfy Reprojector.
-		if lq, ok := q.(*queue.LaneqQueue); ok {
-			reprojector = &LaneqQueueWrapper{queue: lq}
+		// *queue.LaneqQueue implements Reprojector directly.
+		if lq, ok := q.(Reprojector); ok {
+			reprojector = lq
 		}
 	}
 
