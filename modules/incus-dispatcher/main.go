@@ -40,6 +40,12 @@ func main() {
 		os.Exit(runServeCommand(os.Args[2:]))
 	}
 
+	// `tui` runs the operator TUI (STORY-0028, STORY-0027 AC-3): a command-driven
+	// terminal interface for thread and worker management, including pause/block/resume.
+	if len(os.Args) > 1 && os.Args[1] == "tui" {
+		os.Exit(runTUICommand(os.Args[2:]))
+	}
+
 	// CLI flags
 	name := flag.String("name", "", "Task name (required)")
 	repo := flag.String("repo", "", "Git repository path (local) or URL to deliver (optional)")

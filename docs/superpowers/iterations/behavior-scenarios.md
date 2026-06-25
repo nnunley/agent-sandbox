@@ -1068,8 +1068,8 @@ microVM host-socket isolation → ITER-0005)
 - All required operations succeed
 - Operator has visibility into queue, workers, and artifacts
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (ITER-0008b, TG1): `cd modules/incus-dispatcher && go test . -run TestScenario0021` passes; proves AC-1 (create), AC-2 (queue/workers), AC-3 (inspect), AC-4 (pause/resume), and STORY-0027 AC-3 (pause/block/resume transitions with audit recording).
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0021 -v`
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:552-559`
