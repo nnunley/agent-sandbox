@@ -3422,3 +3422,100 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:366-389`
 - STORY-0002 AC-2 (durable defer-until-eligible)
 - STORY-0044 AC-2 (sole-writer seam via Defer)
+
+## SCENARIO-0117 — Host-signed laneq RPC accepted
+
+**Kind:** contract
+**Proof seam:** integration
+**Owning stories:** STORY-0080, STORY-0081, STORY-0079
+
+**Preconditions:**
+- The Mac issuer has minted a valid PASETO v4.public grant for the calling host (`sub`=host, `aud`=this laneq instance, unexpired)
+- The laneq interceptor holds the issuer's public key and is in `enforce` mode
+- The Go client's GrantSource has the current token loaded
+
+**Action:**
+- The Go LaneqQueue issues a laneq RPC (e.g., Push/Claim) with the grant attached as gRPC metadata
+
+**Expected observables:**
+- The laneq interceptor verifies the signature + `exp`/`nbf`/`aud` and ALLOWS the RPC
+- The RPC succeeds and returns the expected result
+- An unauthenticated call (no grant) to the same enforce-mode server is rejected
+
+**Automation status:** pending → ITER-0007c (Go client interceptor + real-wire round-trip extending `queue/run-laneq-wire.sh`; laneq Python interceptor unit)
+**Execution command:** TBD — set in ITER-0007c (real-wire: signed token round-trips all RPCs)
+
+**Sources:**
+- `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:48-66`
+
+## SCENARIO-0118 — Forged / expired / wrong-audience grant rejected
+
+**Kind:** failure-recovery
+**Proof seam:** integration
+**Owning stories:** STORY-0081
+
+**Preconditions:**
+- The laneq interceptor is in `enforce` mode with the issuer public key configured
+
+**Action:**
+- A caller presents (a) a forged-signature token, (b) an expired token, or (c) a token whose `aud` names a different laneq instance
+
+**Expected observables:**
+- Each case is rejected with gRPC `UNAUTHENTICATED`
+- No laneq state is mutated by the rejected RPC
+- The rejection reason (bad-sig / expired / bad-aud) is logged for audit
+
+**Automation status:** pending → ITER-0007c (laneq Python interceptor unit + Go real-wire negative cases)
+**Execution command:** TBD — set in ITER-0007c
+
+**Sources:**
+- `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:60-66`
+
+## SCENARIO-0119 — log-only mode allows and logs an invalid grant (safe rollout)
+
+**Kind:** failure-recovery
+**Proof seam:** integration
+**Owning stories:** STORY-0081, STORY-0082
+
+**Preconditions:**
+- The laneq interceptor is in `log-only` mode (rollout phase) with the issuer public key configured
+
+**Action:**
+- A caller issues an RPC with an invalid/absent grant
+- A caller issues an RPC with a valid grant
+
+**Expected observables:**
+- The invalid-grant RPC is ALLOWED (not rejected) AND a verification-failure is logged
+- The valid-grant RPC is allowed and logs success
+- Flipping to `enforce` then rejects the invalid-grant RPC — proving the rollout gate works without disrupting legitimate traffic
+
+**Automation status:** pending → ITER-0007c (laneq Python interceptor mode tests + cluster log-only→enforce e2e)
+**Execution command:** TBD — set in ITER-0007c
+
+**Sources:**
+- `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:67-79`
+
+## SCENARIO-0120 — Grant key rotation via `kid`
+
+**Kind:** contract
+**Proof seam:** integration
+**Owning stories:** STORY-0079, STORY-0081
+
+**Preconditions:**
+- The issuer has a current Ed25519 keypair (`kid=k1`) and a next keypair (`kid=k2`)
+- The laneq verifier is configured to trust both `k1` and `k2` public keys
+
+**Action:**
+- The issuer mints a token under the new `kid=k2`
+- A caller presents the `k2`-signed token; another presents a still-valid `k1`-signed token
+
+**Expected observables:**
+- Both tokens verify and their RPCs are allowed during the rotation overlap (zero-downtime)
+- A token signed by an untrusted `kid` is rejected
+- After `k1` is retired from the trust set, `k1`-signed tokens are rejected
+
+**Automation status:** pending → ITER-0007c (token-format unit round-trip under multiple kids + interceptor multi-key trust)
+**Execution command:** TBD — set in ITER-0007c
+
+**Sources:**
+- `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:24-46`
