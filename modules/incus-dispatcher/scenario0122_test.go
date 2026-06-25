@@ -64,11 +64,16 @@ func TestScenario0122_RunArtifactCapture(t *testing.T) {
 		t.Fatalf("expected 1 log ref, got %d: %+v", len(run.LogRefs), run.LogRefs)
 	}
 
-	// Verify that refs are NOT inline content (must be opaque strings, not the blob itself).
+	// Typed-reference discipline (AC-1): each Ref must be an OPAQUE key, not the inline blob and not
+	// the bare filename. Assert the ref does not equal any artifact's content nor any artifact name.
 	for _, ref := range run.ArtifactRefs {
-		if string(artifacts[ref.Ref]) != "" {
-			// Ref must NOT be a valid key in artifacts map (it should be an opaque store key).
-			// We'll check this more carefully below when resolving.
+		for name, content := range artifacts {
+			if ref.Ref == string(content) {
+				t.Fatalf("artifact ref %q equals inline content — refs must be opaque, not the blob", ref.Ref)
+			}
+			if ref.Ref == name {
+				t.Fatalf("artifact ref %q equals the bare filename — ref must be an opaque store key", ref.Ref)
+			}
 		}
 	}
 
@@ -108,7 +113,45 @@ func TestScenario0122_RunArtifactCapture(t *testing.T) {
 			string(logs), string(logData))
 	}
 
-	// Verify run_id links artifacts (store is keyed by run_id).
-	// We can't directly inspect store internals, but we've proven Resolve works,
-	// which means the store correctly links ref → artifact under run_id.
+	// AC-2 run_id linkage: every ref the Run recorded must be discoverable from the store BY run_id.
+	runRefs := store.RefsForRun(runID)
+	if len(runRefs) != 3 { // 2 artifacts + 1 log
+		t.Fatalf("RefsForRun(%q) = %d refs, want 3 (2 artifacts + 1 log): %v", runID, len(runRefs), runRefs)
+	}
+	indexed := make(map[string]bool, len(runRefs))
+	for _, r := range runRefs {
+		indexed[r] = true
+	}
+	for _, ref := range run.ArtifactRefs {
+		if !indexed[ref.Ref] {
+			t.Fatalf("artifact ref %q not linked to run_id %q in the store index", ref.Ref, runID)
+		}
+	}
+	if !indexed[run.LogRefs[0]] {
+		t.Fatalf("log ref %q not linked to run_id %q in the store index", run.LogRefs[0], runID)
+	}
+}
+
+// TestArtifactStore_MutationResistance proves the store deep-copies on BOTH Store (input) and Resolve
+// (output), so a caller cannot corrupt the stored "durable" bytes by mutating an aliased slice in
+// either direction (the same defensive-copy discipline the policy store needed).
+func TestArtifactStore_MutationResistance(t *testing.T) {
+	store := NewArtifactStore()
+
+	input := []byte("original")
+	ref := store.Store("run-mut", "art", input)
+
+	// Mutating the caller's input slice after Store must not change the stored bytes.
+	input[0] = 'X'
+	got, ok := store.Resolve(ref)
+	if !ok || string(got) != "original" {
+		t.Fatalf("store corrupted by input mutation: got %q, want %q", string(got), "original")
+	}
+
+	// Mutating a Resolve result must not change the stored bytes.
+	got[0] = 'Y'
+	got2, _ := store.Resolve(ref)
+	if string(got2) != "original" {
+		t.Fatalf("store corrupted by output mutation: got %q, want %q", string(got2), "original")
+	}
 }

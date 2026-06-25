@@ -4,74 +4,75 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
-// ArtifactStore is an in-memory artifact repository keyed by run_id.
-// This is the honest seam for ITER-0008 CI. A production system would
-// back this with a durable object store (S3, GCS, or disk-based).
-// For now, artifacts are persisted only in the current process lifetime.
-// TODO(ITER-0008b): Wire durable backing (e.g., disk store, S3).
+// artifactSeq backs the globally-unique portion of every artifact reference. Using a process-global
+// counter (not a string derived from run_id + artifact name) means a reference can never collide and
+// never needs to be PARSED to resolve — so artifact names or run ids containing any character
+// (including the old "run_id:artifact_id" delimiter, or "/", or a path separator) are handled safely.
+var artifactSeq atomic.Uint64
+
+// ArtifactStore is an in-memory artifact repository. References are opaque keys resolved by a direct
+// map lookup; a separate index links each run_id to the references stored under it (STORY-0015 AC-2
+// "linked to run_id"). This is the honest seam for ITER-0008 CI. A production system would back this
+// with a durable object store (S3, GCS, or disk-based); artifacts here live only for the process
+// lifetime. TODO(ITER-0008b): wire durable backing.
 type ArtifactStore struct {
 	mu    sync.RWMutex
-	store map[string]map[string][]byte // run_id → artifact_id → data
+	blobs map[string][]byte   // opaque ref → data (resolution is a direct lookup; refs are never parsed)
+	byRun map[string][]string // run_id → its artifact refs (run-linkage)
 }
 
 // NewArtifactStore creates a new in-memory artifact store.
 func NewArtifactStore() *ArtifactStore {
 	return &ArtifactStore{
-		store: make(map[string]map[string][]byte),
+		blobs: make(map[string][]byte),
+		byRun: make(map[string][]string),
 	}
 }
 
-// Store saves an artifact blob under the given run_id and artifact_id.
-// Returns an opaque reference that can be used to retrieve the artifact later.
-// The reference has the form "run_id:artifact_id" (opaque to callers).
+// Store saves an artifact blob under the given run_id and artifact_id, returning an opaque reference.
+// The reference embeds the run_id and artifact name for human readability plus a globally-unique
+// suffix for collision-freedom, but callers MUST treat it as opaque — Resolve never parses it.
 func (as *ArtifactStore) Store(runID, artifactID string, data []byte) string {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if _, ok := as.store[runID]; !ok {
-		as.store[runID] = make(map[string][]byte)
-	}
+	ref := fmt.Sprintf("%s/%s#a%d", runID, artifactID, artifactSeq.Add(1))
 
-	// Store a copy of the data to prevent external mutation.
+	// Store a copy of the data to prevent external mutation of the stored (durable) bytes.
 	dataCopy := make([]byte, len(data))
 	copy(dataCopy, data)
-	as.store[runID][artifactID] = dataCopy
+	as.blobs[ref] = dataCopy
+	as.byRun[runID] = append(as.byRun[runID], ref)
 
-	// Return opaque reference.
-	return fmt.Sprintf("%s:%s", runID, artifactID)
+	return ref
 }
 
-// Resolve retrieves artifact data by opaque reference.
+// Resolve retrieves artifact data by opaque reference via a direct map lookup (no parsing).
 // Returns the stored bytes and true if found, or nil and false otherwise.
 func (as *ArtifactStore) Resolve(ref string) ([]byte, bool) {
 	as.mu.RLock()
 	defer as.mu.RUnlock()
 
-	// Parse opaque reference: "run_id:artifact_id"
-	parts := strings.SplitN(ref, ":", 2)
-	if len(parts) != 2 {
-		return nil, false
-	}
-
-	runID := parts[0]
-	artifactID := parts[1]
-
-	runArtifacts, ok := as.store[runID]
+	data, ok := as.blobs[ref]
 	if !ok {
 		return nil, false
 	}
 
-	data, ok := runArtifacts[artifactID]
-	if !ok {
-		return nil, false
-	}
-
-	// Return a copy to prevent external mutation.
+	// Return a copy to prevent external mutation of the stored bytes.
 	dataCopy := make([]byte, len(data))
 	copy(dataCopy, data)
 	return dataCopy, true
+}
+
+// RefsForRun returns all artifact references stored under a run_id (STORY-0015 AC-2: artifacts are
+// linked to run_id and discoverable from it). The returned slice is a copy.
+func (as *ArtifactStore) RefsForRun(runID string) []string {
+	as.mu.RLock()
+	defer as.mu.RUnlock()
+	return append([]string(nil), as.byRun[runID]...)
 }
 
 // CaptureArtifacts populates Run.ArtifactRefs and Run.LogRefs by storing
