@@ -3,6 +3,7 @@ package grantauth_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -313,6 +314,57 @@ func TestFileGrantSource_ErrorOnWhitespaceOnlyFile(t *testing.T) {
 	_, err := source.Current()
 	if err == nil {
 		t.Errorf("Current on whitespace-only file: expected error, got nil")
+	}
+}
+
+func TestFileGrantSource_TrimsSurroundingWhitespace(t *testing.T) {
+	// Verify that surrounding whitespace (trailing newline, leading/trailing spaces)
+	// is trimmed from the returned token. Grant files commonly have trailing newlines
+	// from echo or systemd-credential delivery.
+	tmpdir := t.TempDir()
+	grantFile := filepath.Join(tmpdir, "grant.txt")
+
+	issuer, _ := grantauth.NewKey()
+	client, _ := grantauth.NewKey()
+	clientPEM, _ := client.PublicKeyPEM()
+	now := time.Unix(1782000000, 0).UTC()
+
+	grant, _ := issuer.MintGrant(grantauth.GrantParams{
+		Iss:                "mac",
+		Sub:                "agent-host",
+		Aud:                aud,
+		ClientPublicKeyPEM: clientPEM,
+		ClientKid:          "c1",
+		Kid:                "k1",
+		Now:                now,
+		TTL:                30 * time.Minute,
+		JTI:                "j1",
+	})
+
+	// Write grant with leading space, trailing newline, and trailing space.
+	os.WriteFile(grantFile, []byte(" "+grant+"\n "), 0644)
+
+	source, _ := grantauth.NewFileGrantSource(grantFile)
+	got, err := source.Current()
+	if err != nil {
+		t.Fatalf("Current with surrounded token: %v", err)
+	}
+
+	// Returned token should equal the bare grant (no leading/trailing whitespace).
+	if got != grant {
+		t.Errorf("got %q, want %q (unpadded)", got, grant)
+	}
+
+	// Verify it has no leading/trailing whitespace.
+	if got != strings.TrimSpace(got) {
+		t.Errorf("returned token still has surrounding whitespace: %q", got)
+	}
+
+	// Verify it round-trips through PASETO parsing (interop check).
+	parser := paseto.NewParserWithoutExpiryCheck()
+	_, err = parser.ParseV4Public(issuer.PublicKey(), got, nil)
+	if err != nil {
+		t.Errorf("trimmed token failed PASETO parse: %v", err)
 	}
 }
 

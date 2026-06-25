@@ -202,9 +202,10 @@ func (s *FileGrantSource) Current() (string, error) {
 		return "", fmt.Errorf("read grant file: %w", err)
 	}
 
-	token := string(data)
+	// Trim surrounding whitespace (grant files may have trailing newlines from echo or systemd-credential).
+	token := strings.TrimSpace(string(data))
 	// Reject empty or whitespace-only files.
-	if strings.TrimSpace(token) == "" {
+	if token == "" {
 		return "", fmt.Errorf("grant file is empty or whitespace-only")
 	}
 
