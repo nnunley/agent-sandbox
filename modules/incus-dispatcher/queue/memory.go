@@ -215,3 +215,19 @@ func (q *MemoryQueue) Parked() int {
 	defer q.mu.Unlock()
 	return len(q.parked)
 }
+
+// DeferDirective returns a claimed directive to pending with Attempts PRESERVED (not incremented).
+// Used for dispatch gates (e.g., paused threads) that need backoff without failure escalation.
+func (q *MemoryQueue) DeferDirective(lease Lease, notBefore time.Time) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	it, err := q.live(lease)
+	if err != nil {
+		return err
+	}
+	delete(q.claimed, lease.DirectiveID)
+	// Key difference from Requeue: do NOT increment Attempts
+	it.d.NotBefore = notBefore
+	q.pending = append(q.pending, it.d)
+	return nil
+}

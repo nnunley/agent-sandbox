@@ -17,10 +17,10 @@ import (
 // It is a drop-in replacement for MemoryQueue.
 //
 // Storage split:
-// - Scheduling fields (priority, not_before_unix, lease_until_unix, requeue_count, etc.)
-//   are laneq columns.
-// - The rich Directive (Intent, Template, Origin, Repo, Ref, Task, Grade, HandoffIn,
-//   Deadline, MaxAttempts) is JSON-marshaled into laneq's opaque body field.
+//   - Scheduling fields (priority, not_before_unix, lease_until_unix, requeue_count, etc.)
+//     are laneq columns.
+//   - The rich Directive (Intent, Template, Origin, Repo, Ref, Task, Grade, HandoffIn,
+//     Deadline, MaxAttempts) is JSON-marshaled into laneq's opaque body field.
 //
 // Lane policy: LaneqQueue is configured with a single lane at construction (default="default").
 // All Claim/Peek operations use this lane. Multi-lane fan-out is an ITER-0008 extension point
@@ -126,10 +126,10 @@ func (q *LaneqQueue) Claim(consumer string, leaseDur time.Duration) (Directive, 
 	defer cancel()
 
 	resp, err := q.client.Take(ctx, &laneqpb.TakeRequest{
-		Consumer:          consumer,
-		Lane:              q.lane,
-		LeaseDurationMs:   int64(leaseDur.Milliseconds()),
-		ReapStaleSeconds:  0, // No auto-reap here.
+		Consumer:         consumer,
+		Lane:             q.lane,
+		LeaseDurationMs:  int64(leaseDur.Milliseconds()),
+		ReapStaleSeconds: 0, // No auto-reap here.
 	})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
@@ -203,9 +203,9 @@ func (q *LaneqQueue) Touch(lease Lease, leaseDur time.Duration) (Lease, error) {
 	defer cancel()
 
 	resp, err := q.client.Touch(ctx, &laneqpb.TouchRequest{
-		Id:                lease.DirectiveID,
-		Consumer:          lease.Token,
-		LeaseDurationMs:   int64(leaseDur.Milliseconds()),
+		Id:              lease.DirectiveID,
+		Consumer:        lease.Token,
+		LeaseDurationMs: int64(leaseDur.Milliseconds()),
 	})
 	if err != nil {
 		if status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition {
@@ -277,7 +277,7 @@ func (q *LaneqQueue) Requeue(lease Lease, notBefore time.Time) error {
 	} else {
 		// Deferred: Defer(id, until=notBefore).
 		_, err := q.client.Defer(ctx, &laneqpb.DeferRequest{
-			Id:       lease.DirectiveID,
+			Id:        lease.DirectiveID,
 			UntilUnix: ptrInt64(notBefore.Unix()),
 		})
 		if err != nil {
@@ -375,6 +375,13 @@ func (q *LaneqQueue) Reprioritize(id string, importance Importance) error {
 // This is the SOLE public path for Temporal to update not-before; it mirrors the
 // Defer RPC call inside Requeue (laneq.go:278-289) but is exposed as a lease-free
 // public method for the ReprojectActivity sole-writer seam (STORY-0044 AC-3).
+// DeferDirective (queue.Queue interface) returns a claimed directive to pending with Attempts PRESERVED.
+// Uses the underlying Defer(id, notBefore) from the Reprojector interface.
+func (q *LaneqQueue) DeferDirective(lease Lease, notBefore time.Time) error {
+	return q.Defer(lease.DirectiveID, notBefore)
+}
+
+// Defer is the laneq Reprojector method that defers a directive by ID.
 func (q *LaneqQueue) Defer(id string, notBefore time.Time) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -389,6 +396,7 @@ func (q *LaneqQueue) Defer(id string, notBefore time.Time) error {
 
 	return nil
 }
+
 // Reap reclaims expired leases (requeues them). Returns the count reclaimed.
 func (q *LaneqQueue) Reap() (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -129,4 +129,11 @@ type Queue interface {
 
 	// Len reports pending + claimed directive counts (for tests/observability).
 	Len() (pending, claimed int)
+
+	// DeferDirective returns a claimed directive to pending with Attempts PRESERVED (not incremented)
+	// and NotBefore set to the specified time (for backoff/rate-limiting without failure escalation).
+	// Used by dispatch gates (e.g., paused/blocked threads) to hold work without consuming retries.
+	// Returns ErrLeaseLost if the lease is expired/unknown (match Done/Requeue lease handling).
+	// Note: LaneqQueue has a separate Defer(id, notBefore) method on the Reprojector interface.
+	DeferDirective(lease Lease, notBefore time.Time) error
 }

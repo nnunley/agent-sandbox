@@ -14,14 +14,14 @@ import (
 // It reads operator commands from an io.Reader (line-based) and writes rendered output to an io.Writer.
 // This design is app-level testable by driving stdin→stdout strings without requiring a terminal/TTY.
 type OperatorConsole struct {
-	q                  queue.Queue
-	threads            *ThreadTracker
-	threadStore        *ThreadStore      // For enumeration (threads command)
-	workers            map[string]*Worker
-	audit              AuditLog
-	threadToDirective  map[string]queue.Directive // For requeue: thread ID → last directive
-	threadToResult     map[string]*Result         // For artifact inspection: thread ID → Result
-	now                func() time.Time
+	q                 queue.Queue
+	threads           *ThreadTracker
+	threadStore       *ThreadStore      // For enumeration (threads command)
+	workers           map[string]*Worker
+	audit             AuditLog
+	threadToDirective map[string]queue.Directive // For requeue: thread ID → last directive
+	results           *ResultStore               // For artifact inspection: real result source from Daemon
+	now               func() time.Time
 }
 
 // NewOperatorConsole returns a new OperatorConsole wired with the given dependencies.
@@ -35,7 +35,7 @@ func NewOperatorConsole(q queue.Queue, threads *ThreadTracker, workers map[strin
 		workers:           workers,
 		audit:             audit,
 		threadToDirective: make(map[string]queue.Directive),
-		threadToResult:    make(map[string]*Result),
+		results:           NewResultStore(), // Real result source from Daemon
 		now:               now,
 	}
 }
@@ -148,6 +148,14 @@ func (oc *OperatorConsole) cmdCreate(args []string) (string, error) {
 		oc.threads.Set(id, StatusQueued)
 	}
 
+	// Register the thread in the thread store for enumeration (AC-2)
+	if oc.threadStore != nil {
+		oc.threadStore.Put(Thread{
+			ID:     id,
+			Status: StatusQueued,
+		})
+	}
+
 	// Audit the creation as a mutation
 	if oc.audit != nil {
 		_, _ = oc.audit.Append(AuditEntry{
@@ -242,36 +250,38 @@ func (oc *OperatorConsole) renderInspect(out io.Writer, id string) {
 		fmt.Fprintf(out, "    [%d] %s -> %s at %s\n", i, t.From, t.To, t.Ts.Format("15:04:05"))
 	}
 
-	// Render artifacts if available
-	if result, ok := oc.threadToResult[id]; ok {
-		fmt.Fprintf(out, "  artifacts:\n")
+	// Render artifacts if available (from real result store)
+	if oc.results != nil {
+		if result, ok := oc.results.Get(id); ok {
+			fmt.Fprintf(out, "  artifacts:\n")
 
-		// Render patch data
-		if len(result.PatchData) > 0 {
-			fmt.Fprintf(out, "    patch:\n")
-			lines := strings.Split(string(result.PatchData), "\n")
-			for _, line := range lines[:minInt(len(lines), 5)] { // Show first 5 lines
-				if line != "" {
-					fmt.Fprintf(out, "      %s\n", line)
-				}
-			}
-			if len(lines) > 5 {
-				fmt.Fprintf(out, "      ... (%d more lines)\n", len(lines)-5)
-			}
-		}
-
-		// Render artifacts map
-		if len(result.Artifacts) > 0 {
-			for key, content := range result.Artifacts {
-				fmt.Fprintf(out, "    %s:\n", key)
-				lines := strings.Split(string(content), "\n")
-				for _, line := range lines[:minInt(len(lines), 3)] { // Show first 3 lines
+			// Render patch data
+			if len(result.PatchData) > 0 {
+				fmt.Fprintf(out, "    patch:\n")
+				lines := strings.Split(string(result.PatchData), "\n")
+				for _, line := range lines[:minInt(len(lines), 5)] { // Show first 5 lines
 					if line != "" {
 						fmt.Fprintf(out, "      %s\n", line)
 					}
 				}
-				if len(lines) > 3 {
-					fmt.Fprintf(out, "      ... (%d more lines)\n", len(lines)-3)
+				if len(lines) > 5 {
+					fmt.Fprintf(out, "      ... (%d more lines)\n", len(lines)-5)
+				}
+			}
+
+			// Render artifacts map
+			if len(result.Artifacts) > 0 {
+				for key, content := range result.Artifacts {
+					fmt.Fprintf(out, "    %s:\n", key)
+					lines := strings.Split(string(content), "\n")
+					for _, line := range lines[:minInt(len(lines), 3)] { // Show first 3 lines
+						if line != "" {
+							fmt.Fprintf(out, "      %s\n", line)
+						}
+					}
+					if len(lines) > 3 {
+						fmt.Fprintf(out, "      ... (%d more lines)\n", len(lines)-3)
+					}
 				}
 			}
 		}

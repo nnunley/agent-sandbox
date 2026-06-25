@@ -21,7 +21,8 @@ import (
 // - Requeue directives (AC-4)
 //
 // Usage:
-//   incus-dispatcher tui [--queue memory|laneq] [--laneq-addr localhost:50051]
+//
+//	incus-dispatcher tui [--queue memory|laneq] [--laneq-addr localhost:50051]
 func runTUICommand(args []string) int {
 	fs := flag.NewFlagSet("tui", flag.ExitOnError)
 	queueType := fs.String("queue", "memory", "queue backend: 'memory' (default) or 'laneq'")

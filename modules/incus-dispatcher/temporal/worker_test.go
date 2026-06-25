@@ -69,3 +69,6 @@ func (f *fakeQueueNonReprojector) Reap() (int, error) {
 func (f *fakeQueueNonReprojector) Len() (pending, claimed int) {
 	return 0, 0
 }
+func (f *fakeQueueNonReprojector) DeferDirective(lease queue.Lease, notBefore time.Time) error {
+	return nil
+}

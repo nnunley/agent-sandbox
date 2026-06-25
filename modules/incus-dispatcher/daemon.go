@@ -43,6 +43,7 @@ type Daemon struct {
 	Escalations EscalationLane             // non-blocking human escalations lane (optional)
 	Now         func() time.Time           // clock for decision timestamps (optional; defaults to time.Now)
 	Context     ContextProvider            // soft-state provider (optional; defaults to NoopProvider). Best-effort: handoff loss never affects correctness (STORY-0018 AC-4).
+	Results     *ResultStore               // result/artifact persistence (optional; stores run results for later inspection).
 }
 
 // ctx returns the configured ContextProvider, or a NoopProvider when none is set. The daemon claims
@@ -136,13 +137,19 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 		return OutcomeEmpty, "", fmt.Errorf("claim: %w", err)
 	}
 
-	// Thread status gating: if the thread is paused or blocked, requeue the directive
-	// and leave the thread status unchanged. This prevents execution while the thread is held.
+	// Thread status gating: if the thread is paused or blocked, defer the directive
+	// (return to pending WITHOUT incrementing Attempts) to prevent execution while held.
+	// Use a small backoff (poll interval) so the gate doesn't cause a tight spin.
 	if dm.Threads != nil {
 		threadStatus := dm.Threads.Status(d.ID)
 		if threadStatus == StatusPaused || threadStatus == StatusBlocked {
-			_ = dm.Q.Requeue(lease, time.Time{})
-			dm.record(d.ID, "", "thread-held", "requeue", fmt.Sprintf("thread status %s prevents dispatch", threadStatus))
+			// Backoff: use poll interval if available, else a sensible default (1 second)
+			backoff := time.Second
+			// Note: Daemon doesn't have a poll interval field; caller (Serve) manages polling.
+			// For now, use 1s backoff; production could wire daemon.PollInterval if needed.
+			deferTime := dm.clock().Add(backoff)
+			_ = dm.Q.DeferDirective(lease, deferTime)
+			dm.record(d.ID, "", "thread-held", "defer", fmt.Sprintf("thread status %s prevents dispatch (backed off until %s)", threadStatus, deferTime.Format("15:04:05")))
 			return OutcomeRequeued, d.ID, nil
 		}
 	}
@@ -200,6 +207,11 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 	// Teardown always runs (stop-then-delete lives in the Runner's Cleanup); log the reap (D6).
 	_ = runner.Cleanup()
 	dm.record(d.ID, "", "teardown", "reap")
+
+	// Store the result for later inspection (artifacts, patch, output) — optional but enables AC-3.
+	if dm.Results != nil && result != nil {
+		dm.Results.Store(d.ID, result)
+	}
 
 	if passed(result, runErr) {
 		_ = dm.Q.Done(lease)
