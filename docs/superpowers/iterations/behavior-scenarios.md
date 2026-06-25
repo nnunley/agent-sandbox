@@ -3638,8 +3638,26 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - The Mac recomputes/replays nothing on reconnect
 - No fleet state is required to live on the Mac for correctness
 
-**Automation status:** planned (ITER-0008)
+**Automation status:** AUTOMATED:ITER-0008 (in-process e2e harness, in-memory substrate)
 **Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0124_MacStatelessClient`
+
+**Evidence:**
+- Automated harness: `modules/incus-dispatcher/scenario0124_test.go` — `TestScenario0124_MacStatelessClient`
+  proves the three acceptance criteria by:
+  1. **AC-1 (author + disconnect):** Daemon processes a directive to completion using a shared substrate
+     (queue, decision log, thread store). The author's in-memory queue reference is discarded.
+     Assertions: queue is fully drained (0 pending/claimed), decision log records the complete flow,
+     Runner was invoked exactly once.
+  2. **AC-2 (reconnect = fresh read):** A fresh Daemon is constructed with ZERO in-memory state from the
+     author/processing phases. It reads from the SAME durable substrate (queue, decision log).
+     Assertions: the fresh reader observes that the queue is empty (directive was Done and removed),
+     the decision log contains the completion marker (grade="pass", action="done").
+  3. **AC-3 (no replay on reconnect):** The Runner is instrumented to count invocations. The fresh reader
+     does NOT re-run the directive. Assertions: Runner.invocationCount remains 1 (not incremented during
+     reconnect phase), Queue.Peek() returns ErrEmpty (the directive is not re-claimable).
+- Statelessness seam: the test models the Mac's statelessness boundary by discarding the author's queue
+  reference and constructing a fresh Daemon with NO shared mutable state with the processing phase,
+  proving that all state lives in the substrate (queue + log), not on the Mac.
 
 **Sources:**
 - requirements/EPIC-001.md STORY-0006
