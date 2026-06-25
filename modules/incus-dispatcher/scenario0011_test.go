@@ -26,9 +26,9 @@ import (
 //
 // Cluster-residual (marked honestly, NOT proven here):
 // AC-2 (dnsmasq config): dnsmasq runs on br-microvm for DHCP + basic name resolution.
-// - Config evidence: host/networking.nix:83-94 (dnsmasq enable=true on br-microvm bridge).
-// - Network trace observables (dnsmasq queries, /etc/hosts injection) are cluster-level and
-//   cannot be tested in Go CI — proven by config file reference, not this test.
+//   - Config evidence: host/networking.nix:83-94 (dnsmasq enable=true on br-microvm bridge).
+//   - Network trace observables (dnsmasq queries, /etc/hosts injection) are cluster-level and
+//     cannot be tested in Go CI — proven by config file reference, not this test.
 //
 // Owning stories: STORY-0009. Seam: integration (in-process, fake backend, no real network).
 // Execution command: cd modules/incus-dispatcher && go test . -run TestScenario0011_StaticEndpointInjection
@@ -54,8 +54,8 @@ func testAC1_StaticEndpointInjection(t *testing.T) {
 			// These represent the fixed endpoints injected by the task-spec template.
 			// In real deployment: dnsmasq resolves 'queue' → 10.88.0.1:5000,
 			// and 'llm-proxy' → 10.88.0.1:4000. The worker reads these from the env.
-			"QUEUE_ADDR":    "10.88.0.1:5000",      // Static queue/coordinator endpoint
-			"LLM_PROXY_ADDR": "10.88.0.1:4000",     // Static llm-proxy endpoint
+			"QUEUE_ADDR":     "10.88.0.1:5000", // Static queue/coordinator endpoint
+			"LLM_PROXY_ADDR": "10.88.0.1:4000", // Static llm-proxy endpoint
 		},
 	}
 
@@ -98,7 +98,7 @@ func testAC1_StaticEndpointInjection(t *testing.T) {
 		Model:    "claude-3-5-haiku",
 		Env: map[string]string{
 			"QUEUE_ADDR":     "10.88.0.1:5000",
-			"LLM_PROXY_ADDR":  "10.88.0.1:4000",
+			"LLM_PROXY_ADDR": "10.88.0.1:4000",
 		},
 	}
 	err = applyProviderRouting(task2)
@@ -121,8 +121,8 @@ func testAC1_StaticEndpointInjection(t *testing.T) {
 	// Observable 4: NO discovery client is constructed in the injection path.
 	// Structurally, applyProviderRouting is a pure function that merges two maps (provider env + task env).
 	// There is no DNS lookup, no service discovery request, no network I/O.
-	// This is proven by code inspection of provider_routing.go (lines 35-53):
-	// the function is 18 lines, purely functional, zero imports beyond the main package.
+	// This is proven by code inspection of provider_routing.go applyProviderRouting/ProviderWorkerEnv:
+	// a small pure function, no DNS/discovery imports, only map assignment.
 	// We verify this indirectly: the task env is only modified via map assignment, no side effects.
 	providerEnv, _ := ProviderWorkerEnv(ProviderAnthropic, "claude-3-5-haiku")
 	if providerEnv == nil || providerEnv["FLEET_PROVIDER"] == "" {
@@ -151,14 +151,20 @@ func testAC3_QueueMediadPullCoordination(t *testing.T) {
 		LeaseDur: time.Minute,
 		Log:      logmem,
 		Now:      func() time.Time { return time.Unix(0, 0) },
+		// AC-1 SEAM NOTE: this MapToTask stands in for the executor's task-spec/template
+		// discipline — it injects FIXED service endpoints into the worker Task.Env (no dynamic
+		// discovery). The test proves the injection MECHANISM end-to-end through the daemon
+		// (endpoints reach the launched worker unchanged) and the no-discovery guarantee. The
+		// production supply chain for QUEUE_ADDR/LLM_PROXY_ADDR is a worker-startup/flags concern
+		// (serve_cmd flags + provider routing), not a Directive field today; there is intentionally
+		// no Directive→endpoint discovery step — that absence is the point of STORY-0009 v1.
 		MapToTask: func(d queue.Directive) Task {
 			return Task{
 				Name: d.ID,
 				Cmd:  []string{"true"},
 				Env: map[string]string{
-					// Static endpoints injected by template spec (simulating AC-1).
 					"QUEUE_ADDR":     "10.88.0.1:5000",
-					"LLM_PROXY_ADDR":  "10.88.0.1:4000",
+					"LLM_PROXY_ADDR": "10.88.0.1:4000",
 				},
 			}
 		},
@@ -191,7 +197,7 @@ func testAC3_QueueMediadPullCoordination(t *testing.T) {
 	}
 
 	// Observable 2: NO discovery client is constructed or called.
-	// Structurally, the daemon hot path (RunOnce → run → runner.Run) only calls Queue methods:
+	// Structurally, the daemon hot path (RunOnce → runner.Run) only calls Queue methods:
 	// - queue.Claim(consumer, leaseDur) — returns a directive from the queue
 	// - runner.Run(task) — executes the task (where static endpoints are in task.Env)
 	// - queue.Done/Requeue/Escalate — outcome handling
