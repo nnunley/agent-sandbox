@@ -100,7 +100,9 @@ func (b *MessageBus) Receive(topic string) ([]Message, error) {
 	msgs := b.topics[topic]
 	// Return a copy to prevent external mutation of the bus's internal state.
 	result := append([]Message(nil), msgs...)
-	// Clear the topic so Receive is idempotent (next call gets empty).
+	// Drain-and-clear: clearing the topic means a later Receive does NOT re-deliver these messages
+	// (so a message is consumed once, not reprocessed). This is single-consumer-per-topic semantics
+	// for the in-memory seam; a durable bus (Phase-2) would use acks/offsets instead.
 	b.topics[topic] = []Message{}
 	return result, nil
 }
@@ -138,6 +140,13 @@ func EmitUnderPolicy(bus *MessageBus, policy ExecutionPolicy, msg Message, maxDe
 	// STORY-0014 AC-3 (monotonicity): when the parent run is observable on the bus, the child's depth
 	// MUST strictly exceed it. (A ParentRunID naming a run the bus has not seen is a single message,
 	// not a recursion chain, so it cannot be — and need not be — verified here.)
+	//
+	// Phase-1 seam notes for a future maintainer porting to a durable bus: this parent lookup is an
+	// O(n) scan of the message log per emit (fine at CI scale; a durable bus would index run_id→depth),
+	// and it is NOT atomic with the Emit below (a benign TOCTOU window — the worst case is a concurrent
+	// emit changing the log between check and append; the maxDepth ceiling still hard-bounds recursion
+	// regardless). A run's depth is fixed by its position in the tree, so the first log match by RunID
+	// carries the correct parent depth.
 	if msg.ParentRunID != "" {
 		for _, m := range bus.MessageLog() {
 			if m.RunID == msg.ParentRunID {
@@ -160,7 +169,9 @@ func EmitUnderPolicy(bus *MessageBus, policy ExecutionPolicy, msg Message, maxDe
 
 // ReconstructDelegationGraph builds a parent→children adjacency map from the message log (STORY-0012 AC-4).
 // It uses ParentRunID to establish delegation edges. Returns a map[parentRunID][]childRunID.
-// The graph enables auditing the delegation chain: who delegated to whom.
+// The graph captures the delegation HIERARCHY (who delegated to whom); request/response CorrelationID
+// pairing is an orthogonal, application-level concern (the messages carry CorrelationID for callers to
+// pair on, but it is not an edge in this hierarchy graph).
 func ReconstructDelegationGraph(log []Message) map[string][]string {
 	graph := make(map[string][]string)
 	childSeen := make(map[string]bool) // track which children we've already added to avoid duplicates
