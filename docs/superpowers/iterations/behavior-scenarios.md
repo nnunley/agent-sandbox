@@ -3550,8 +3550,8 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - Worker selection respects capabilities + policy allowed_policies
 - An unsatisfiable capability request does not silently pick a wrong worker
 
-**Automation status:** planned (ITER-0008)
-**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0121_PolicyDrivenDispatch`
+**Automation status:** AUTOMATED:ITER-0008 (T2b — Worker registry + capability/allowed-policies dispatch → Run stamped with worker_id/worker_kind/policy_id + provider_instance/model_id/budget_snapshot; STORY-0035 AC-3/4 model-resolution + cost capture deferred to ITER-0008b)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0121_PolicyDrivenDispatch`
 
 **Sources:**
 - requirements/EPIC-001.md STORY-0011, STORY-0016; requirements/EPIC-005.md STORY-0035 AC-1/2

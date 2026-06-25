@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"sync/atomic"
 )
 
 // ErrNoEligibleWorker is returned when no worker satisfies the dispatch requirements
@@ -86,14 +87,16 @@ func (d *Dispatcher) Dispatch(
 	return run, nil
 }
 
-// generateRunID creates a unique run ID. In production, this would use a proper ID generator
-// (UUID, snowflake, etc.). For now, a simple counter or placeholder is acceptable for testing.
-// TODO(ITER-0008b): integrate with real ID generation scheme.
+// runIDCounter backs generateRunID's monotonic sequence. A process-local atomic counter gives
+// genuinely distinct ids without a time/random dependency (so tests are deterministic across the
+// process while still unique). ITER-0008b can swap in a durable/global id scheme (UUID, snowflake).
+var runIDCounter atomic.Uint64
+
+// generateRunID returns a process-unique run id (e.g. "run-1", "run-2", ...). Distinct ids matter
+// downstream: the audit log (SCENARIO-0125) and parent/child delegation lineage key off RunID, so a
+// constant id would collide.
 func generateRunID() string {
-	// Placeholder; in production, use uuid.New().String() or similar.
-	// For now, just generate a simple ID for testing.
-	static := "run-" // stub; tests don't depend on the exact format, only uniqueness
-	return static + fmt.Sprintf("%x", len(static))
+	return fmt.Sprintf("run-%d", runIDCounter.Add(1))
 }
 
 // copyBudgetSnapshot returns a deep copy of the budget snapshot (so the returned Run's

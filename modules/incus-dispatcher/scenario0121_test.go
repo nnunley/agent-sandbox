@@ -27,25 +27,25 @@ func TestScenario0121_PolicyDrivenDispatch(t *testing.T) {
 
 	// Worker 1: has "code-review" but NOT "deployment"
 	w1 := Worker{
-		WorkerID:       "worker-1",
-		WorkerKind:     WorkerKindIncusContainer,
-		Capabilities:   []string{"code-review", "synthesis"},
+		WorkerID:        "worker-1",
+		WorkerKind:      WorkerKindIncusContainer,
+		Capabilities:    []string{"code-review", "synthesis"},
 		AllowedPolicies: []string{"policy-review@v1", "policy-synthesis@v1"},
 	}
 
 	// Worker 2: has "deployment" and "code-review"
 	w2 := Worker{
-		WorkerID:       "worker-2",
-		WorkerKind:     WorkerKindMicroVM,
-		Capabilities:   []string{"deployment", "code-review", "verification"},
+		WorkerID:        "worker-2",
+		WorkerKind:      WorkerKindMicroVM,
+		Capabilities:    []string{"deployment", "code-review", "verification"},
 		AllowedPolicies: []string{"policy-deployment@v1", "policy-review@v1"},
 	}
 
 	// Worker 3: has "code-review" but is NOT in the policy's allowed workers
 	w3 := Worker{
-		WorkerID:       "worker-3",
-		WorkerKind:     WorkerKindLocal,
-		Capabilities:   []string{"code-review", "analysis"},
+		WorkerID:        "worker-3",
+		WorkerKind:      WorkerKindLocal,
+		Capabilities:    []string{"code-review", "analysis"},
 		AllowedPolicies: []string{}, // No policies allowed — will always be rejected
 	}
 
@@ -165,6 +165,26 @@ func TestScenario0121_PolicyDrivenDispatch(t *testing.T) {
 	}
 	if run3 != nil {
 		t.Fatalf("expected nil run on policy-allowlist violation, got %v", run3)
+	}
+
+	// --- CASE 3b: a policy-disallowed but capability-matching worker is SKIPPED for an allowed one ---
+	// Both w1 and w2 have "code-review", but only w2 is allowed under policy-deployment@v1 (w1 is not).
+	// Dispatch must skip w1 (policy-disallowed) and select w2 — proving allowed_policies drives
+	// SELECTION, not merely rejection (STORY-0011 AC-3).
+	policyIDDeploy := policyStore.Save("policy-deployment", ExecutionPolicy{Kind: PolicyKindOneShot})
+	run3b, err := dispatcher.Dispatch(requiredCapability("code-review"), policyIDDeploy, provider, model, budget)
+	if err != nil {
+		t.Fatalf("CASE 3b: dispatch should succeed by selecting the policy-allowed worker, got error: %v", err)
+	}
+	if run3b == nil || run3b.WorkerID != "worker-2" {
+		t.Fatalf("CASE 3b: expected worker-2 (skipping policy-disallowed worker-1), got %+v", run3b)
+	}
+	if run3b.PolicyID != policyIDDeploy {
+		t.Fatalf("CASE 3b: run policy_id = %q, want %q", run3b.PolicyID, policyIDDeploy)
+	}
+	// Distinct dispatches yield distinct run ids (RunID feeds audit + parent/child lineage downstream).
+	if run.RunID == "" || run.RunID == run3b.RunID {
+		t.Fatalf("CASE 3b: run ids must be non-empty and distinct, got %q and %q", run.RunID, run3b.RunID)
 	}
 
 	// --- CASE 4: Dispatch requiring a capability NO worker has ---
