@@ -9,7 +9,8 @@ import (
 // inherited; the child cannot escalate privilege because:
 // (1) Directive schema forbids root/access_cmd flags (D1 premise),
 // (2) If a worker tries to propose a privileged template, Policy.ValidateTemplate rejects
-//     worker-origin directives for privileged templates (D1 gate).
+//
+//	worker-origin directives for privileged templates (D1 gate).
 //
 // The returned directive has Origin set to "worker:<workerID>" and Intent/Task set to
 // the supplied child content. The Template is copied from parent, enforcing that the
