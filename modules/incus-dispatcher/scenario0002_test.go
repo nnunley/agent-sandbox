@@ -119,24 +119,32 @@ func testAC1AC3_DrainAndDecisionLog(t *testing.T) {
 		t.Fatalf("no decisions recorded, expected at least 10+ (tier-select, run, teardown, grade for each)")
 	}
 
-	// Verify the decision log has actions for every key coordination step:
-	// For each directive/attempt, we expect: tier-select, teardown, grade-{pass|fail}
-	// Plus the requeue transition for the first attempts.
-	actions := []string{}
+	// Verify the decision log records a line for EVERY coordination action. The loop runs each
+	// of the 3 directives twice (attempt 0 fails → requeue, attempt 1 passes → done), so 6 runs.
+	// Each run emits a tier-select (rule="tier-select") and a teardown (action="reap"); the
+	// outcome is requeue (action="requeue") on the 3 first attempts and done (action="done") on
+	// the 3 second attempts. Assert exact per-class counts so a single missing line is caught
+	// (a loose ">=N" threshold would let a dropped log line pass silently).
+	byRule := map[string]int{}
+	byAction := map[string]int{}
 	for _, d := range decisions {
-		actions = append(actions, d.Action)
+		byRule[d.Rule]++
+		byAction[d.Action]++
+	}
+	if byRule["tier-select"] != 6 {
+		t.Errorf("tier-select decision lines = %d, want 6 (one per run): %+v", byRule["tier-select"], decisions)
+	}
+	if byAction["reap"] != 6 {
+		t.Errorf("teardown (reap) decision lines = %d, want 6 (one per run)", byAction["reap"])
+	}
+	if byAction["requeue"] != 3 {
+		t.Errorf("requeue decision lines = %d, want 3 (one per failed first attempt)", byAction["requeue"])
+	}
+	if byAction["done"] != 3 {
+		t.Errorf("done decision lines = %d, want 3 (one per passing second attempt)", byAction["done"])
 	}
 
-	// Expected: for each of the 6 runs, we have a tier-select + teardown + grade-{pass|fail}.
-	// Plus requeue actions for the 3 first attempts (grades are "fail" for requeued, "pass" for done).
-	// So we expect: 6 tier-select + 6 teardown + 6 grade + 3 requeue = 21 lines.
-	// However, the actual log shows: 3 (requeue+fail) + 3 done with various actions.
-	// Let's be more flexible: we expect at least 12 lines (6 tier-selects + 6 teardowns + grade outcomes).
-	if len(actions) < 12 {
-		t.Fatalf("expected >=12 decision log lines, got %d: %v", len(actions), actions)
-	}
-
-	// Spot-check that requeue is recorded for dir-2's first attempt.
+	// Spot-check that requeue is attributed to dir-2's first attempt (action keyed to the directive).
 	hasRequeue := false
 	for _, d := range decisions {
 		if d.DirectiveID == id2 && d.Action == "requeue" {
@@ -148,7 +156,7 @@ func testAC1AC3_DrainAndDecisionLog(t *testing.T) {
 		t.Fatalf("expected requeue action for dir-2 attempt 0, not found in decisions")
 	}
 
-	// Spot-check that grade-pass is recorded (not just grade-fail).
+	// Spot-check that a grade-pass outcome is recorded (not just grade-fail).
 	hasGradePass := false
 	for _, d := range decisions {
 		if d.Grade == "pass" && d.Action == "done" {

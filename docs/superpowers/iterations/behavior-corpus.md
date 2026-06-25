@@ -12,7 +12,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | JOURNEY-0006 | Mac-off: low-cost escalations proceed autonomously, privileged in esca | e2e | sentinel | TBD | STORY-0074 |
 | JOURNEY-0007 | Mac-off: successor resumes via handoff without replay | e2e | sentinel | TBD | STORY-0074 |
 | SCENARIO-0001 | Dispatcher recovers mid-flight after Mac host restart | e2e | iteration | **LIVE-PROVEN (E1):** Full restart-survival cycle: `TEMPORAL_LIVE=1 .../temporal-live.test -run TestScenario0001_LiveRestartSurvival` (62.57s, PASS). Workflow persists + resumes post-restart + fires after eligibility + directive claims from laneq. | STORY-0001, STORY-0006 |
-| SCENARIO-0002 | Dispatcher drains queue with deterministic coordination | integration | iteration | PLANNED (ITER-0008): `cd modules/incus-dispatcher && go test ./daemon/ -run TestScenario0002_DeterministicDrain` | STORY-0003 |
+| SCENARIO-0002 | Dispatcher drains queue with deterministic coordination | integration | iteration | AUTOMATED (ITER-0008) — `cd modules/incus-dispatcher && go test . -run TestScenario0002_DeterministicDrain` | STORY-0003 |
 | SCENARIO-0003 | Worker launches from golden image without live build | integration | iteration | `bash fleet-worker/cluster-tests/run.sh golden-launch` | STORY-0005 |
 | SCENARIO-0004 | Durable micro-VM stays up across multiple task executions | process-level | iteration | `bash fleet-worker/cluster-tests/run.sh durable-vm` | STORY-0007, STORY-0008 |
 | SCENARIO-0005 | Trusted lane task uses Fast (namespace) isolation | integration | iteration | `bash fleet-worker/cluster-tests/run.sh nspawn-fast` | STORY-0021 |
