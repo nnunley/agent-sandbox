@@ -933,22 +933,53 @@ Track 2 is a worker-image investment (STORY-0075 territory), not first-PR-blocki
 **Look-ahead check:** spans two repos (agent-sandbox token+client+issuer; nnunley/laneq interceptor);
 rollout is non-breaking (log-only first) so it does not disrupt the live ITER-0007b cluster.
 
-### ITER-0008 — Tier-2 coordinator, recursive delegation & operator UX
+### ITER-0008 — Tier-2 coordinator core: recursive delegation, Run/dispatch/policy/audit foundation
 
-**Stories:** STORY-0073, STORY-0028, STORY-0012, STORY-0013, STORY-0014, STORY-0026, STORY-0006, STORY-0003, STORY-0009, STORY-0032, STORY-0074, **STORY-0027 AC-3 (operator pause/block/resume from TUI — split in from ITER-0001), STORY-0054 (audit all runs/delegations/mutations + replayability — moved from ITER-0001, folds into STORY-0032's genome/delegation audit), STORY-0016 (versioned execution policies — moved from ITER-0002 PAR: delegation_rules/mutation_allowed gain meaning with recursive delegation here), STORY-0011 (policy-driven worker dispatch — moved from ITER-0002 PAR: needs multiple worker_kinds (post-ITER-0005) + Tier-2 dispatch decisions), STORY-0049 AC-4 (worker-authored child-directive inherits non-privileged provisioning — moved from ITER-0002 PAR: needs the recursive child-directive emit path built here), STORY-0015 (capture artifacts: Run object with run_id/artifact_refs/log_refs — moved from ITER-0003 PAR: build with STORY-0011's Run shape to avoid a colliding/duplicate Run definition), STORY-0035 (Run provider_instance/model_id/budget_snapshot — moved from ITER-0007 PAR 2026-06-23: its Run fields MUST be defined with STORY-0011/0015's Run shape, same anti-collision lesson), STORY-0036 (multi-level budget guardrails — moved from ITER-0007 PAR: budget enforcement is a dispatch/resource-allocation concern, not the time plane), STORY-0037 (thread aging + queue classes + stale-thread resurfacing — moved from ITER-0007 PAR: thread-registry/operator concern; pairs with the operator-resurface half of SCENARIO-0087), STORY-0038 (provider instances + escalation routing — moved from ITER-0007 PAR: dispatch routing, composes with STORY-0011 worker_kind), STORY-0039 (multi-repo thread coordination — moved from ITER-0007 PAR: thread-spanning, operationalized with the coordinator/TUI here)**
-**Rationale:** Bidirectional steering (file-feed now), operator TUI for
-thread/worker management (incl. STORY-0027 AC-3 thread pause/block/resume — it needs the TUI built
-here), the full agent/delegation/mutation audit + replay (STORY-0054, alongside STORY-0032 genome
-mutation — distinct from ITER-0001's coordination-level D6 decision log), durable
-message-queue-first recursive delegation,
-one-shot vs long-running modes, the Mac-off-stateless-client framing made
-concrete, deterministic-loop + service-discovery stories, safe/auditable genome
-mutation, and the **full Mac-off acceptance test (STORY-0074)** — now that
-substrate (ITER-0006) + Temporal (ITER-0007) + the escalation ladder exist to
-exercise it end-to-end. Capstone integration.
+**SCOPE DECISION (PAR scope review, 2026-06-25):** the original 22-story capstone was split into **ITER-0008
+(this entry — autonomous-fleet core)** + **ITER-0008b (operator UX, governance & Mac-off capstone)**. Both
+reviewers independently returned REVISE: 22 stories is too large for one sprint; the operator-TUI/governance
+features are orthogonal to the coordinator/delegation core; and three stories (0011/0015/0035) converge on one
+`Run` struct that MUST be locked up front to avoid a mid-iteration colliding-definition rework (CRITICAL boxing-in
+finding, both reviewers). ITER-0008 builds the autonomous-fleet subsystems and **closes JOURNEY-0002 (live
+steering)**; ITER-0008b operationalizes them and **closes the Mac-off journeys JOURNEY-0004..0007** via STORY-0074.
+
+**Stories (autonomous-fleet core):** STORY-0003 (deterministic coordination loop), STORY-0006 (Mac stateless
+client — holds no fleet state), STORY-0009 (service discovery v1 / static endpoint injection), **STORY-0011
+AC-1/AC-2/AC-3** (Worker.worker_kind + capabilities + Policy.allowed_policies — the **dispatch-decision AC-4 →
+ITER-0008b**, it needs STORY-0073's Tier-2 dispatch + the locked Run shape), STORY-0015 (Run object:
+run_id/artifact_refs/log_refs), STORY-0016 (versioned execution policies — delegation_rules/mutation_allowed gain
+meaning with recursive delegation here), **STORY-0035 AC-1/AC-2** (Run.provider_instance/model_id + budget_snapshot
+fields — **model-resolution AC-3 + token/latency/spend capture AC-4 → ITER-0008b**, they need provider
+integration/cost tracking), STORY-0054 (audit all runs/delegations/mutations + replayability — moved from ITER-0001;
+the audit data layer that STORY-0032's genome mutation builds on), STORY-0073 (Tier-2 bidirectional coordinator /
+file-feed steering), STORY-0012 (durable message-queue recursive delegation), STORY-0013 (one-shot vs long-running
+modes), STORY-0014 (recursive delegation via message emission), STORY-0049 AC-4 (worker-authored child-directive
+inherits non-privileged provisioning — needs the recursive child-directive emit path; sequence after 0012/0013/0014).
+
+**Task-0 (BLOCKING, before any story impl) — lock the unified `Run` struct shape.** STORY-0011/0015/0035 converge
+on one `Run`; sequential implementation would generate conflicting definitions (CRITICAL, both reviewers). Design +
+commit one `Run` in `types.go` carrying: `run_id, thread_id, parent_run_id, worker_id, worker_kind, policy_id,
+artifact_refs, log_refs, provider_instance, model_id, budget_snapshot` and **additively reserve** the ITER-0008b
+fields (`tokens, latency, spend, stumble_signals`) so the later stories extend, not redefine. Document the additive
+contract. Only after this lands do STORY-0011/0015/0035 implement in parallel.
+
+**Internal sequencing:** T0 Run-shape lock → T1 foundational (STORY-0003/0006/0009, independent) → T2 Run/policy
+shape (STORY-0011 AC-1/2/3 + STORY-0015 + STORY-0016 + STORY-0035 AC-1/2, parallel once T0 locked) → T3 delegation
+core (STORY-0073 + STORY-0012/0013/0014) → T4 STORY-0049 AC-4 (after T3) → T5 STORY-0054 audit layer → T6 close
+JOURNEY-0002 (live steering exercises coordinator + delegation end-to-end).
+
+**Scenario coverage (both reviewers — SERIOUS gap to close in-iteration):** several owning scenarios are TBD and
+must be authored as evidence tasks before their stories are marked done — SCENARIO-0002 (deterministic loop,
+STORY-0003), SCENARIO-0011 (static-endpoint injection, STORY-0009), a Mac-stateless scenario (STORY-0006: author →
+disconnect → reconnect → review without replay), SCENARIO-0016/versioned-policy flow (STORY-0016: dispatch v1 →
+revise → dispatch v2, version recorded), SCENARIO-0017/0019/0023 (delegation + modes, STORY-0012/0013/0014),
+SCENARIO-0027 (child-directive, STORY-0049 AC-4), and the STORY-0054 audit/replay scenario. **JOURNEY-0002**
+(live-steering high-priority preempt) is ITER-0008's closing journey and must get a non-TBD execution command.
 **Status:** pending
-**Impacted scenarios:** bidirectional-steer; operator-TUI; recursive-delegation; Mac-off-client
-**Look-ahead check:** depends on ITER-0007 + the coordination plane; final integration.
+**Impacted scenarios:** JOURNEY-0002 (closing); recursive-delegation (SCENARIO-0017/0019/0023); deterministic-loop
+(SCENARIO-0002); service-discovery (SCENARIO-0011); versioned-policy (SCENARIO-0016); audit/replay (STORY-0054).
+**Look-ahead check:** ITER-0008b depends on this core (TUI/governance act on these subsystems; STORY-0074 Mac-off
+acceptance exercises all of it). Lock the Run shape and the audit API here so 0008b extends without redefining.
 **Substrate constraint (from ITER-0006 T6 real-wire, 2026-06-22):** real laneq leases are NOT
 consumer-exclusive — the server keys leases by directive id and does NOT enforce per-consumer token
 ownership on Touch/Done (verified in SCENARIO-0092; the in-process fake is stricter). Recursive
@@ -956,8 +987,50 @@ delegation / multi-consumer / work-stealing here MUST NOT assume lease exclusivi
 add an opaque per-claim token to laneq upstream (nnunley/laneq) first. See `queue/laneq.go`
 `directiveFromProto` divergence note.
 
+### ITER-0008b — Operator UX, governance & Mac-off capstone
+
+**Origin:** the operator-experience + governance half of the original ITER-0008, split out by PAR scope review
+(2026-06-25). Depends on the ITER-0008 core (coordinator, recursive delegation, Run/dispatch/policy/audit
+foundation). **Closing journeys: JOURNEY-0004, JOURNEY-0005, JOURNEY-0006, JOURNEY-0007 (the full Mac-off
+acceptance), via STORY-0074.** This is the final iteration of the project — its completion triggers the
+orchestrator's final behavior-evidence audit.
+
+**Stories (operator UX + governance + Mac-off capstone):** STORY-0028 (operator TUI for thread/worker management),
+STORY-0027 AC-3 (operator pause/block/resume from TUI — needs the TUI; sequence after STORY-0028), STORY-0032
+(safe/auditable genome mutation — builds on ITER-0008's STORY-0054 audit data layer; **AC-4 mutation flow
+detect→propose→trial→measure→promote needs the pattern-detection design note below**), **STORY-0011 AC-4** (the
+dispatch decision that augments a Run with worker_id/worker_kind/policy_id — deferred from ITER-0008 because it needs
+STORY-0073's Tier-2 dispatch + the locked Run shape), **STORY-0035 AC-3/AC-4** (model-name resolution + per-Run
+token/latency/spend capture — needs provider integration/cost tracking, orthogonal to the Run shape), STORY-0036
+(multi-level budget guardrails — dispatch/resource-allocation enforcement), STORY-0037 (thread aging + queue classes
++ stale-thread resurfacing — thread-registry/operator concern; pairs with the operator-resurface half of
+SCENARIO-0087), STORY-0038 (provider instances + escalation routing — composes with STORY-0011 worker_kind),
+STORY-0039 (multi-repo thread coordination — operationalized with the coordinator/TUI), STORY-0026 (Mac-off SPOF /
+fleet autonomy), STORY-0074 (full Mac-off acceptance test — the capstone journey, runs LAST).
+
+**Task-0 (BLOCKING, before story impl):** (1) write the JOURNEY-0004..0007 specs (preconditions / action sequence /
+final observables / automation seam) so STORY-0074's ACs are testable; (2) write the genome pattern-detection design
+note (`docs/plans/2026-06-25-genome-pattern-detection.md`) defining what a "stumble-pattern repeat" is (signal type +
+count + time window), who detects it (daemon task querying the STORY-0054 audit log), and the mutation-proposal
+format — STORY-0032 AC-4 is under-specified without it (CRITICAL boxing-in, both reviewers).
+
+**Internal sequencing:** T0 (journey specs + pattern-detection note) → T1 STORY-0028 TUI (unblocks TUI-dependent
+ACs) → T2 STORY-0027 AC-3 (after TUI) → T3 governance/dispatch (STORY-0011 AC-4, STORY-0035 AC-3/4, STORY-0032,
+STORY-0036, STORY-0037, STORY-0038, STORY-0039 — mostly parallel) → T4 STORY-0026 (Mac-off autonomy) → T5
+STORY-0074 (full Mac-off acceptance — exercises ITER-0008 core + all of ITER-0008b end-to-end; closes
+JOURNEY-0004..0007).
+**Status:** pending
+**Impacted scenarios:** operator-TUI (SCENARIO-0021); genome-mutation (SCENARIO-0018); budget-guardrails;
+thread-aging (operator half of SCENARIO-0087); provider-routing; multi-repo; **JOURNEY-0004/0005/0006/0007 (closing,
+Mac-off)**; SCENARIO-0010 (Mac-off SPOF).
+**Look-ahead check:** final iteration. On completion the orchestrator runs the final behavior-evidence audit over
+every user-facing surface from the original spec.
+
 ## Deferred / cross-cutting
 
-- **STORY-0037** (thread aging) appears in ITER-0007 (urgency aging is a Temporal concern).
+- **STORY-0037** (thread aging) — scheduled in **ITER-0008b** (thread-registry/operator-resurface concern). The
+  Temporal-side urgency *aging* (Q2→Q1 over wall-clock) is STORY-0043, already done in ITER-0007b; STORY-0037 is the
+  distinct thread-registry queue-class + stale-thread *resurfacing* operator concern. (Prior note that it "appears in
+  ITER-0007" was stale — corrected 2026-06-25 PAR scope review.)
 - **Story split pending PAR:** STORY-0058 (ITER-0000 minimal outcome ↔ ITER-0001 full
   ladder) to be formalized in the requirements index during scope review.
