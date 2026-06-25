@@ -42,3 +42,7 @@ Status legend: [ ] pending  [~] in progress  [x] done:ITER-0008
 Process note: implementer subagents may refuse orchestrator-relayed PAR fix requests (their global
 CLAUDE.md treats coordinator messages as lacking user authority). For small, fully-specified review
 fixes the orchestrator applies them directly (as done for Task-0's Currency removal).
+
+Process note 2: PAR reviewer subagents (general-purpose, can write) sometimes leave scratch test
+files / rebuilt the tracked binary in the working tree while "verifying". After each PAR round,
+`git status` and clean up (rm untracked scratch, `git checkout` the binary) BEFORE committing.
