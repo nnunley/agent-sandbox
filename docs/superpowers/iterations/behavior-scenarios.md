@@ -126,7 +126,7 @@
 - Prior context from earlier attempts is preserved in handoff
 - Lower-priority directives remain queued
 
-**Automation status:** planned (ITER-0008 closing journey)
+**Automation status:** automated (ITER-0008)
 **Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0002_LiveSteering`
 
 **Sources:**

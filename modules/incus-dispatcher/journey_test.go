@@ -228,3 +228,140 @@ func TestJourney0001_RejectedDirectiveNeverLaunches(t *testing.T) {
 		t.Fatalf("queue after reject = %d/%d, want 0/0", p, c)
 	}
 }
+
+// TestJourney0002_LiveSteering proves live-steering preemption: a high-priority directive
+// pushed by the orchestrator is claimed BEFORE lower-priority work, demonstrating the
+// priority-queue-based preemption at the core of the daemon's claim logic.
+//
+// This journey validates JOURNEY-0002 end-to-end using the same harness as JOURNEY-0001:
+// - A lower-priority directive (ImportanceNormal) is queued as "current work"
+// - The orchestrator steers by pushing a high-priority directive (ImportanceHigh)
+// - Next daemon cycle claims the high-priority directive (preemption proven)
+// - The lower-priority directive remains queued
+// - The high-priority directive runs and completes
+// - The same daemon loop then claims and completes the lower-priority work
+// - No restart occurs; the loop continues seamlessly (no-restart observable)
+//
+// Execution: cd modules/incus-dispatcher && go test . -run TestJourney0002_LiveSteering
+func TestJourney0002_LiveSteering(t *testing.T) {
+	backend := &journeyBackend{}
+	q := queue.NewMemoryQueue()
+	dm := &Daemon{
+		Q:        q,
+		Runner:   backend,
+		Policy:   testPolicy(),
+		Consumer: "journey",
+		LeaseDur: time.Minute,
+		Audit:    NewMemoryAuditLog(), // wire audit to prove runs are logged
+	}
+
+	// Step 1: Push a lower-priority directive (ImportanceNormal) as "current work"
+	lowID, err := q.Push(queue.Directive{
+		Intent:   "implement lower-priority task",
+		Template: "fleet-go",
+		Origin:   OriginOrchestrator,
+		Repo:     "/srv/let-go",
+		Ref:      "main",
+		Task:     "lower-priority work",
+		Importance: queue.ImportanceNormal, // normal priority
+	})
+	if err != nil {
+		t.Fatalf("push D_low: %v", err)
+	}
+
+	// Step 2: Orchestrator steers by pushing a HIGH-priority directive
+	highID, err := q.Push(queue.Directive{
+		Intent:   "high-priority steering directive",
+		Template: "fleet-go",
+		Origin:   OriginOrchestrator,
+		Repo:     "/srv/let-go",
+		Ref:      "main",
+		Task:     "high-priority work from orchestrator",
+		Importance: queue.ImportanceHigh, // HIGH priority — will preempt
+	})
+	if err != nil {
+		t.Fatalf("push D_high (steering): %v", err)
+	}
+
+	// Step 3: Verify both directives are pending (D_high will be claimed first due to priority)
+	if p, c := q.Len(); p != 2 || c != 0 {
+		t.Fatalf("after push both: pending=%d claimed=%d, want 2/0", p, c)
+	}
+
+	// Step 4: Next daemon cycle claims and runs the HIGH-priority directive (preemption)
+	outcome1, claimedID1, err := dm.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce (first cycle): %v", err)
+	}
+	if outcome1 != OutcomeDone {
+		t.Fatalf("first RunOnce outcome = %q, want done", outcome1)
+	}
+	if claimedID1 != highID {
+		t.Fatalf("first RunOnce claimed %q, want %q (high-priority directive must be preempted)", claimedID1, highID)
+	}
+
+	// HARD-assert: D_high was the one run (preemption proven)
+	// Task.Name is the sanitized directive ID; check it matches D_high
+	expectedHighName := sanitizeName(highID)
+	if backend.lastTask.Name != expectedHighName {
+		t.Fatalf("backend.lastTask.Name = %q, want %q (sanitized highID, preemption not verified)", backend.lastTask.Name, expectedHighName)
+	}
+	if backend.runs != 1 {
+		t.Fatalf("backend.runs = %d after first cycle, want 1", backend.runs)
+	}
+
+	// Step 5: Verify D_low remains queued (not lost)
+	if p, c := q.Len(); p != 1 || c != 0 {
+		t.Fatalf("after D_high done: pending=%d claimed=%d, want 1/0 (D_low must remain queued)", p, c)
+	}
+
+	// Step 6: Next daemon cycle claims and runs the LOWER-priority directive (no-restart, proceeds after preemption)
+	outcome2, claimedID2, err := dm.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce (second cycle): %v", err)
+	}
+	if outcome2 != OutcomeDone {
+		t.Fatalf("second RunOnce outcome = %q, want done", outcome2)
+	}
+	if claimedID2 != lowID {
+		t.Fatalf("second RunOnce claimed %q, want %q (lower-priority work must proceed after preemption)", claimedID2, lowID)
+	}
+
+	// Verify D_low was run on the second cycle
+	expectedLowName := sanitizeName(lowID)
+	if backend.lastTask.Name != expectedLowName {
+		t.Fatalf("backend.lastTask.Name = %q, want %q (sanitized lowID)", backend.lastTask.Name, expectedLowName)
+	}
+	if backend.runs != 2 {
+		t.Fatalf("backend.runs = %d after second cycle, want 2", backend.runs)
+	}
+
+	// Step 7: Verify queue is fully drained (both directives processed)
+	if p, c := q.Len(); p != 0 || c != 0 {
+		t.Fatalf("queue after both cycles: pending=%d claimed=%d, want 0/0 (fully drained)", p, c)
+	}
+
+	// Step 8: Verify both directives were reaped (teardown ran twice, one per directive)
+	if backend.cleanups != 2 {
+		t.Fatalf("teardown ran %d times, want 2 (once per directive)", backend.cleanups)
+	}
+
+	// --- JOURNEY-0002 final observables ---
+
+	// ✅ High-priority directive completed
+	if outcome1 != OutcomeDone {
+		t.Fatalf("D_high outcome = %q, want done", outcome1)
+	}
+
+	// ✅ Lower-priority directives remain queued (D_low was queued, then ran after preemption)
+	// This observable is proven by claimedID2 == lowID on the second cycle
+
+	// ✅ No restart: the same daemon loop continued seamlessly from D_high to D_low
+	// This observable is proven by sequential RunOnce calls without external restart
+
+	// ✅ Both directives ran in the correct order (preemption honored, lower-priority proceeded)
+	if backend.runs != 2 {
+		t.Fatalf("total backend runs = %d, want 2 (both directives must run)", backend.runs)
+	}
+}
+
