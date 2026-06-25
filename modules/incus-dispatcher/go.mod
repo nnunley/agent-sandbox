@@ -3,6 +3,7 @@ module github.com/agent-sandbox/incus-dispatcher
 go 1.25.6
 
 require (
+	aidanwoods.dev/go-paseto v1.6.0
 	github.com/lxc/incus/v6 v6.23.0
 	go.temporal.io/sdk v1.45.0
 	google.golang.org/grpc v1.81.1
@@ -10,6 +11,7 @@ require (
 )
 
 require (
+	aidanwoods.dev/go-result v0.3.1 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6 // indirect
 	github.com/apex/log v1.9.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
