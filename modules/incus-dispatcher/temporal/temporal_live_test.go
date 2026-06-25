@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/agent-sandbox/incus-dispatcher/grantauth"
 	"github.com/agent-sandbox/incus-dispatcher/queue"
 	"github.com/agent-sandbox/incus-dispatcher/queue/laneqpb"
 )
@@ -45,8 +46,29 @@ func SetupTemporalLive(t *testing.T) *TemporalLiveEnv {
 		laneqAddr = "127.0.0.1:9999"
 	}
 
-	// Dial the live laneq gRPC server first (insecure; loopback inside the container).
-	laneqConn, err := grpc.NewClient(laneqAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Dial the live laneq gRPC server first (insecure transport; loopback inside the container).
+	// ITER-0007c AC-1b: when grant-auth env is set (LANEQ_GRANT_FILE / LANEQ_CLIENT_KEY / LANEQ_AUD),
+	// attach the sender-constrained grant+proof client interceptor so the worker authenticates to a
+	// log-only/enforce laneq. This shared conn backs every LaneqQueue the activities build, so the
+	// ReprojectActivity's Defer/Reprioritize calls are authenticated too. Absent → legacy passthrough.
+	laneqDialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	grantFile, clientKey, aud := os.Getenv("LANEQ_GRANT_FILE"), os.Getenv("LANEQ_CLIENT_KEY"), os.Getenv("LANEQ_AUD")
+	if grantFile != "" || clientKey != "" || aud != "" {
+		if grantFile == "" || clientKey == "" || aud == "" {
+			t.Fatalf("laneq auth partially configured: set LANEQ_GRANT_FILE, LANEQ_CLIENT_KEY, and LANEQ_AUD together (or none)")
+		}
+		gs, gerr := grantauth.NewFileGrantSource(grantFile)
+		if gerr != nil {
+			t.Fatalf("laneq grant source %q: %v", grantFile, gerr)
+		}
+		ckey, kerr := grantauth.LoadEd25519PrivateKeyPEM(clientKey)
+		if kerr != nil {
+			t.Fatalf("laneq client key %q: %v", clientKey, kerr)
+		}
+		laneqDialOpts = append(laneqDialOpts, grpc.WithChainUnaryInterceptor(grantauth.NewClientInterceptor(gs, ckey, aud)))
+		t.Logf("laneq auth: attaching grant+proof (aud=%s)", aud)
+	}
+	laneqConn, err := grpc.NewClient(laneqAddr, laneqDialOpts...)
 	if err != nil {
 		t.Fatalf("dial laneq at %s: %v", laneqAddr, err)
 	}

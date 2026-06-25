@@ -16,11 +16,13 @@ let
   laneqPort = "9999";
 
   # ITER-0007c: PASETO grant auth (sender-constrained; off|log-only|enforce).
-  # Rollout starts in LOG-ONLY: the interceptor verifies + logs failures but ALLOWS
-  # every RPC, so existing unauthenticated cluster clients (e.g. the Temporal worker
-  # harness) are NOT broken. Flip to "enforce" only once every live laneq client
-  # attaches a grant (the Temporal worker's laneq client must be grant-wired first).
-  laneqAuthMode = "log-only";
+  # ITER-0007c AC-1b: ENFORCE (rolled forward 2026-06-25 after verifying, against the live
+  # log-only server, that the grant-wired Temporal worker authenticates — its grant+proof
+  # verified, producing no rejection log, while only unauthenticated traffic was flagged).
+  # In enforce, every laneq RPC MUST carry a valid grant+proof or it is rejected UNAUTHENTICATED.
+  # The Temporal worker harness attaches grants when LANEQ_GRANT_FILE/LANEQ_CLIENT_KEY/LANEQ_AUD
+  # are set (temporal/temporal_live_test.go); the serve_cmd daemon via its --laneq-*-file flags.
+  laneqAuthMode = "enforce";
   laneqAudience = "laneq://agent-host:${laneqPort}";
   laneqIssuerPubPath = "${laneqDataDir}/issuer.pub";
   # Issuer PUBLIC key (the Mac trust root holds the private half). Public — safe in-repo.
