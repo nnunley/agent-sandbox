@@ -35,7 +35,8 @@ Asymmetric (`v4.public`) so the remote side holds only the public key. Claims:
 | `aud` | 1 | target laneq instance, e.g. `laneq://agent-host:9999` — prevents cross-target replay |
 | `iat`/`nbf`/`exp` | 1 | short TTL (default ~30m), renewable |
 | `jti` | 1 | token id (audit / optional revocation) |
-| footer `kid` | 1 | key id, for zero-downtime rotation |
+| `cnf: {kid, key}` | 1 | **client public-key thumbprint** — binds the grant to the client's own keypair (sender-constraint; enables per-request proofs / anti-replay) |
+| footer `kid` | 1 | issuer key id, for zero-downtime rotation |
 | `cap: {ops:[...], lanes:[...]}` | 2 | per-operation/lane capability; the Temporal-role grant is the ONLY one with `defer`/`reprioritize` |
 
 ## Components
@@ -69,11 +70,32 @@ Ed25519 keypair on the Mac; public key(s) distributed to laneq via Nix config / 
 (no secret in the repo). `kid` in the footer lets laneq trust **current + next** keys → zero-downtime
 rotation.
 
+## Replay resistance — sender-constrained grants + per-request proof (DPoP-style)
+**Security does NOT assume the transport** (no reliance on Tailscale/TLS for auth). A bearer grant,
+once captured, is replayable regardless of TTL; the only transport-independent defense is **per-request
+client signing** + a server replay check. So the grant is **sender-constrained**:
+
+- The issuer mints the grant with a **`cnf`** claim = the thumbprint of the **client's own** Ed25519
+  public key (the client keypair is enrolled at the issuer; its private key never leaves the client).
+- For **every** RPC the client produces a short **proof** — a PASETO v4.public token signed by the
+  client key over `{aud, method, nonce, iat}` — and sends it alongside the grant (gRPC metadata
+  `laneq-grant` + `laneq-proof`).
+- laneq verifies, in order: (1) the **grant** (issuer-signed; `verify_grant`: sig, `exp`/`nbf`, `aud`),
+  (2) extract `cnf`, (3) the **proof** signature against the `cnf` key, (4) `proof.aud` == this laneq,
+  (5) `proof.method` == the actual RPC method (so a proof for `Peek` can't be replayed as `Done`),
+  (6) `proof.iat` within a small skew window (default ±30 s), (7) `proof.nonce` **unseen** in a
+  TTL-bounded replay cache (sized to the skew window).
+
+Result: a captured grant is useless without the client's private key; a captured proof is valid only for
+~seconds, only for that exact method/target, and only once (the nonce cache rejects the second use).
+No transport trust required.
+
 ## Transport confidentiality
-Across non-local networks, Tailscale (WireGuard) provides encryption-in-transit (per the broker doc);
-PASETO provides authn/authz + integrity + replay-resistance (short TTL + `aud` binding + optional
-`jti`). gRPC-TLS may layer on later. **Residual risk:** bearer replay *within* the TTL on an
-already-compromised Tailscale path — mitigated by short TTL + audience binding.
+Tailscale (WireGuard) or gRPC-TLS still provide **confidentiality** in transit and are recommended, but
+auth/replay-resistance no longer **depend** on them. The replay defense above holds even on a fully
+observed/hostile channel. The remaining residual risk is a within-skew-window replay of the *same*
+method by an on-path attacker who wins the race before the nonce is cached — bounded to seconds and a
+single use; tighten the skew window to reduce it further.
 
 ## Rollout (safe against the live cluster)
 laneq is live (ITER-0007b deploys against it):
@@ -87,11 +109,13 @@ The Go `GrantSource` ships dark (off) until issuer + keys are in place.
 - **Go ↔ laneq real-wire** (extend `queue/run-laneq-wire.sh` + `laneq_realwire_lifecycle_test.go`):
   valid signed token round-trips all RPCs; expired / wrong-`aud` / forged-sig rejected (`UNAUTHENTICATED`);
   `log-only` mode logs-but-allows a bad token (proves the rollout gate).
-- **laneq (Python) unit:** accept valid; reject expired/bad-aud/bad-sig/bad-kid; Phase 2 capability + lane
-  enforcement + the sole-writer scenario (non-Temporal grant `Defer`/`Reprioritize` → `PERMISSION_DENIED`;
-  Temporal-role grant succeeds).
-- **Behavior scenarios:** `host-signed RPC accepted`; `forged/expired rejected`; `log-only allows + logs`;
-  (Phase 2) `sole-writer capability enforced`.
+- **laneq (Python) unit:** accept valid grant+proof; reject expired/bad-aud/bad-sig/bad-kid grant;
+  **reject proof not signed by `cnf`, wrong-method proof, stale-iat proof, and a replayed nonce** (the
+  anti-replay core); Phase 2 capability + lane enforcement + the sole-writer scenario (non-Temporal grant
+  `Defer`/`Reprioritize` → `PERMISSION_DENIED`; Temporal-role grant succeeds).
+- **Behavior scenarios:** `host-signed RPC accepted`; `forged/expired grant rejected`; **`replayed request
+  rejected (nonce reuse)`**; **`captured grant without client key is useless (no valid proof)`**;
+  `log-only allows + logs`; (Phase 2) `sole-writer capability enforced`.
 
 ## Phasing
 - **Phase 1 (this spec):** token format + Mac issuer CLI + key distribution + Go client attach/renew +
