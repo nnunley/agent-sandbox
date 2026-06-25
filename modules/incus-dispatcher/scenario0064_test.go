@@ -198,3 +198,35 @@ func splitJsonl(data []byte) [][]byte {
 	}
 	return lines
 }
+
+// TestSteerChannel_CorruptFileGraceful proves the worker poll path is defensive (STORY-0073 AC-1
+// robustness): a missing, empty, or corrupt/partial steer file must NOT panic and must NOT be
+// mis-consumed — PollSteer returns ok=false, and a corrupt file surfaces an error so the orchestrator
+// can re-write rather than the worker silently acting on garbage.
+func TestSteerChannel_CorruptFileGraceful(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "steer.json")
+	sc := NewSteerChannel(path)
+
+	// Missing file: no steer pending, no error, no panic.
+	if _, ok, err := sc.PollSteer(); ok || err != nil {
+		t.Fatalf("missing file: want (ok=false, err=nil), got (ok=%v, err=%v)", ok, err)
+	}
+
+	// Empty file: treated as no pending steer, no panic.
+	if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
+		t.Fatalf("write empty: %v", err)
+	}
+	if _, ok, _ := sc.PollSteer(); ok {
+		t.Fatalf("empty file must not yield a steer")
+	}
+
+	// Corrupt/partial JSON: surfaces an error, no panic, and is NOT silently consumed as a valid steer.
+	if err := os.WriteFile(path, []byte(`{"message_id":"m1","action":"rev`), 0o644); err != nil {
+		t.Fatalf("write corrupt: %v", err)
+	}
+	msg, ok, err := sc.PollSteer()
+	if ok || err == nil {
+		t.Fatalf("corrupt JSON: want (ok=false, err!=nil), got (ok=%v, err=%v, msg=%+v)", ok, err, msg)
+	}
+}
