@@ -366,8 +366,8 @@ half of this scenario (the durability assertion). Run the AC-1 timer-ownership c
 - Audit trail shows all coordination decisions
 - No non-deterministic delays
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** planned (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test ./daemon/ -run TestScenario0002_DeterministicDrain`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:45-50`
@@ -679,8 +679,8 @@ task — boot is NOT the limiting factor; nspawn (76 ms) is the substrate-select
 - Network trace shows queries only to br-microvm dnsmasq (10.88.0.1:53), not external resolvers
 - Worker successfully pulls tasks from queue without any discovery-phase latency
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** planned (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0011_StaticEndpointInjection`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:354-363`
@@ -975,8 +975,8 @@ WorkspaceRegistry + ReconstructResumeAudit + ContinueRun)
 - Depth field prevents unbounded recursion
 - No heavyweight in-memory orchestration was needed
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** planned (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0019_RecursiveDelegation`
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:699-839`
@@ -1121,8 +1121,8 @@ microVM host-socket isolation → ITER-0005)
 - Worker exited after emitting result
 - No ephemeral cache or coordination state persisted
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** planned (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0023_OneShotWorker`
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:767-820`
@@ -1232,8 +1232,8 @@ microVM host-socket isolation → ITER-0005)
 - Child container launched with parent provisioning
 - Child cannot elevate privileges beyond parent template capability
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** planned (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0027_ChildDirectiveProvisioning`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:104-105`

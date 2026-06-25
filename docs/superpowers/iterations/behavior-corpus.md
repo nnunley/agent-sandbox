@@ -5,14 +5,14 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | Scenario ID | Title | Proof seam | Run cadence | Command | Owning stories |
 |---|---|---|---|---|---|
 | JOURNEY-0001 | Complete one-shot lifecycle: directive to completion (walking skeleton | e2e | sentinel | `cd modules/incus-dispatcher && go test . -run TestJourney0001` | STORY-0057, STORY-0050, STORY-0051, STORY-0052, STORY-0019, STORY-0065, STORY-0066, STORY-0058, STORY-0063 |
-| JOURNEY-0002 | Live steering: high-priority directive preempts current work | e2e | sentinel | PLANNED (ITER-0008 closing): `cd modules/incus-dispatcher && go test . -run TestJourney0002_LiveSteering` | STORY-0073, STORY-0012, STORY-0057 |
+| JOURNEY-0002 | Live steering: high-priority directive preempts current work | e2e | sentinel | PLANNED (ITER-0008 closing): `cd modules/incus-dispatcher && go test . -run TestJourney0002_LiveSteering` | STORY-0073, STORY-0012 |
 | JOURNEY-0003 | External grading reproduces 13→0 result | e2e | sentinel | AC-1 CI: `cd modules/incus-dispatcher && go test -run 'Grade\|RunGrade' .`; AC-2 cluster (refs pinned, pending): `incus-dispatcher grade --checkout <let-go@d4c36cf2d> --diff testdata/journey0003/lvl1-focused.diff` | STORY-0068 |
 | JOURNEY-0004 | Mac-off: daemon claims and runs task offline | e2e | sentinel | TBD | STORY-0074 |
 | JOURNEY-0005 | Mac-off: autonomous grading without human feedback | e2e | sentinel | TBD | STORY-0074 |
 | JOURNEY-0006 | Mac-off: low-cost escalations proceed autonomously, privileged in esca | e2e | sentinel | TBD | STORY-0074 |
 | JOURNEY-0007 | Mac-off: successor resumes via handoff without replay | e2e | sentinel | TBD | STORY-0074 |
 | SCENARIO-0001 | Dispatcher recovers mid-flight after Mac host restart | e2e | iteration | **LIVE-PROVEN (E1):** Full restart-survival cycle: `TEMPORAL_LIVE=1 .../temporal-live.test -run TestScenario0001_LiveRestartSurvival` (62.57s, PASS). Workflow persists + resumes post-restart + fires after eligibility + directive claims from laneq. | STORY-0001, STORY-0006 |
-| SCENARIO-0002 | Dispatcher drains queue with deterministic coordination | integration | iteration | TBD | STORY-0003 |
+| SCENARIO-0002 | Dispatcher drains queue with deterministic coordination | integration | iteration | PLANNED (ITER-0008): `cd modules/incus-dispatcher && go test ./daemon/ -run TestScenario0002_DeterministicDrain` | STORY-0003 |
 | SCENARIO-0003 | Worker launches from golden image without live build | integration | iteration | `bash fleet-worker/cluster-tests/run.sh golden-launch` | STORY-0005 |
 | SCENARIO-0004 | Durable micro-VM stays up across multiple task executions | process-level | iteration | `bash fleet-worker/cluster-tests/run.sh durable-vm` | STORY-0007, STORY-0008 |
 | SCENARIO-0005 | Trusted lane task uses Fast (namespace) isolation | integration | iteration | `bash fleet-worker/cluster-tests/run.sh nspawn-fast` | STORY-0021 |
@@ -21,7 +21,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0008 | Benchmark shows nspawn spin-up time with boot-readiness probe | process-level | spike | `cd fleet-worker/spikes && ./bench-spinup.sh nspawn 100` | STORY-0025 |
 | SCENARIO-0009 | Benchmark shows per-task microVM spin-up time is not the limiting fact | process-level | spike | `cd fleet-worker/spikes && ./bench-spinup.sh microvm 20` | STORY-0025 |
 | SCENARIO-0010 | Mac disconnected → fleet still claims, runs, grades, escalates; succes | e2e | iteration | TBD | STORY-0026 |
-| SCENARIO-0011 | Static endpoint injection: worker receives fixed llm-proxy and queue a | integration | iteration | TBD | STORY-0009 |
+| SCENARIO-0011 | Static endpoint injection: worker receives fixed llm-proxy and queue a | integration | iteration | PLANNED (ITER-0008): `cd modules/incus-dispatcher && go test ./... -run TestScenario0011_StaticEndpointInjection` | STORY-0009 |
 | SCENARIO-0012 | [BLOCKED-ON-SUBSTRATE-DECISION] Laneq-as-cluster-service: MCP clients  | e2e | iteration | TBD | STORY-0010 |
 | SCENARIO-0013 | [BLOCKED-ON-SUBSTRATE-DECISION] Network-native backend (Postgres/NATS) | integration | iteration | TBD | STORY-0010 |
 | SCENARIO-0014 | [BLOCKED-ON-SUBSTRATE-DECISION] Dedicated queue host: survives worker- | process-level | iteration | TBD | STORY-0010 |
@@ -29,15 +29,15 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0016 | Escalate to stronger model on verification failure | integration | iteration | TBD | STORY-0035, STORY-0038, STORY-0031 |
 | SCENARIO-0017 | Long-running scheduler maintains priority queue | process-level | iteration | TBD | STORY-0037, STORY-0013, STORY-0012 |
 | SCENARIO-0018 | Capture and learn from repeated stumble pattern | process-level | iteration | TBD | STORY-0031, STORY-0032 |
-| SCENARIO-0019 | Recursive delegation via message emission | e2e | iteration | TBD | STORY-0012, STORY-0014 |
+| SCENARIO-0019 | Recursive delegation via message emission | e2e | iteration | PLANNED (ITER-0008): `cd modules/incus-dispatcher && go test . -run TestScenario0019_RecursiveDelegation` | STORY-0012, STORY-0014 |
 | SCENARIO-0020 | Worker accesses provider through broker proxy without exposing credent | integration | iteration | `cd modules/llm-proxy && go test -race -run TestScenario0020` | STORY-0048 |
 | SCENARIO-0021 | Operator uses TUI to create, inspect, and manage threads | app-level | iteration | TBD | STORY-0028 |
 | SCENARIO-0022 | Budget enforcement prevents runaway spending | integration | iteration | TBD | STORY-0036, STORY-0032 |
-| SCENARIO-0023 | One-shot worker consumes task, exits | integration | iteration | TBD | STORY-0013 |
+| SCENARIO-0023 | One-shot worker consumes task, exits | integration | iteration | PLANNED (ITER-0008): `cd modules/incus-dispatcher && go test ./... -run TestScenario0023_OneShotWorker` | STORY-0013 |
 | SCENARIO-0024 | Coordinator rejects superseding work without explicit declaration | integration | iteration | TBD | STORY-0030 |
 | SCENARIO-0025 | D1: Worker directive with root flag is rejected | integration | iteration | `cd modules/incus-dispatcher && go test -race -run TestScenario0025` | STORY-0049 |
 | SCENARIO-0026 | D1: Directive body contains no access_cmd or root flag | unit | iteration | `cd modules/incus-dispatcher && go test -run TestParseDirective ./queue` | STORY-0049 |
-| SCENARIO-0027 | D1: Child directive from worker inherits immutable provisioning, not p | integration | iteration | TBD | STORY-0049 |
+| SCENARIO-0027 | D1: Child directive from worker inherits immutable provisioning, not p | integration | iteration | PLANNED (ITER-0008): `cd modules/incus-dispatcher && go test ./... -run TestScenario0027_ChildDirectiveProvisioning` | STORY-0049 |
 | SCENARIO-0028 | D2: Backend interface abstracts container vs. micro-VM delivery | unit | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0028` | STORY-0017 |
 | SCENARIO-0029 | D2: Micro-VM boot-to-ready ≤ 5 s with closure realized | process-level | iteration | `bash fleet-worker/cluster-tests/run.sh microvm-boot` | STORY-0017 |
 | SCENARIO-0030 | D3: ctx_agent diary write and read preserve progression state | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestLeanCtxProvider` | STORY-0018 |
