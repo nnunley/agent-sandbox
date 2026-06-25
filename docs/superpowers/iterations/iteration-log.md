@@ -672,3 +672,50 @@ a TODO re-tag only), Tier 3 (JOURNEY-0001 + JOURNEY-0003 AC-1 sentinels green; s
 Both independently confirmed the ITER-0007b/0008 deferrals legitimate (live Temporal / wall-clock / e2e /
 concurrent-daemon), counters correct (EPIC-005 3/13, EPIC-010 1/1), zero `TODO(ITER-0007)`, no unrequested work.
 ITER-0007 confirmed done.
+
+## ITER-0007b — Temporal time plane: deployment, sole-writer wiring & live aging (cluster)
+
+**Completed:** 2026-06-24
+
+**Stories delivered:** STORY-0001 AC-1/AC-2 (Temporal owns Schedules/durable timers; **state survives a real
+restart — E1 LIVE**), STORY-0041 AC-1/AC-2 (Temporal is the live sole writer of effective-priority + not-before;
+re-projects on rescore — **ITER-0008 GATE met**), STORY-0044 AC-3 (Temporal sole caller of Defer/Reprioritize —
+**GATE met**), STORY-0047 AC-1 (**live human rescore moves item to any bucket — E1 LIVE, laneq P1→P0**),
+STORY-0046 AC-2 (concurrent-read consistency under single writer), STORY-0043 AC-2 (Q2→Q1 aging — CI-PROVEN; live
+wall-clock limitation documented), and split-in live ACs STORY-0058 AC-24 (retry backoff re-push), STORY-0061
+AC-3 / STORY-0055 AC-7 (stale-escalation re-raise), STORY-0002 AC-2 (deferred work held until eligible).
+
+**Tasks executed:** T0 deploy (durable `temporal-cli start-dev` file-SQLite on `/srv/temporal` host volume,
+:7233, restart-survival). C1 worker skeleton + `Reprioritize` wrapper. C2 PriorityWorkflow + sole-writer
+ReprojectActivity (`Reprojector` Reprioritize+Defer) + lease-free `LaneqQueue.Defer` (3-round evidence-strengthen +
+2-stage PAR). C3 rescore signal + `currentImportance` query (de-vacuumed via query handler; 2-stage PAR). C4
+RetryWorkflow/EscalationWorkflow/DeferWorkflow in own files (no PriorityWorkflow god-loop; `nextCheckInterval`
+helper; dead `ReprojectRequest` fields dropped; 2-stage PAR). C5 both-fields concurrent-read `-race` test. E1
+worker-driven live harness — **orchestrator-executed**: required fixing a nil laneq dial, a run-selector regex,
+and the missing Temporal **Worker** (workflows were only enqueued, never executed) + a post-restart transient
+retry loop; three earlier "all-pass" reports were hollow (smoke tests / simulated `time.Sleep` restart) and were
+rejected until real evidence was captured.
+
+**Scenarios:** SCENARIO-0056 (`go test -race -run TestScenario0056_Q2ToQ1Promotion ./temporal/` CI Q2→Q1;
+live = durable-timer+gRPC mechanism via `run-temporal-live.sh`), SCENARIO-0093 (sole-writer seam CI `TestScenario0093*`;
+live process-level sole-caller), SCENARIO-0094 (`TestScenario0094*` CI; **live P1→P0 rescore**), SCENARIO-0081
+(`TestScenario0081ConcurrentReadersAndTemporalWriteBothFields` -race CI; live concurrent Peek), SCENARIO-0001
+(**live restart-survival e2e** — PID 6976→7066, same runID Running→Completed, directive fired), SCENARIO-0087
+(escalation re-raise time-driven). Live scenarios are env-gated (`TEMPORAL_LIVE=1`), excluded from default CI.
+
+**Sentinel corpus results:** baseline clean (387 -race green). Post-iteration: `go vet ./...` clean,
+`go test -race ./...` **429 green** (+42; no regression in the prior 387), zero `TODO(ITER-0007b)` markers
+(re-tagged escalation-approval-routing + laneq `Stats()/Len()` → `TODO(ITER-0008)`), `scenario0078_test.go.bak`
+removed. Live harness (worker-driven) re-run by orchestrator: SCENARIO-0094 + SCENARIO-0001 PASS with captured output.
+
+**Summary:** Grafted a deployed durable Temporal time plane onto ITER-0007's proven pure-Go projection logic and
+ITER-0006's live laneq. Temporal is now the sole writer/caller of the laneq scheduling seam (Reprioritize+Defer),
+ages/re-raises/retries directives via durable workflows, accepts live human rescores, and survives a real service
+restart. The single-writer guarantee is process-level discipline (orthogonal to laneq's non-exclusive leases). The
+ITER-0008 gate (STORY-0041 AC-1/AC-2 + STORY-0044 AC-3) is met with no carries. **ITER-0008 design notes:**
+(1) PriorityWorkflow exits at Q1 — post-Q1 operator pause/block/resume needs a different control plane (operator
+TUI / coordinator), not this aging workflow; (2) live wall-clock Q2→Q1 is not compressible to seconds because
+urgency is calibrated in days — ITER-0008/ops should add an urgency-calibration knob or a multi-day runner if a
+fully-live aging proof is wanted (the logic itself is CI-PROVEN); (3) rejected agent rescores route to the
+operator approval queue / escalation lane in ITER-0008; (4) laneq `Stats()/Len()` observability deferred to
+ITER-0008's operator surface. No `Run` struct introduced (defers STORY-0035 colliding-Run risk).

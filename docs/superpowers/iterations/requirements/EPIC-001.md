@@ -3,11 +3,11 @@
 **Summary:** Execution backend & topology
 **Stories:** STORY-0001, STORY-0002, STORY-0003, STORY-0004, STORY-0005, STORY-0006, STORY-0007, STORY-0008, STORY-0009, STORY-0010, STORY-0011, STORY-0012, STORY-0013, STORY-0014, STORY-0015, STORY-0016, STORY-0017, STORY-0018, STORY-0019, STORY-0020
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 7/20 done (STORY-0018 done:ITER-0004; STORY-0004/0017/0020 done:ITER-0005 — in-scope
+**Status:** 9/20 done (STORY-0018 done:ITER-0004; STORY-0004/0017/0020 done:ITER-0005 — in-scope
 interface ACs; STORY-0007/0005/0008 done:ITER-0005b — durable coordinator VM (SCENARIO-0004),
-immutable golden + incus-copy launch (SCENARIO-0003), disposable units inside the VM (SCENARIO-0004).
-Deferred microVM ACs (STORY-0004 AC-3, STORY-0017 AC-3/4, STORY-0020 AC-2) proven by the ITER-0005b
-substrate harness — see iteration-log)
+immutable golden + incus-copy launch (SCENARIO-0003), disposable units inside the VM (SCENARIO-0004);
+STORY-0001/0002 done:ITER-0007b — live Temporal time plane. Deferred microVM ACs (STORY-0004 AC-3,
+STORY-0017 AC-3/4, STORY-0020 AC-2) proven by the ITER-0005b substrate harness — see iteration-log)
 
 ## STORY-0001
 
@@ -26,11 +26,7 @@ substrate harness — see iteration-log)
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:31-37`
 
-**Status:** partial:ITER-0007 (AC-3 design done; AC-1, AC-2 → ITER-0007b) — AC-3 (single-writer constraint:
-only Temporal writes laneq scheduling fields) proven at the design/logic level by the `GuardedDirective`
-writer-role guard (`modules/incus-dispatcher/temporal/writer.go`), evidence SCENARIO-0081 (mock-Temporal).
-**AC-1 (Temporal plane owns durable Schedules/timers/retry-backoff) + AC-2 (server+workers on ndn-desktop;
-state survives host restart — e2e) → ITER-0007b** (cluster, live Temporal).
+**Status:** done:ITER-0007b — AC-3 (single-writer constraint: only Temporal writes laneq scheduling fields) proven at the design/logic level by the `GuardedDirective` writer-role guard (`modules/incus-dispatcher/temporal/writer.go`), evidence SCENARIO-0081 (mock-Temporal). **AC-1 + AC-2 done:ITER-0007b (E1 LIVE: DeferWorkflow survived a real Temporal restart, same runID Running→Completed, directive fired — durable timer, not laneq natural expiry)**.
 
 ## STORY-0002
 
@@ -48,12 +44,7 @@ state survives host restart — e2e) → ITER-0007b** (cluster, live Temporal).
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:39-43`
 
-**Status:** partial:ITER-0006+ITER-0007 (AC-1 done; AC-2 contract done:ITER-0007 [mock], live durable-hold →
-ITER-0007b) — AC-1 done:ITER-0006 (laneq is the durable cluster-resident queue: priority/lanes/threading/leasing,
-proven via the gRPC adapter + SCENARIO-0091 fake CI gate + SCENARIO-0092 real-wire @nnunley/laneq 2d1b59e).
-**AC-2 deferral-holder contract done:ITER-0007** — the Temporal-holds-deferred-until-eligible contract is proven
-against a mock Temporal/laneq seam (`temporal/projection.go` not-before gating logic); **live durable hold of
-deferred/future work in deployed Temporal until eligible → ITER-0007b.**
+**Status:** done:ITER-0007b — AC-1 done:ITER-0006 (laneq is the durable cluster-resident queue: priority/lanes/threading/leasing, proven via the gRPC adapter + SCENARIO-0091 fake CI gate + SCENARIO-0092 real-wire @nnunley/laneq 2d1b59e). AC-2 done:ITER-0007b (DeferWorkflow, C4 testsuite + E1 live) — the Temporal-holds-deferred-until-eligible contract proven against mock Temporal/laneq seam (`temporal/projection.go` not-before gating logic) in ITER-0007; live durable hold in deployed Temporal until eligible confirmed ITER-0007b.
 
 ## STORY-0003
 

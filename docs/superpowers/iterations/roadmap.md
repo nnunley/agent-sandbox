@@ -842,7 +842,22 @@ schedules/timers/backoff) is provable at the **integration** seam once the worke
 (Temporal sole caller of Defer/Reprioritize) are gating for ITER-0008 dispatch/delegation work. If either slips
 or carries, ITER-0008 cannot proceed — the time plane would not be stable.
 
-**Status:** pending
+**Status:** done:ITER-0007b (2026-06-24) — durable Temporal time plane deployed + wired live. Code C2–C5 (all
+two-stage PAR): C2 PriorityWorkflow + sole-writer ReprojectActivity (Reprioritize+Defer seam) + lease-free
+`LaneqQueue.Defer`; C3 rescore signal (human-unrestricted / agent-bounded) + `currentImportance` query; C4
+RetryWorkflow (exp backoff re-push) + EscalationWorkflow (time-driven stale re-raise) + DeferWorkflow
+(hold-until-eligible), all via the sole-writer seam; C5 concurrent-read consistency (both guarded fields, -race).
+E1 live cluster harness (env-gated `TEMPORAL_LIVE=1`, cross-compiled + `incus exec` in agent-host) **independently
+re-run by the orchestrator**: SCENARIO-0094 LIVE-PROVEN (human rescore flips laneq P1→P0 with a real worker
+executing the workflow), SCENARIO-0001 LIVE-PROVEN (DeferWorkflow survives a REAL Temporal restart PID 6976→7066,
+same runID Running→Completed post-restart, directive fired — STORY-0001 AC-2 durable timer, not laneq natural
+expiry). Mac suite 387→429 -race green; gated live tests skip in CI. **ITER-0008 GATE MET:** STORY-0041 AC-1/AC-2
+(live sole writer — C2/C3 + E1 priority flip) + STORY-0044 AC-3 (sole caller — C2 CI + E1 0093) proven; no carries.
+**Honest live/CI split:** SCENARIO-0056 — live proves the durable timer + real-gRPC reproject MECHANISM; Q2→Q1
+quadrant logic is CI-PROVEN (testsuite time-skip), and live wall-clock Q2→Q1 is NOT compressible to seconds
+(urgency calibrated in days → seconds-out deadline starts already-Q1) — needs a multi-day runner or urgency knob
+(→ ITER-0008/ops). SCENARIO-0081/0093 live = concurrent Peek over real gRPC succeeds + process-level sole-caller;
+value-consistency & sole-writer enforcement are CI-PROVEN (C5/C2).
 **Impacted scenarios:** SCENARIO-0056 (live single-writer projection + compressed-wall-clock deadline aging,
 integration), SCENARIO-0001 (Temporal plane durable + restart survival, e2e), SCENARIO-0081 (live concurrent-read
 consistency under single writer, integration), **SCENARIO-0093 (NEW — Temporal is the sole live caller of laneq
@@ -853,6 +868,39 @@ SCENARIO-0087 (a human/TUI consumer acts on the re-raised escalation) → ITER-0
 AC-2 read as single ACs but are split logic(ITER-0007)/live(ITER-0007b)/operator(ITER-0008); annotate on a docs pass.
 **Look-ahead check:** depends on ITER-0007 logic + ITER-0006 deployed laneq; Temporal becomes the sole
 writer of the gRPC seam so ITER-0008 steering/delegation builds on a stable time plane.
+
+### ITER-0007c — laneq grant signing (PASETO host-to-host auth), Phase 1
+
+**Origin:** human interrupt (2026-06-24) — secure the laneq gRPC for non-local networks (host-to-host
+signing) + a grant mechanism on laneq (addresses laneq's "security story" feedback). Approved design:
+`docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md`.
+
+**Intent (Phase 1, end-to-end):** sign every laneq gRPC call with a **PASETO v4.public (Ed25519)** grant
+so laneq is safe across non-local (Tailscale) networks; verify **inside laneq** (`nnunley/laneq` gRPC
+interceptor); roll out **`log-only` → `enforce`** against the live cluster. Trust root (Ed25519 private
+key + service passwords) stays on the user's Mac; laneq holds only public key(s).
+
+**Scope:** (a) grant token format — `iss`/`sub`/`aud`(laneq instance)/`iat`/`nbf`/`exp`/`jti` + footer
+`kid`; (b) Mac issuer `laneq-grant` CLI (mint + renew; private key in macOS Keychain / secstore vault —
+seeds the `2026-06-16-credential-broker-architecture.md` `brokerd`); (c) Go client `GrantSource` +
+gRPC client interceptor attaching the token to `LaneqQueue` RPCs (additive; absent grant == legacy
+passthrough); (d) laneq Python `ServerInterceptor` verifying v4.public sig + `exp`/`nbf`/`aud`, config
+mode `off|log-only|enforce`, `kid` key rotation; (e) Phase-1 token delivery via Incus systemd-credential
+push + Mac-side renewal helper.
+
+**Stories/scenarios:** to be created by `extracting-requirements` (incremental) from the design doc —
+host-signed RPC accepted; forged/expired/wrong-`aud` rejected (`UNAUTHENTICATED`); `log-only` allows+logs;
+key rotation via `kid`. Real-wire evidence extends `queue/run-laneq-wire.sh` + `laneq_realwire_lifecycle_test.go`.
+
+**Phasing:** Phase 2 (separate spec/iteration) adds `cap:{ops,lanes}` per-consumer/op capabilities and
+ENFORCES the sole-writer rule at laneq (only the Temporal-role grant may `Defer`/`Reprioritize`) — upgrading
+the ITER-0007b process-level invariant to authz. The full provider-credential broker stays the broker doc.
+
+**Sequencing:** runs **before/alongside ITER-0008** — ITER-0008's multi-consumer/recursive delegation
+(non-exclusive leases) benefits from real per-consumer grants, and Phase 2 sole-writer enforcement builds
+directly on the ITER-0007b seam. **Status:** pending (spec approved; requirements extraction next).
+**Look-ahead check:** spans two repos (agent-sandbox token+client+issuer; nnunley/laneq interceptor);
+rollout is non-breaking (log-only first) so it does not disrupt the live ITER-0007b cluster.
 
 ### ITER-0008 — Tier-2 coordinator, recursive delegation & operator UX
 

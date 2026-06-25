@@ -1,38 +1,31 @@
 # Progress
 
-**Phase:** ITER-0007b — **Task 0 (deploy) COMPLETE**; **C1 (worker+Reprioritize) COMPLETE**; ready for C2 (PriorityWorkflow).
-**Iterations:** 10/11 done (ITER-0000..0007). **Current: ITER-0007b** (LIVE Temporal time plane). ITER-0008 pending.
+**Phase:** ITER-0007b — **COMPLETE** (done:2026-06-24). Ready for `auditing-progress`, then ITER-0008.
+**Iterations:** 11/12 done (ITER-0000..0007, 0007b). **Current: none active.** ITER-0008 pending (capstone:
+Tier-2 coordinator, recursive delegation, operator TUI, Run object, budget, multi-consumer).
 
-**Sentinel baseline (held green throughout):** `go vet` clean; `go test -race ./...` **387 green** (4 new Reprioritize tests); tree clean; citations 78/78.
+**Sentinel corpus:** `go vet ./...` clean; `go test -race ./...` **429 green** (387→429, +42 across C2–C5);
+tree clean; zero `TODO(ITER-0007b)` markers (re-tagged → ITER-0008). Live tests env-gated (`TEMPORAL_LIVE=1`),
+excluded from default CI.
 
-**Scope review: 2-round PAR → APPROVE, committed `03bb3c3`.** (Round-1 both REVISE → 7 findings applied;
-round-2 A=APPROVE, B=REVISE cleared by committing the deploy doc + recording the nixpkgs availability artifact.)
+**ITER-0007b delivered (all code tasks two-stage PAR; E1 orchestrator-executed & verified):**
+- **C2** — PriorityWorkflow + sole-writer ReprojectActivity (Reprioritize+Defer) + lease-free `LaneqQueue.Defer`. `4bc32ae`.
+- **C3** — rescore signal (human-unrestricted / agent-bounded) + `currentImportance` query handler. `958f6ca`.
+- **C4** — RetryWorkflow (exp backoff re-push) + EscalationWorkflow (time-driven stale re-raise) + DeferWorkflow
+  (hold-until-eligible), all via the sole-writer seam; `nextCheckInterval` helper; dead `ReprojectRequest` fields removed. `e58ea72`.
+- **C5** — concurrent-read consistency, both guarded fields, `-race`. `401abc0`.
+- **E1** — worker-driven live cluster harness (`temporal/temporal_live_test.go` + `run-temporal-live.sh`, gated).
+  **SCENARIO-0094 LIVE-PROVEN** (human rescore flips laneq P1→P0, real worker executing). **SCENARIO-0001 LIVE-PROVEN**
+  (DeferWorkflow survives a REAL Temporal restart PID 6976→7066; same runID Running→Completed; directive fired —
+  STORY-0001 AC-2 durable timer, not laneq natural expiry). 0081/0093 live = honest (concurrent Peek / process-level
+  sole-caller; value-consistency & sole-writer enforcement CI-PROVEN in C5/C2). Latest E1 commit `c55a35d`.
 
-**Task 0 (BLOCKING) — DONE, committed `e53c71a`:** Temporal time plane LIVE on `agent-host`.
-- `fleet-worker/temporal-service.nix`: hand-rolled systemd unit running `temporal-cli` 1.5.1
-  `server start-dev --db-filename /srv/temporal/temporal.db --ip 0.0.0.0 --port 7233 --headless`.
-  Chosen over stock `services.temporal` module because start-dev auto-bootstraps file-SQLite schema (stock
-  needs temporal-sql-tool; upstream test only covers in-memory). Verified empirically (spike + deployed).
-- `temporal-data` Incus host volume at `/srv/temporal` → durable across restart.
-- Deployed via live switch (no container restart). Unit active, gRPC ready :7233 (boot-to-ready 22s).
-- **Restart-survival proven:** namespace survived `systemctl restart temporal` (State=Registered).
-- Deploy doc realized: `docs/plans/2026-06-23-iter0007b-temporal-deploy.md`.
+**ITER-0008 GATE: MET (no carries).** STORY-0041 AC-1/AC-2 (live sole writer) + STORY-0044 AC-3 (live sole caller).
 
-**C1 (worker skeleton + Reprioritize wrapper) — DONE, committed `e7ca48e`:**
-- `temporal/worker.go`: Temporal worker struct + NewWorker, Register, Start/Stop lifecycle.
-  PriorityWorkflow stub registered (implementation in C2).
-- `queue/laneq.go`: Reprioritize(id, importance) method wrapping laneq gRPC RPC.
-  Called by Temporal workflows to update directive priority as urgency changes.
-- `queue/laneq_test.go`: 4 Reprioritize tests (success, not found, rpc error).
-- `temporal/worker_test.go`: Stub tests for NewWorker and PriorityWorkflow (integration tests deferred to C2).
-- SDK v1.45.0 added to go.mod; all dependencies resolved via `go mod tidy`.
+**ITER-0008 design notes (recorded):** PriorityWorkflow early-exit-at-Q1 → post-Q1 operator pause/block/resume
+needs a separate control plane; live wall-clock Q2→Q1 not compressible to seconds (urgency calibrated in days —
+needs a knob or multi-day runner; logic is CI-PROVEN); rejected agent rescores → operator approval queue;
+laneq `Stats()/Len()` observability deferred.
 
-**Code phase (remaining):** C2 PriorityWorkflow + ReprojectActivity (sole-writer, CI via testsuite time-skip) → SCENARIO-0056/0093;
-C3 rescore signal → SCENARIO-0094; C4 durable retry/escalation re-push → STORY-0058 AC-24/0061 AC-3/0055 AC-7;
-C5 concurrent reads → SCENARIO-0081; E1 LIVE cluster harness (compressed-wall-clock aging + container-restart e2e)
-→ fills SCENARIO-0001/0056/0081/0093/0094 execution commands. Wrap: corpus + story markers; rm temporal/scenario0078_test.go.bak.
-
-**ITER-0008 GATE (recorded):** STORY-0041 AC-1/AC-2 + STORY-0044 AC-3 must pass (no carries).
-
-**Last event:** 2026-06-24 — C1 complete (e7ca48e); worker skeleton + Reprioritize wrapper ready for C2.
-**On resume:** start code phase C2 (PriorityWorkflow + ReprojectActivity) against live Temporal at agent-host:7233.
+**Last event:** 2026-06-24 — ITER-0007b complete; artifacts updated (roadmap done, iteration-log appended, TODOs
+re-tagged, .bak removed). **On resume:** orchestrator runs `auditing-progress` (three-tier), then ITER-0008.

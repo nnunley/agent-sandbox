@@ -3,7 +3,7 @@
 **Summary:** Prioritization & scheduling (Temporal)
 **Stories:** STORY-0035, STORY-0036, STORY-0037, STORY-0038, STORY-0039, STORY-0040, STORY-0041, STORY-0042, STORY-0043, STORY-0044, STORY-0045, STORY-0046, STORY-0047
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 3/13 done (STORY-0040/0042/0045 done:ITER-0007; STORY-0041/0043/0044/0046/0047 partial — CI-logic ACs done:ITER-0007, live ACs → ITER-0007b)
+**Status:** 8/13 done (STORY-0040/0042/0045 done:ITER-0007; STORY-0041/0043/0044/0046/0047 done:ITER-0007b — live Temporal ACs proven (E1), 0043 AC-2 with documented wall-clock-aging limitation; STORY-0035/0036/0037/0038/0039 → ITER-0008)
 ## STORY-0035
 
 **Epic:** EPIC-005 — Prioritization & scheduling (Temporal)
@@ -140,7 +140,7 @@ timeline, Q4 stability + deadline aging).
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:265-271`
 
-**Status:** partial:ITER-0006+ITER-0007 (AC-3 done; AC-1, AC-2 → ITER-0007b) — AC-3 (laneq.next returns
+**Status:** partial:ITER-0006+ITER-0007→**done:ITER-0007b** (AC-3 done; **AC-1, AC-2 done:ITER-0007b — live sole writer of effective-priority + not-before (C2/C3 + E1); ITER-0008 GATE met**) — AC-3 (laneq.next returns
 highest-importance eligible item, no urgency knowledge) proven ITER-0006 SCENARIO-0091/0092 and re-asserted
 here against the temporal projection seam. **AC-1/AC-2 (Temporal is the live sole writer of effective-priority
 + not-before; re-projects on rescore over the real laneq gRPC seam) → ITER-0007b** (cluster, live Temporal).
@@ -184,7 +184,7 @@ evidence SCENARIO-0057 (rescore-authority unit/integration) + SCENARIO-0082 (dri
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:283-285`
 
-**Status:** partial:ITER-0007 (AC-1, AC-3 done; AC-2 → ITER-0007b) — AC-1 (urgency monotonic in (deadline,now))
+**Status:** partial:ITER-0007→**done:ITER-0007b** (AC-1, AC-3 done; **AC-2 done:ITER-0007b — Q2→Q1 CI-PROVEN (C2 time-skip); live durable-timer+gRPC reproject mechanism (E1); NOTE live wall-clock Q2→Q1 not compressible to seconds (urgency calibrated in days) → urgency knob / multi-day runner deferred to ITER-0008/ops**) — AC-1 (urgency monotonic in (deadline,now))
 + AC-3 (no-deadline low-importance Q4 never ages up) proven pure-math/fake-clock in
 `modules/incus-dispatcher/temporal/projection.go`, evidence SCENARIO-0078. **AC-2 (Q2→Q1 promotion over
 wall-clock time, no human intervention — `journey`/`integration`) → ITER-0007b** (live Temporal wall-clock aging).
@@ -206,7 +206,7 @@ wall-clock time, no human intervention — `journey`/`integration`) → ITER-000
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:287-289`
 
-**Status:** partial:ITER-0000+ITER-0006+ITER-0007 (AC-1, AC-2 done; AC-3 logic done:ITER-0007 [mock laneq],
+**Status:** partial:ITER-0000+ITER-0006+ITER-0007→**done:ITER-0007b** (AC-1, AC-2 done; **AC-3 done:ITER-0007b — Temporal is the live sole caller of Defer/Reprioritize (C2 seam + E1 0093); ITER-0008 GATE met**) [AC-3 logic done:ITER-0007 mock laneq],
 live gRPC → ITER-0007b) —
 **Discovery: laneq already ships `not_before` + `blocked_by` deferral upstream (v0.4.0 + #18)**, so
 ITER-0006 VALIDATED + INTEGRATED rather than added it. AC-1 (not_before field) + AC-2 (`next` filters
@@ -254,7 +254,7 @@ deterministically in `modules/incus-dispatcher/temporal/projection.go`, evidence
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:456-457`
 
-**Status:** partial:ITER-0007 (AC-1 done; AC-2 → ITER-0007b) — AC-1 (only Temporal can write effective-priority
+**Status:** partial:ITER-0007→**done:ITER-0007b** (AC-1 done; **AC-2 done:ITER-0007b — concurrent-read consistency under single writer (C5 both-fields -race + E1 live Peek)**) — AC-1 (only Temporal can write effective-priority
 + not-before; no other actor) proven by the `GuardedDirective` writer-role guard
 (`modules/incus-dispatcher/temporal/writer.go`: private fields + role-checked setters reject Queue/Human writes),
 evidence SCENARIO-0081 (single-writer guard, unit/integration + code-review). Single-writer is process-level and
@@ -278,7 +278,7 @@ evidence SCENARIO-0081 (single-writer guard, unit/integration + code-review). Si
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:458-460`
 
-**Status:** partial:ITER-0007 (AC-2, AC-3 done; AC-1 → ITER-0007b) — AC-2 (agent-proposed rescore beyond bound
+**Status:** partial:ITER-0007→**done:ITER-0007b** (AC-2, AC-3 done; **AC-1 done:ITER-0007b — live human rescore moves item to any bucket via deployed Temporal (E1: laneq P1→P0)**) — AC-2 (agent-proposed rescore beyond bound
 rejected with reason logged) + AC-3 (privileged-implication rescore routes to approval queue, reusing the
 ITER-0001 escalation lane) proven in `modules/incus-dispatcher/temporal/authority.go`, evidence SCENARIO-0082.
 **AC-1 (live human rescore moves an item to any bucket via the deployed Temporal rescore path) → ITER-0007b.**

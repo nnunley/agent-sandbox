@@ -27,7 +27,7 @@
 
 **Status:** done:ITER-0001 (D4 loop + ladder AC-1..6; AC-7 decision-log done ITER-0001, Temporal-resurface
 logic done:ITER-0007 [urgency-reprojection of stale escalations, `temporal/escalate.go`
-`ReprojectOnEscalation`, fake-clock evidence SCENARIO-0087 logic], live re-raise → ITER-0007b, operator-acts
+`ReprojectOnEscalation`, fake-clock evidence SCENARIO-0087 logic], **AC-7 live re-raise done:ITER-0007b (C4 EscalationWorkflow — time-driven re-raise, `workflow.GetLogger` ladder log)**, operator-acts
 journey → ITER-0008)
 
 ## STORY-0056
@@ -86,7 +86,7 @@ journey → ITER-0008)
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:322-324`
 
-**Status:** partial:ITER-0000+0001+0004 (AC-22 done ITER-0000, AC-23 synchronous ladder done ITER-0001, **AC-25 done:ITER-0004** — daemon emits a fresh handoff bundle on each autonomous requeue, evidence SCENARIO-0054 daemon seam); **AC-24 retry-backoff projection logic done:ITER-0007** (`temporal/escalate.go` importance-dependent escalation windows + reproject, fake-clock); live durable re-push of retries with backoff in deployed Temporal → ITER-0007b
+**Status:** partial:ITER-0000+0001+0004 (AC-22 done ITER-0000, AC-23 synchronous ladder done ITER-0001, **AC-25 done:ITER-0004** — daemon emits a fresh handoff bundle on each autonomous requeue, evidence SCENARIO-0054 daemon seam); **AC-24 retry-backoff projection logic done:ITER-0007** (`temporal/escalate.go` importance-dependent escalation windows + reproject, fake-clock); **AC-24 done:ITER-0007b — live durable re-push of retries with backoff (C4 RetryWorkflow, exp backoff via sole-writer Defer, testsuite delta-asserted)**
 
 ## STORY-0059
 
@@ -146,5 +146,5 @@ journey → ITER-0008)
 
 **Status:** partial:ITER-0001+ITER-0007 (AC-1 autonomous climb + AC-2 non-blocking human lane done); AC-3
 urgency-reprojection logic done:ITER-0007 (stale escalations resurface in priority order as urgency rises —
-`temporal/escalate.go`, fake-clock evidence SCENARIO-0087 logic); live Temporal re-raise → ITER-0007b;
+`temporal/escalate.go`, fake-clock evidence SCENARIO-0087 logic); **AC-3 live Temporal re-raise done:ITER-0007b (C4 EscalationWorkflow); operator-resurface journey → ITER-0008**;
 operator-acts-on-resurfaced journey → ITER-0008
