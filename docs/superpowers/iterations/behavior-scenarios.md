@@ -3705,8 +3705,8 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - Entries carry causal parent refs enabling ordered reconstruction
 - Replaying the log reproduces the action chain deterministically
 
-**Automation status:** planned (ITER-0008)
-**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0125_AuditReplay`
+**Automation status:** automated (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0125_AuditReplay`
 
 **Sources:**
 - requirements/EPIC-007.md STORY-0054
