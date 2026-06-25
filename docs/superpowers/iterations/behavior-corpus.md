@@ -37,7 +37,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0024 | Coordinator rejects superseding work without explicit declaration | integration | iteration | TBD | STORY-0030 |
 | SCENARIO-0025 | D1: Worker directive with root flag is rejected | integration | iteration | `cd modules/incus-dispatcher && go test -race -run TestScenario0025` | STORY-0049 |
 | SCENARIO-0026 | D1: Directive body contains no access_cmd or root flag | unit | iteration | `cd modules/incus-dispatcher && go test -run TestParseDirective ./queue` | STORY-0049 |
-| SCENARIO-0027 | D1: Child directive from worker inherits immutable provisioning, not p | integration | iteration | PLANNED (ITER-0008): `cd modules/incus-dispatcher && go test ./... -run TestScenario0027_ChildDirectiveProvisioning` | STORY-0049 |
+| SCENARIO-0027 | D1: Child directive from worker inherits immutable provisioning, not p | integration | iteration | AUTOMATED (ITER-0008) — `cd modules/incus-dispatcher && go test . -run TestScenario0027_ChildDirectiveProvisioning` | STORY-0049 |
 | SCENARIO-0028 | D2: Backend interface abstracts container vs. micro-VM delivery | unit | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0028` | STORY-0017 |
 | SCENARIO-0029 | D2: Micro-VM boot-to-ready ≤ 5 s with closure realized | process-level | iteration | `bash fleet-worker/cluster-tests/run.sh microvm-boot` | STORY-0017 |
 | SCENARIO-0030 | D3: ctx_agent diary write and read preserve progression state | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestLeanCtxProvider` | STORY-0018 |

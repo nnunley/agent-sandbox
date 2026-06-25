@@ -1236,8 +1236,8 @@ microVM host-socket isolation → ITER-0005)
 - Child container launched with parent provisioning
 - Child cannot elevate privileges beyond parent template capability
 
-**Automation status:** planned (ITER-0008)
-**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0027_ChildDirectiveProvisioning`
+**Automation status:** automated (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0027_ChildDirectiveProvisioning`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:104-105`

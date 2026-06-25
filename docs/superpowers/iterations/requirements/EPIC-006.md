@@ -45,11 +45,12 @@ isolation deferred to ITER-0005.
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:99-116`
 
-**Status:** done:ITER-0002 — AC-1 (strict directive schema, queue.ParseDirective rejecting
+**Status:** done:ITER-0008 — AC-1 (strict directive schema, queue.ParseDirective rejecting
 access_cmd/root/unknown fields; unit evidence SCENARIO-0026), AC-2 (allowlist reject) +
-AC-3 (origin reject) at the daemon, evidence SCENARIO-0025. **DEFERRED (PAR scope review):
-AC-4 (worker-authored child-directive inheritance — no child-directive emit machinery yet)
-→ ITER-0008; AC-5 (immutable root + tmpfs scratch — NixOS image config) → ITER-0005 (folds
+AC-3 (origin reject) at the daemon, evidence SCENARIO-0025, AC-4 (NewChildDirective constructor
+enforces inheritance via immutable Template; integration proof SCENARIO-0027 asserts inheritance +
+D1-accepts-inherited + D1-rejects-escalation + schema-forbids-root). **DEFERRED:
+AC-5 (immutable root + tmpfs scratch — NixOS image config) → ITER-0005 (folds
 into STORY-0075 golden image).** Note: ParseDirective is the JSON ingestion boundary; its
 live wiring rides the laneq substrate (ITER-0006).
 
