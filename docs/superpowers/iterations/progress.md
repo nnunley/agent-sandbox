@@ -8,11 +8,11 @@ JOURNEY-0001); zero `TODO(ITER-0007c)`. STORY-0079/0080/0081 done; STORY-0082 AC
 **NEXT (orchestrator):** per-sprint `auditing-progress` on ITER-0007c (+ the still-owed ITER-0007b three-tier audit).
 **Gated handoff (NOT autonomous):** STORY-0082 AC-1b — external `nnunley/laneq` PR (with laneq-side PAR review) +
 live cluster `log-only→enforce` rollout — awaiting operator authorization.
-**⚠ Incident (2026-06-25, resolved):** an implementer subagent cleaned the working tree and wiped UNCOMMITTED work —
-my scope edits (re-applied + committed) and a pre-existing edit to `specs/2026-06-24-laneq-grant-paseto-design.md`.
-The spec edit was RECOVERED verbatim from conversation history and committed (`713f2a3`). Mitigation now standard:
-commit artifacts before each implementer dispatch; implementers restricted to explicit `git add <files>` (no
-checkout/restore/stash/clean/add -A) — held for T1-fix..T4.
+**⚠ Incident (2026-06-25, resolved):** during the iteration RESUME, my own mishandling of the working directory /
+tree state wiped UNCOMMITTED work (NO other agents were involved) — my scope edits (re-applied + committed) and a
+pre-existing edit to `specs/2026-06-24-laneq-grant-paseto-design.md`. The spec edit was RECOVERED verbatim from
+conversation history and committed (`713f2a3`). Mitigation now standard: commit artifacts before dispatching work;
+use explicit `git add <files>` (no checkout/restore/stash/clean/add -A); confirm absolute working directory on resume.
 ITER-0007b COMPLETE (done:2026-06-24). ITER-0008 pending (capstone).
 **Iterations:** 11/12 base done; **ITER-0007c active**.
 

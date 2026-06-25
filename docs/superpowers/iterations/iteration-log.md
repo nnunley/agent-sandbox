@@ -752,10 +752,10 @@ replay cache with `off|log-only|enforce` modes. The riskiest risk — the cross-
 by a real Go-client ↔ real-Python-laneq round trip in enforce mode: a valid grant+proof is ACCEPTED, and
 missing / wrong-audience / replayed-nonce / wrong-method are each REJECTED with gRPC `Unauthenticated`; log-only
 allows an unauthenticated call (the safe-rollout gate). Trust root (issuer Ed25519 private key) stays file-backed
-on the Mac and is never exported. **Process incident:** an implementer subagent cleaned the working tree and wiped
-uncommitted work, including a pre-existing edit to the design spec; the spec edit was recovered verbatim from
-conversation history (`713f2a3`) and the practice changed to commit artifacts before each implementer dispatch +
-restrict implementers to explicit `git add`. **Owed forward:** STORY-0082 AC-1b live rollout + the external
+on the Mac and is never exported. **Process incident:** during the iteration RESUME, mishandled
+working-directory/tree state wiped uncommitted work (no other agents were involved), including a pre-existing edit
+to the design spec; the spec edit was recovered verbatim from conversation history (`713f2a3`) and the practice
+changed to commit artifacts before dispatching work + use explicit `git add` (no checkout/restore/stash/clean). **Owed forward:** STORY-0082 AC-1b live rollout + the external
 `nnunley/laneq` PR (with laneq-side PAR review); ITER-0007b's three-tier `auditing-progress` (still owed).
 
 **Scenarios:** SCENARIO-0117 (host-signed RPC accepted — AUTOMATED: Go interceptor unit + issuer-CLI mint +
