@@ -22,12 +22,13 @@ type ArtifactRef struct {
 	Ref  string       `json:"ref"`
 }
 
-// BudgetSnapshot captures the budget context at dispatch time (STORY-0035 AC-2).
-// This is a read-only snapshot for auditing; enforcement happens in ITER-0008b (STORY-0036).
+// BudgetSnapshot captures the token budget context at dispatch time (STORY-0035 AC-2).
+// This is a read-only snapshot for auditing; budget enforcement is ITER-0008b (STORY-0036),
+// and monetary cost/spend tracking (tokens/latency/spend) is reserved for ITER-0008b
+// (STORY-0035 AC-3/4) — that story defines the cost/spend shape when it is actually needed.
 type BudgetSnapshot struct {
-	LimitTokens int64  `json:"limit_tokens"`
-	SpentTokens int64  `json:"spent_tokens"`
-	Currency    string `json:"currency"`
+	LimitTokens int64 `json:"limit_tokens"`
+	SpentTokens int64 `json:"spent_tokens"`
 }
 
 // StumbleType enumerates the structured failure-signal kinds (STORY-0031 AC-2).

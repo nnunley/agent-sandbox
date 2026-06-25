@@ -180,7 +180,6 @@ func TestRunShape(t *testing.T) {
 		BudgetSnapshot: &BudgetSnapshot{                 // STORY-0035 AC-2
 			LimitTokens: 1000000,
 			SpentTokens: 45000,
-			Currency:    "tokens",
 		},
 		StumbleSignals: []StumbleSignal{
 			{Type: StumbleRetry, Ts: time.Date(2026, 3, 15, 9, 0, 0, 0, time.UTC), EvidenceSummary: "test"},
@@ -262,8 +261,21 @@ func TestRunShape(t *testing.T) {
 	if got.BudgetSnapshot.SpentTokens != fullRun.BudgetSnapshot.SpentTokens {
 		t.Errorf("BudgetSnapshot.SpentTokens: got %d, want %d", got.BudgetSnapshot.SpentTokens, fullRun.BudgetSnapshot.SpentTokens)
 	}
-	if got.BudgetSnapshot.Currency != fullRun.BudgetSnapshot.Currency {
-		t.Errorf("BudgetSnapshot.Currency: got %q, want %q", got.BudgetSnapshot.Currency, fullRun.BudgetSnapshot.Currency)
+
+	// Explicitly assert every new ITER-0008 key is present in the marshaled JSON of a
+	// fully-populated Run (key presence, not just round-trip equality).
+	var fullRaw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &fullRaw); err != nil {
+		t.Fatalf("Unmarshal fullRun to map: %v", err)
+	}
+	for _, field := range []string{
+		"worker_id", "worker_kind", "policy_id",
+		"artifact_refs", "log_refs",
+		"provider_instance", "model_id", "budget_snapshot",
+	} {
+		if _, ok := fullRaw[field]; !ok {
+			t.Errorf("fully-populated Run JSON missing expected key %q", field)
+		}
 	}
 
 	// Test 2: Minimal Run (RunID, ThreadID only) maintains back-compat by omitting all new fields in JSON.
