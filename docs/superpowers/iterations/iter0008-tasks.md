@@ -36,4 +36,8 @@ Stories: STORY-0015, STORY-0011 (fields), STORY-0035 AC-1/2. Gate for T2.
 - STORY-0073 + STORY-0012: orchestrator steers high-priority directive; daemon preempts next claim → `TestJourney0002_LiveSteering`
 
 Status legend: [ ] pending  [~] in progress  [x] done:ITER-0008
-- [ ] Task-0  [ ] T1a [ ] T1b [ ] T1c  [ ] T2a [ ] T2b [ ] T2c  [ ] T3a [ ] T3b/d [ ] T3c  [ ] T4  [ ] T5  [ ] T6
+- [x] Task-0 (be3e6c0 + review-fix bf1522b; two-stage PAR APPROVED; suite 468 green)  [~] T1a [ ] T1b [ ] T1c  [ ] T2a [ ] T2b [ ] T2c  [ ] T3a [ ] T3b/d [ ] T3c  [ ] T4  [ ] T5  [ ] T6
+
+Process note: implementer subagents may refuse orchestrator-relayed PAR fix requests (their global
+CLAUDE.md treats coordinator messages as lacking user authority). For small, fully-specified review
+fixes the orchestrator applies them directly (as done for Task-0's Currency removal).
