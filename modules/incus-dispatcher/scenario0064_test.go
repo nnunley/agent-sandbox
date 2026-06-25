@@ -217,8 +217,8 @@ func TestSteerChannel_CorruptFileGraceful(t *testing.T) {
 	if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
 		t.Fatalf("write empty: %v", err)
 	}
-	if _, ok, _ := sc.PollSteer(); ok {
-		t.Fatalf("empty file must not yield a steer")
+	if _, ok, err := sc.PollSteer(); ok || err != nil {
+		t.Fatalf("empty file: want (ok=false, err=nil), got (ok=%v, err=%v)", ok, err)
 	}
 
 	// Corrupt/partial JSON: surfaces an error, no panic, and is NOT silently consumed as a valid steer.

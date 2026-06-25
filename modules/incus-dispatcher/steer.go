@@ -71,7 +71,9 @@ func (sc *SteerChannel) PollSteer() (SteerMessage, bool, error) {
 		return SteerMessage{}, false, fmt.Errorf("parse steer message: %w", err)
 	}
 
-	// Consume: delete the file so the same steer is not processed again.
+	// Consume: delete the file so the same steer is not processed again. If delete fails we return
+	// ok=false (consume failed) so the caller does NOT act on the steer; the message is not lost — a
+	// later poll re-reads the file and retries the delete.
 	if err := os.Remove(sc.path); err != nil {
 		return SteerMessage{}, false, fmt.Errorf("consume steer (delete file): %w", err)
 	}
