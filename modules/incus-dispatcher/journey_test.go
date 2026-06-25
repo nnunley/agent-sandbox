@@ -21,7 +21,8 @@ import (
 // (claim → validate → launch → deliver → run → harvest → grade → outcome →
 // stop+reap) without needing a live remote, so the journey runs deterministically
 // in CI. Execution command (run inside the module dir — it is a nested go.mod):
-//   cd modules/incus-dispatcher && go test . -run TestJourney0001
+//
+//	cd modules/incus-dispatcher && go test . -run TestJourney0001
 //
 // Coverage note: this harness asserts the observables that live at the daemon
 // seam — directive→done, queue drained, instance reaped, authoritative grade,
@@ -246,6 +247,7 @@ func TestJourney0001_RejectedDirectiveNeverLaunches(t *testing.T) {
 func TestJourney0002_LiveSteering(t *testing.T) {
 	backend := &journeyBackend{}
 	q := queue.NewMemoryQueue()
+	ctxSpy := &handoffSpy{} // records ImportHandoff so we can prove "prior context preserved"
 	dm := &Daemon{
 		Q:        q,
 		Runner:   backend,
@@ -253,16 +255,17 @@ func TestJourney0002_LiveSteering(t *testing.T) {
 		Consumer: "journey",
 		LeaseDur: time.Minute,
 		Audit:    NewMemoryAuditLog(), // wire audit to prove runs are logged
+		Context:  ctxSpy,              // wire context so the steered directive's handoff is imported
 	}
 
 	// Step 1: Push a lower-priority directive (ImportanceNormal) as "current work"
 	lowID, err := q.Push(queue.Directive{
-		Intent:   "implement lower-priority task",
-		Template: "fleet-go",
-		Origin:   OriginOrchestrator,
-		Repo:     "/srv/let-go",
-		Ref:      "main",
-		Task:     "lower-priority work",
+		Intent:     "implement lower-priority task",
+		Template:   "fleet-go",
+		Origin:     OriginOrchestrator,
+		Repo:       "/srv/let-go",
+		Ref:        "main",
+		Task:       "lower-priority work",
 		Importance: queue.ImportanceNormal, // normal priority
 	})
 	if err != nil {
@@ -271,13 +274,14 @@ func TestJourney0002_LiveSteering(t *testing.T) {
 
 	// Step 2: Orchestrator steers by pushing a HIGH-priority directive
 	highID, err := q.Push(queue.Directive{
-		Intent:   "high-priority steering directive",
-		Template: "fleet-go",
-		Origin:   OriginOrchestrator,
-		Repo:     "/srv/let-go",
-		Ref:      "main",
-		Task:     "high-priority work from orchestrator",
-		Importance: queue.ImportanceHigh, // HIGH priority — will preempt
+		Intent:     "high-priority steering directive",
+		Template:   "fleet-go",
+		Origin:     OriginOrchestrator,
+		Repo:       "/srv/let-go",
+		Ref:        "main",
+		Task:       "high-priority work from orchestrator",
+		Importance: queue.ImportanceHigh,                 // HIGH priority — will preempt
+		HandoffIn:  "/srv/handoff-store/thr-prior/run-0", // prior context the orchestrator carries into the steered work
 	})
 	if err != nil {
 		t.Fatalf("push D_high (steering): %v", err)
@@ -308,6 +312,12 @@ func TestJourney0002_LiveSteering(t *testing.T) {
 	}
 	if backend.runs != 1 {
 		t.Fatalf("backend.runs = %d after first cycle, want 1", backend.runs)
+	}
+
+	// Observable "prior context preserved": the steered high-priority directive carried a HandoffIn,
+	// and the daemon imported that prior context before running it (best-effort soft state, STORY-0018).
+	if len(ctxSpy.imported) != 1 || ctxSpy.imported[0] != "/srv/handoff-store/thr-prior/run-0" {
+		t.Fatalf("prior handoff not applied to the preempting run: imported=%v, want [/srv/handoff-store/thr-prior/run-0]", ctxSpy.imported)
 	}
 
 	// Step 5: Verify D_low remains queued (not lost)
@@ -365,3 +375,14 @@ func TestJourney0002_LiveSteering(t *testing.T) {
 	}
 }
 
+// handoffSpy is a ContextProvider that records every ImportHandoff bundle path so a test can prove
+// the daemon applied prior context to a run. All other soft-state ops are no-ops (embedded NoopProvider).
+type handoffSpy struct {
+	NoopProvider
+	imported []string
+}
+
+func (h *handoffSpy) ImportHandoff(bundlePath string) (HandoffManifest, error) {
+	h.imported = append(h.imported, bundlePath)
+	return HandoffManifest{}, nil
+}
