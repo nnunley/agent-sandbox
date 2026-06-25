@@ -888,9 +888,12 @@ passthrough); (d) laneq Python `ServerInterceptor` verifying v4.public sig + `ex
 mode `off|log-only|enforce`, `kid` key rotation; (e) Phase-1 token delivery via Incus systemd-credential
 push + Mac-side renewal helper.
 
-**Stories/scenarios:** to be created by `extracting-requirements` (incremental) from the design doc —
-host-signed RPC accepted; forged/expired/wrong-`aud` rejected (`UNAUTHENTICATED`); `log-only` allows+logs;
-key rotation via `kid`. Real-wire evidence extends `queue/run-laneq-wire.sh` + `laneq_realwire_lifecycle_test.go`.
+**Stories/scenarios (extracted 2026-06-24 → EPIC-014):** STORY-0079 (PASETO v4.public grant format + Mac
+issuer), STORY-0080 (Go client grant attachment), STORY-0081 (laneq Python verify interceptor + log-only/enforce
+modes + kid rotation), STORY-0082 (token delivery, rollout, transport). Scenarios SCENARIO-0117 (host-signed RPC
+accepted), SCENARIO-0118 (forged/expired/wrong-`aud` rejected `UNAUTHENTICATED`), SCENARIO-0119 (`log-only`
+allows+logs, then enforce rejects), SCENARIO-0120 (`kid` key rotation). Real-wire evidence extends
+`queue/run-laneq-wire.sh` + `laneq_realwire_lifecycle_test.go`.
 
 **Phasing:** Phase 2 (separate spec/iteration) adds `cap:{ops,lanes}` per-consumer/op capabilities and
 ENFORCES the sole-writer rule at laneq (only the Temporal-role grant may `Defer`/`Reprioritize`) — upgrading
