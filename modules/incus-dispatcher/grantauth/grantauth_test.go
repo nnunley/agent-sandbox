@@ -168,8 +168,66 @@ func TestFileGrantSource_CurrentReadsAndCachesGrant(t *testing.T) {
 	}
 }
 
-func TestFileGrantSource_ReloadsOnFileChange(t *testing.T) {
+func TestFileGrantSource_ReloadsOnMtimeChange(t *testing.T) {
 	// When file mtime changes, reread and re-cache.
+	// Use os.Chtimes for deterministic mtime control.
+	tmpdir := t.TempDir()
+	grantFile := filepath.Join(tmpdir, "grant.txt")
+
+	issuer, _ := grantauth.NewKey()
+	client, _ := grantauth.NewKey()
+	clientPEM, _ := client.PublicKeyPEM()
+	now := time.Unix(1782000000, 0).UTC()
+
+	// Write grant1 with mtime T1.
+	grant1, _ := issuer.MintGrant(grantauth.GrantParams{
+		Iss:                "mac",
+		Sub:                "agent-host",
+		Aud:                aud,
+		ClientPublicKeyPEM: clientPEM,
+		ClientKid:          "c1",
+		Kid:                "k1",
+		Now:                now,
+		TTL:                30 * time.Minute,
+		JTI:                "j1",
+	})
+	t1 := time.Unix(1700000000, 0)
+	os.WriteFile(grantFile, []byte(grant1), 0644)
+	os.Chtimes(grantFile, t1, t1)
+
+	source, _ := grantauth.NewFileGrantSource(grantFile)
+
+	got1, _ := source.Current()
+	if got1 != grant1 {
+		t.Errorf("First read: got %q, want %q", got1, grant1)
+	}
+
+	// Write grant2 with a different mtime T1+2s.
+	grant2, _ := issuer.MintGrant(grantauth.GrantParams{
+		Iss:                "mac",
+		Sub:                "agent-host",
+		Aud:                aud,
+		ClientPublicKeyPEM: clientPEM,
+		ClientKid:          "c1",
+		Kid:                "k1",
+		Now:                now.Add(1 * time.Second),
+		TTL:                30 * time.Minute,
+		JTI:                "j2",
+	})
+	t2 := t1.Add(2 * time.Second)
+	os.WriteFile(grantFile, []byte(grant2), 0644)
+	os.Chtimes(grantFile, t2, t2)
+
+	// Current should detect mtime change and reread.
+	got2, _ := source.Current()
+	if got2 != grant2 {
+		t.Errorf("After mtime change: got %q, want %q", got2, grant2)
+	}
+}
+
+func TestFileGrantSource_NoReloadOnSameMtime(t *testing.T) {
+	// If file is rewritten with same mtime (rare but documents the contract),
+	// the cached token is returned (mtime-driven reload).
 	tmpdir := t.TempDir()
 	grantFile := filepath.Join(tmpdir, "grant.txt")
 
@@ -189,19 +247,14 @@ func TestFileGrantSource_ReloadsOnFileChange(t *testing.T) {
 		TTL:                30 * time.Minute,
 		JTI:                "j1",
 	})
+	t1 := time.Unix(1700000000, 0)
 	os.WriteFile(grantFile, []byte(grant1), 0644)
+	os.Chtimes(grantFile, t1, t1)
 
 	source, _ := grantauth.NewFileGrantSource(grantFile)
+	cached, _ := source.Current()
 
-	got1, _ := source.Current()
-	if got1 != grant1 {
-		t.Errorf("First read: got %q, want %q", got1, grant1)
-	}
-
-	// Sleep briefly to ensure mtime differs.
-	time.Sleep(10 * time.Millisecond)
-
-	// Mint a new grant with a different JTI.
+	// Rewrite with same mtime — simulates a no-op rewrite.
 	grant2, _ := issuer.MintGrant(grantauth.GrantParams{
 		Iss:                "mac",
 		Sub:                "agent-host",
@@ -214,11 +267,12 @@ func TestFileGrantSource_ReloadsOnFileChange(t *testing.T) {
 		JTI:                "j2",
 	})
 	os.WriteFile(grantFile, []byte(grant2), 0644)
+	os.Chtimes(grantFile, t1, t1) // Same mtime
 
-	// Current should detect mtime change and reread.
-	got2, _ := source.Current()
-	if got2 != grant2 {
-		t.Errorf("After file change: got %q, want %q", got2, grant2)
+	// Current should return cached token (grant1), not the new content (grant2).
+	got, _ := source.Current()
+	if got != cached {
+		t.Errorf("Same mtime rewrite: expected cache hit, got new content")
 	}
 }
 
@@ -245,6 +299,20 @@ func TestFileGrantSource_ErrorOnEmptyFile(t *testing.T) {
 	_, err := source.Current()
 	if err == nil {
 		t.Errorf("Current on empty file: expected error, got nil")
+	}
+}
+
+func TestFileGrantSource_ErrorOnWhitespaceOnlyFile(t *testing.T) {
+	tmpdir := t.TempDir()
+	grantFile := filepath.Join(tmpdir, "grant.txt")
+	// Write only whitespace: spaces, newlines, tabs.
+	os.WriteFile(grantFile, []byte("  \n\t  \n"), 0644)
+
+	source, _ := grantauth.NewFileGrantSource(grantFile)
+
+	_, err := source.Current()
+	if err == nil {
+		t.Errorf("Current on whitespace-only file: expected error, got nil")
 	}
 }
 
@@ -300,107 +368,3 @@ func TestFileGrantSource_ConcurrentReads(t *testing.T) {
 	}
 }
 
-func TestFileGrantSource_InjectableClock(t *testing.T) {
-	// Verify that the clock can be injected for testing.
-	tmpdir := t.TempDir()
-	grantFile := filepath.Join(tmpdir, "grant.txt")
-
-	issuer, _ := grantauth.NewKey()
-	client, _ := grantauth.NewKey()
-	clientPEM, _ := client.PublicKeyPEM()
-	now := time.Unix(1782000000, 0).UTC()
-
-	grant, _ := issuer.MintGrant(grantauth.GrantParams{
-		Iss:                "mac",
-		Sub:                "agent-host",
-		Aud:                aud,
-		ClientPublicKeyPEM: clientPEM,
-		ClientKid:          "c1",
-		Kid:                "k1",
-		Now:                now,
-		TTL:                1 * time.Minute,
-		JTI:                "j1",
-	})
-	os.WriteFile(grantFile, []byte(grant), 0644)
-
-	// Create source with injectable clock at 'now'.
-	fakeNow := now
-	source, _ := grantauth.NewFileGrantSource(grantFile, func(opts *grantauth.FileGrantSourceOptions) {
-		opts.Now = func() time.Time { return fakeNow }
-	})
-
-	got, err := source.Current()
-	if err != nil {
-		t.Fatalf("Current: %v", err)
-	}
-	if got != grant {
-		t.Errorf("got %q, want %q", got, grant)
-	}
-
-	// Advance fake clock close to expiry and verify the token is still returned.
-	fakeNow = now.Add(55 * time.Second)
-	got, err = source.Current()
-	if err != nil {
-		t.Fatalf("Current near expiry: %v", err)
-	}
-	if got != grant {
-		t.Errorf("got %q, want %q", got, grant)
-	}
-}
-
-func TestFileGrantSource_InjectedPublicKeyForExpiryCheck(t *testing.T) {
-	// If an issuer public key is provided, verify expiry-based reload.
-	tmpdir := t.TempDir()
-	grantFile := filepath.Join(tmpdir, "grant.txt")
-
-	issuer, _ := grantauth.NewKey()
-	client, _ := grantauth.NewKey()
-	clientPEM, _ := client.PublicKeyPEM()
-	now := time.Unix(1782000000, 0).UTC()
-
-	// Mint a grant with short TTL.
-	grant1, _ := issuer.MintGrant(grantauth.GrantParams{
-		Iss:                "mac",
-		Sub:                "agent-host",
-		Aud:                aud,
-		ClientPublicKeyPEM: clientPEM,
-		ClientKid:          "c1",
-		Kid:                "k1",
-		Now:                now,
-		TTL:                1 * time.Minute,
-		JTI:                "j1",
-	})
-	os.WriteFile(grantFile, []byte(grant1), 0644)
-
-	// Create source with injected issuer public key and fake clock.
-	fakeNow := now
-	issuerPubKey := issuer.PublicKey()
-	source, _ := grantauth.NewFileGrantSource(grantFile,
-		func(opts *grantauth.FileGrantSourceOptions) {
-			opts.IssuerPublicKey = &issuerPubKey
-			opts.Now = func() time.Time { return fakeNow }
-		},
-	)
-
-	got, err := source.Current()
-	if err != nil {
-		t.Fatalf("Current: %v", err)
-	}
-	if got != grant1 {
-		t.Errorf("got %q, want %q", got, grant1)
-	}
-
-	// Advance clock past the refresh threshold (90% of TTL = 54 seconds).
-	fakeNow = now.Add(55 * time.Second)
-
-	// Without file change, expiry-aware code may trigger a reload attempt.
-	// Since file hasn't changed, the cache stays valid unless we force a refresh.
-	// For this test, we just verify the call succeeds.
-	got2, err := source.Current()
-	if err != nil {
-		t.Fatalf("Current after clock advance: %v", err)
-	}
-	if got2 != grant1 {
-		t.Errorf("got %q, want %q", got2, grant1)
-	}
-}

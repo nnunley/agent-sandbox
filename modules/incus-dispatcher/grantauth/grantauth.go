@@ -14,6 +14,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -132,67 +133,52 @@ func (k *Key) sign(claims map[string]any, footer map[string]string) (string, err
 }
 
 // GrantSource is the interface for loading the current PASETO grant token.
-// Implementations may cache the token and refresh it on file changes or expiry.
+// Reload is mtime-driven: the issuer's renewal helper rewrites the token file before exp;
+// FileGrantSource re-stats on every Current() call and reloads when the file's mtime changes,
+// so a renewed token is picked up promptly. A static file is never re-fetched.
+// Phase 1 serves a single host-level grant. Phase-2/ITER-0008 per-role grant selection
+// (sub=temporal-writer|daemon-consumer) will be a separate GrantSource implementation.
 type GrantSource interface {
 	// Current returns the current grant token string, or an error if unavailable.
 	Current() (string, error)
 }
 
-// FileGrantSourceOptions configures a FileGrantSource.
-type FileGrantSourceOptions struct {
-	// Now is the clock used for time-based checks; defaults to time.Now.
-	Now func() time.Time
-	// IssuerPublicKey is optional; if provided, enables expiry-aware reload checks.
-	// Store as a *V4AsymmetricPublicKey since the struct is not nilable.
-	IssuerPublicKey *paseto.V4AsymmetricPublicKey
-}
+// FileGrantSourceOptions configures a FileGrantSource (currently unused but kept for future extensibility).
+type FileGrantSourceOptions struct{}
 
 // FileGrantSource loads a PASETO grant from a file, caches it in memory,
-// and reloads when the file's modification time changes or the cached grant
-// approaches expiry.
+// and reloads when the file's modification time changes.
 type FileGrantSource struct {
-	path                string
-	issuerPublicKey     *paseto.V4AsymmetricPublicKey
-	now                 func() time.Time
-	mu                  sync.Mutex
-	cachedToken         string
-	cachedModTime       time.Time
-	cachedExp           int64 // unix seconds; 0 if unknown
-	refreshThresholdSec int64 // reload when remaining TTL <= this many seconds (90% of typical 30min = 1620s)
+	path          string
+	mu            sync.Mutex
+	cachedToken   string
+	cachedModTime time.Time
 }
 
 // NewFileGrantSource creates a FileGrantSource that loads grants from the given path.
-// The source accepts optional configuration via functional options.
-//
-// Example with default (mtime-only reload):
-//
-//	source, err := NewFileGrantSource("/path/to/grant.txt")
-//
-// Example with expiry-aware reload:
-//
-//	source, err := NewFileGrantSource("/path/to/grant.txt", func(opts *FileGrantSourceOptions) {
-//	    opts.IssuerPublicKey = issuerKey.PublicKey()
-//	})
+// Reload is purely mtime-driven: on each Current() call, the file is stat'd;
+// if mtime matches the cached mtime, the cached token is returned; otherwise,
+// the file is read and re-cached with the new mtime.
+// This satisfies AC-2's "reloads on file change" contract: the issuer's renewal
+// helper (launchd/cron) rewrites the token file before expiry, changing mtime,
+// and FileGrantSource promptly picks up the new token.
 func NewFileGrantSource(path string, optFuncs ...func(*FileGrantSourceOptions)) (*FileGrantSource, error) {
-	opts := &FileGrantSourceOptions{
-		Now: time.Now,
-	}
+	opts := &FileGrantSourceOptions{}
 	for _, fn := range optFuncs {
 		fn(opts)
 	}
 
 	return &FileGrantSource{
-		path:                path,
-		issuerPublicKey:     opts.IssuerPublicKey,
-		now:                 opts.Now,
-		refreshThresholdSec: 1620, // ~90% of 30-minute typical TTL
+		path: path,
 	}, nil
 }
 
 // Current returns the current grant token, reading from the file if necessary.
 // It caches by file modification time and reloads if the mtime changes.
-// If an issuer public key was configured, it also checks for upcoming expiry
-// and reloads the file if the cached grant is within the refresh threshold.
+// On each call, the file is stat'd; if mtime matches the cached mtime, the
+// cached token is returned. If mtime differs, the file is re-read, trimmed,
+// and re-cached.
+// Returns an error if the file cannot be read, is empty, or contains only whitespace.
 func (s *FileGrantSource) Current() (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -207,19 +193,7 @@ func (s *FileGrantSource) Current() (string, error) {
 
 	// Check if we have a cached token with matching mtime.
 	if s.cachedToken != "" && modTime == s.cachedModTime {
-		// Mtime matches. Check expiry-based refresh threshold if we have issuer key.
-		if s.issuerPublicKey != nil && s.cachedExp > 0 {
-			now := s.now().Unix()
-			remainingTTL := s.cachedExp - now
-			if remainingTTL > s.refreshThresholdSec {
-				// Token is valid and not yet within refresh threshold.
-				return s.cachedToken, nil
-			}
-			// Within refresh threshold; attempt to reread below.
-		} else {
-			// No expiry check configured; mtime match is sufficient.
-			return s.cachedToken, nil
-		}
+		return s.cachedToken, nil
 	}
 
 	// Read and cache the token.
@@ -229,22 +203,9 @@ func (s *FileGrantSource) Current() (string, error) {
 	}
 
 	token := string(data)
-	if token == "" {
-		return "", fmt.Errorf("grant file is empty")
-	}
-
-	// Attempt to parse expiry if issuer key is available.
-	var exp int64
-	if s.issuerPublicKey != nil {
-		parser := paseto.NewParserWithoutExpiryCheck()
-		tok, err := parser.ParseV4Public(*s.issuerPublicKey, token, nil)
-		if err == nil {
-			// Parsed successfully; extract exp claim.
-			if err := tok.Get("exp", &exp); err == nil {
-				s.cachedExp = exp
-			}
-		}
-		// If parsing fails, we continue with the token anyway (graceful degradation).
+	// Reject empty or whitespace-only files.
+	if strings.TrimSpace(token) == "" {
+		return "", fmt.Errorf("grant file is empty or whitespace-only")
 	}
 
 	s.cachedToken = token
