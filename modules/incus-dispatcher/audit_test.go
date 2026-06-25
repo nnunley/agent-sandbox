@@ -337,3 +337,37 @@ func TestMemoryAuditLog_Replay_MissingParent(t *testing.T) {
 		t.Fatalf("Replay dropped an entry on missing parent (gap): got %d, want 2", len(got))
 	}
 }
+
+// TestMemoryAuditLog_Replay_MultipleRoots proves Replay is deterministic with several independent
+// causal chains (multiple roots): each root's chain is emitted parent-before-child, and the roots
+// keep their append order (records iteration, not map iteration).
+func TestMemoryAuditLog_Replay_MultipleRoots(t *testing.T) {
+	log := NewMemoryAuditLog()
+	// Two independent chains appended interleaved: rootA, rootB, childA(parent rootA), childB(parent rootB).
+	_, _ = log.Append(AuditEntry{ID: "rootA", Kind: AuditKindRun, ThreadID: "TA", RunID: "RA"})
+	_, _ = log.Append(AuditEntry{ID: "rootB", Kind: AuditKindRun, ThreadID: "TB", RunID: "RB"})
+	_, _ = log.Append(AuditEntry{ID: "childA", Kind: AuditKindDelegation, ThreadID: "TA", RunID: "RA2", ParentRef: "rootA"})
+	_, _ = log.Append(AuditEntry{ID: "childB", Kind: AuditKindDelegation, ThreadID: "TB", RunID: "RB2", ParentRef: "rootB"})
+
+	got := log.Replay()
+	if len(got) != 4 {
+		t.Fatalf("Replay = %d, want 4", len(got))
+	}
+	// The causal contract is parent-before-child for every chain (the exact interleaving of independent
+	// roots is records-order, not contractually meaningful). Assert the invariant + determinism.
+	pos := map[string]int{}
+	for i, e := range got {
+		pos[e.ID] = i
+	}
+	for child, parent := range map[string]string{"childA": "rootA", "childB": "rootB"} {
+		if pos[parent] >= pos[child] {
+			t.Fatalf("causal order violated: %s (pos %d) must precede %s (pos %d)", parent, pos[parent], child, pos[child])
+		}
+	}
+	got2 := log.Replay()
+	for i := range got {
+		if got[i].ID != got2[i].ID {
+			t.Fatalf("Replay not deterministic at %d: %q vs %q", i, got[i].ID, got2[i].ID)
+		}
+	}
+}

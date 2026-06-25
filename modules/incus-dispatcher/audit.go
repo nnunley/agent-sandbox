@@ -13,7 +13,7 @@ import (
 type AuditKind string
 
 const (
-	AuditKindRun       AuditKind = "run"
+	AuditKindRun        AuditKind = "run"
 	AuditKindDelegation AuditKind = "delegation"
 	AuditKindTransition AuditKind = "transition"
 	AuditKindToolAction AuditKind = "tool_action"
@@ -163,7 +163,10 @@ func (j *JSONLAuditLog) Replay() []AuditEntry {
 		}
 	}
 
-	// Perform a topological sort: start from roots, follow ParentRef pointers.
+	// Perform a topological sort: start from roots, follow ParentRef pointers. Multiple roots
+	// (independent chains) keep their append order; siblings are deterministic (records iteration,
+	// not map iteration). The recursion follows a delegation chain — fine for the short chains an
+	// audit produces; a pathologically deep (10k+) linear chain would want an iterative sort.
 	// This reconstructs the causal chain deterministically.
 	var ordered []AuditEntry
 	visitedIDs := make(map[string]bool)
@@ -283,7 +286,10 @@ func (m *MemoryAuditLog) Replay() []AuditEntry {
 		}
 	}
 
-	// Perform a topological sort: start from roots, follow ParentRef pointers.
+	// Perform a topological sort: start from roots, follow ParentRef pointers. Multiple roots
+	// (independent chains) keep their append order; siblings are deterministic (records iteration,
+	// not map iteration). The recursion follows a delegation chain — fine for the short chains an
+	// audit produces; a pathologically deep (10k+) linear chain would want an iterative sort.
 	var ordered []AuditEntry
 	visitedIDs := make(map[string]bool)
 
