@@ -13,6 +13,8 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"os"
+	"sync"
 	"time"
 
 	paseto "aidanwoods.dev/go-paseto"
@@ -127,4 +129,126 @@ func (k *Key) sign(claims map[string]any, footer map[string]string) (string, err
 		return "", fmt.Errorf("build token: %w", err)
 	}
 	return tok.V4Sign(k.secret, nil), nil
+}
+
+// GrantSource is the interface for loading the current PASETO grant token.
+// Implementations may cache the token and refresh it on file changes or expiry.
+type GrantSource interface {
+	// Current returns the current grant token string, or an error if unavailable.
+	Current() (string, error)
+}
+
+// FileGrantSourceOptions configures a FileGrantSource.
+type FileGrantSourceOptions struct {
+	// Now is the clock used for time-based checks; defaults to time.Now.
+	Now func() time.Time
+	// IssuerPublicKey is optional; if provided, enables expiry-aware reload checks.
+	// Store as a *V4AsymmetricPublicKey since the struct is not nilable.
+	IssuerPublicKey *paseto.V4AsymmetricPublicKey
+}
+
+// FileGrantSource loads a PASETO grant from a file, caches it in memory,
+// and reloads when the file's modification time changes or the cached grant
+// approaches expiry.
+type FileGrantSource struct {
+	path                string
+	issuerPublicKey     *paseto.V4AsymmetricPublicKey
+	now                 func() time.Time
+	mu                  sync.Mutex
+	cachedToken         string
+	cachedModTime       time.Time
+	cachedExp           int64 // unix seconds; 0 if unknown
+	refreshThresholdSec int64 // reload when remaining TTL <= this many seconds (90% of typical 30min = 1620s)
+}
+
+// NewFileGrantSource creates a FileGrantSource that loads grants from the given path.
+// The source accepts optional configuration via functional options.
+//
+// Example with default (mtime-only reload):
+//
+//	source, err := NewFileGrantSource("/path/to/grant.txt")
+//
+// Example with expiry-aware reload:
+//
+//	source, err := NewFileGrantSource("/path/to/grant.txt", func(opts *FileGrantSourceOptions) {
+//	    opts.IssuerPublicKey = issuerKey.PublicKey()
+//	})
+func NewFileGrantSource(path string, optFuncs ...func(*FileGrantSourceOptions)) (*FileGrantSource, error) {
+	opts := &FileGrantSourceOptions{
+		Now: time.Now,
+	}
+	for _, fn := range optFuncs {
+		fn(opts)
+	}
+
+	return &FileGrantSource{
+		path:                path,
+		issuerPublicKey:     opts.IssuerPublicKey,
+		now:                 opts.Now,
+		refreshThresholdSec: 1620, // ~90% of 30-minute typical TTL
+	}, nil
+}
+
+// Current returns the current grant token, reading from the file if necessary.
+// It caches by file modification time and reloads if the mtime changes.
+// If an issuer public key was configured, it also checks for upcoming expiry
+// and reloads the file if the cached grant is within the refresh threshold.
+func (s *FileGrantSource) Current() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Stat the file to check its modification time.
+	stat, err := os.Stat(s.path)
+	if err != nil {
+		return "", fmt.Errorf("stat grant file: %w", err)
+	}
+
+	modTime := stat.ModTime()
+
+	// Check if we have a cached token with matching mtime.
+	if s.cachedToken != "" && modTime == s.cachedModTime {
+		// Mtime matches. Check expiry-based refresh threshold if we have issuer key.
+		if s.issuerPublicKey != nil && s.cachedExp > 0 {
+			now := s.now().Unix()
+			remainingTTL := s.cachedExp - now
+			if remainingTTL > s.refreshThresholdSec {
+				// Token is valid and not yet within refresh threshold.
+				return s.cachedToken, nil
+			}
+			// Within refresh threshold; attempt to reread below.
+		} else {
+			// No expiry check configured; mtime match is sufficient.
+			return s.cachedToken, nil
+		}
+	}
+
+	// Read and cache the token.
+	data, err := os.ReadFile(s.path)
+	if err != nil {
+		return "", fmt.Errorf("read grant file: %w", err)
+	}
+
+	token := string(data)
+	if token == "" {
+		return "", fmt.Errorf("grant file is empty")
+	}
+
+	// Attempt to parse expiry if issuer key is available.
+	var exp int64
+	if s.issuerPublicKey != nil {
+		parser := paseto.NewParserWithoutExpiryCheck()
+		tok, err := parser.ParseV4Public(*s.issuerPublicKey, token, nil)
+		if err == nil {
+			// Parsed successfully; extract exp claim.
+			if err := tok.Get("exp", &exp); err == nil {
+				s.cachedExp = exp
+			}
+		}
+		// If parsing fails, we continue with the token anyway (graceful degradation).
+	}
+
+	s.cachedToken = token
+	s.cachedModTime = modTime
+
+	return token, nil
 }
