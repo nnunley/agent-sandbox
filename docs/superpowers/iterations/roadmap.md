@@ -902,6 +902,17 @@ the ITER-0007b process-level invariant to authz. The full provider-credential br
 **Sequencing:** runs **before/alongside ITER-0008** — ITER-0008's multi-consumer/recursive delegation
 (non-exclusive leases) benefits from real per-consumer grants, and Phase 2 sole-writer enforcement builds
 directly on the ITER-0007b seam. **Status:** pending (spec approved; requirements extraction next).
+
+**Python/uv toolchain decision (2026-06-24 research):** the laneq side (STORY-0081) is a `uv`-managed
+Python project; the offline fleet worker has no PyPI egress (binary-cache only) and prebuilt manylinux
+wheels won't run on NixOS without nix-ld/FHS. **Two tracks:** *Track 1 (first PR, on the connected Mac)* —
+plain `uv` (no Nix; Nix isn't on the Mac): `uv sync` + `uv run ruff format --check / ruff check / pytest /
+coverage` for exact parity with laneq's 4 CI gates. *Track 2 (fleet-worker offline grading, the dogfood)* —
+**uv2nix** (`pyproject-nix/uv2nix` + `pyproject-build-systems`) so laneq's `uv.lock` closure is realized by
+Nix on `nix-server` and pulled from the shared cache like everything else (no PyPI, no manylinux/FHS
+problem); oracle runs `ruff/pytest/coverage` from the uv2nix venv, NOT `uv run`. Track 1 is first-PR path;
+Track 2 is a worker-image investment (STORY-0075 territory), not first-PR-blocking. uv2nix is stable
+(dropped "experimental" early 2025).
 **Look-ahead check:** spans two repos (agent-sandbox token+client+issuer; nnunley/laneq interceptor);
 rollout is non-breaking (log-only first) so it does not disrupt the live ITER-0007b cluster.
 
