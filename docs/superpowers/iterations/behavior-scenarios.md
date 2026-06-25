@@ -3579,8 +3579,8 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - Run.log_refs points to the run's logs
 - No artifact content is lost between emission and retrieval
 
-**Automation status:** planned (ITER-0008)
-**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0122_RunArtifactCapture`
+**Automation status:** AUTOMATED:ITER-0008
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0122_RunArtifactCapture`
 
 **Sources:**
 - requirements/EPIC-001.md STORY-0015
