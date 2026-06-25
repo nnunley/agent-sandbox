@@ -47,7 +47,7 @@ Status legend: [ ] pending  [~] in progress  [x] done:ITER-0008  (11/13 done)
 - [x] T3c runtime modes SCENARIO-0023 (d85fff6 + artifact-linkage/Valid 2dc65ff/c468780)
 - [x] T3a file-feed steering SCENARIO-0064 (fc9cefc + corrupt-file test d1365bc/2bb4436)
 - [x] T4 child-directive provisioning SCENARIO-0027 (49efacc + end-to-end proofs edbfc69)
-- [~] T5 audit SCENARIO-0125 (in progress)
+- [x] T5 audit SCENARIO-0125 (0ee56ce + wiring/non-tautological-replay fix 2ab35fa; two-stage PAR APPROVED)
 - [ ] T6 close JOURNEY-0002
 
 Process note: implementer subagents may refuse orchestrator-relayed PAR fix requests (their global
