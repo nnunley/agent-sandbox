@@ -54,15 +54,20 @@ var (
 
 	// ErrDepthExceeded is returned when EmitUnderPolicy rejects a message at or beyond max depth.
 	ErrDepthExceeded = errors.New("message: depth limit exceeded")
+
+	// ErrDepthNotMonotonic is returned when a child message's depth does not strictly exceed its
+	// parent's depth. Enforcing this is what actually bounds recursion: without it a caller could
+	// emit an unbounded chain of children all at the same depth and never hit the maxDepth ceiling.
+	ErrDepthNotMonotonic = errors.New("message: child depth must exceed parent depth")
 )
 
 // MessageBus is an in-memory topic-based bus for message emission (STORY-0012 AC-3).
 // It stores messages in topics and maintains a global log for graph reconstruction.
 // This is a minimal seam; durable topics (laneq, NATS, etc.) are Phase-2 residual.
 type MessageBus struct {
-	mu       sync.Mutex
-	topics   map[string][]Message // topics[topicName] = []Message
-	msgLog   []Message              // global message log for reconstruction (STORY-0012 AC-4)
+	mu     sync.Mutex
+	topics map[string][]Message // topics[topicName] = []Message
+	msgLog []Message            // global message log for reconstruction (STORY-0012 AC-4)
 }
 
 // NewMessageBus creates a new empty bus.
@@ -109,9 +114,14 @@ func (b *MessageBus) MessageLog() []Message {
 }
 
 // EmitUnderPolicy enforces policy-gated emission with depth limits (STORY-0014 AC-1, AC-3).
-// It checks that msg.Topic is in policy.DelegationRules and that msg.Depth < maxDepth.
-// If either check fails, it returns ErrTopicNotAllowed or ErrDepthExceeded (without emitting).
-// Otherwise, it emits the message to the bus.
+// Rejections (no emission) and their sentinel errors:
+//   - topic not in policy.DelegationRules → ErrTopicNotAllowed
+//   - child depth does not exceed the observed parent's depth → ErrDepthNotMonotonic
+//   - depth at/beyond the maxDepth ceiling → ErrDepthExceeded
+//
+// Monotonicity + the ceiling together guarantee recursion is BOUNDED: in any real delegation chain
+// each hop's parent is a prior emitter, so depth strictly increases and the chain must terminate
+// within maxDepth hops (STORY-0014 AC-3 "prevents unbounded recursion").
 func EmitUnderPolicy(bus *MessageBus, policy ExecutionPolicy, msg Message, maxDepth int) error {
 	// STORY-0014 AC-1: reject if topic not in DelegationRules
 	topicAllowed := false
@@ -125,7 +135,21 @@ func EmitUnderPolicy(bus *MessageBus, policy ExecutionPolicy, msg Message, maxDe
 		return ErrTopicNotAllowed
 	}
 
-	// STORY-0014 AC-3: reject if depth >= maxDepth (depth is 0-indexed; maxDepth is the limit)
+	// STORY-0014 AC-3 (monotonicity): when the parent run is observable on the bus, the child's depth
+	// MUST strictly exceed it. (A ParentRunID naming a run the bus has not seen is a single message,
+	// not a recursion chain, so it cannot be — and need not be — verified here.)
+	if msg.ParentRunID != "" {
+		for _, m := range bus.MessageLog() {
+			if m.RunID == msg.ParentRunID {
+				if msg.Depth <= m.Depth {
+					return ErrDepthNotMonotonic
+				}
+				break
+			}
+		}
+	}
+
+	// STORY-0014 AC-3 (ceiling): reject if depth >= maxDepth (depth is 0-indexed; maxDepth is the limit)
 	if msg.Depth >= maxDepth {
 		return ErrDepthExceeded
 	}
