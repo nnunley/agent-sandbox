@@ -1,6 +1,14 @@
 # Progress
 
-**Phase:** **ITER-0008 core IMPLEMENTING (subagent-driven TDD, two-stage PAR per task) — 2026-06-25.** Scope review
+**Phase:** **ITER-0008 core COMPLETE (13/13, two-stage PAR per task) — 2026-06-25. NEXT: per-sprint auditing-progress.**
+All 13 TDD tasks delivered + wrapped (stories done:ITER-0008, roadmap done, iteration-log validated, commit 9db07a7).
+Sentinels JOURNEY-0001+0002 green; full -race 514; zero core TODO(ITER-0008). The two-stage adversarial gate caught
++ fixed a real defect on essentially every production task (T1c substrate-tautology, T2a immutability hole, T2b
+constant-RunID, T2c ref-collision, T3b/d toothless depth-limit, T3c artifact-linkage, T4 non-assertion+end-to-end,
+T5 tautological-replay+unwired, T6 unexercised-handoff). NOW: run `auditing-progress` three-tier PAR on the core →
+if clean, ITER-0008b (operator UX/governance + Mac-off capstone, closes JOURNEY-0004..0007).
+
+**ITER-0008 core IMPLEMENTING (subagent-driven TDD, two-stage PAR per task) — 2026-06-25.** Scope review
 APPROVED (5 rounds). **8/13 tasks done:** Task-0 Run-shape lock (be3e6c0/bf1522b); T1a deterministic zero-LLM drain
 SCENARIO-0002 (35dfe91…); T1b static-endpoint injection SCENARIO-0011 (honest cluster-residual dnsmasq); T1c
 Mac-stateless SCENARIO-0124 (rewritten: single shared substrate); T2a versioned ExecutionPolicy SCENARIO-0123
