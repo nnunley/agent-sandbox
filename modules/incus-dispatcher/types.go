@@ -102,6 +102,22 @@ type Result struct {
 	// ExternalGradingResult contains the results of external grading (if enabled).
 	// Nil if external grading was not run.
 	ExternalGradingResult *GradingResult
+
+	// TokensIn is the number of input tokens consumed by the LLM (STORY-0035 AC-4).
+	// Omitted if not captured by the runner.
+	TokensIn int64 `json:"tokens_in,omitempty"`
+
+	// TokensOut is the number of output tokens produced by the LLM (STORY-0035 AC-4).
+	// Omitted if not captured by the runner.
+	TokensOut int64 `json:"tokens_out,omitempty"`
+
+	// LatencyMs is the round-trip latency in milliseconds to the LLM provider (STORY-0035 AC-4).
+	// Omitted if not measured.
+	LatencyMs int64 `json:"latency_ms,omitempty"`
+
+	// SpendUSD is the estimated cost in USD for this run (STORY-0035 AC-4).
+	// Omitted if not calculated.
+	SpendUSD float64 `json:"spend_usd,omitempty"`
 }
 
 // GradingResult captures the output of running the oracle on a clean checkout.

@@ -39,14 +39,19 @@ func NewDispatcher(workers []Worker) *Dispatcher {
 // Parameters:
 //   - requiredCapability: the capability the directive requires (e.g., "code-review")
 //   - policyID: the versioned policy ID (e.g., "policy-1@v1")
-//   - provider: the LLM provider (e.g., "anthropic")
-//   - model: the model ID (e.g., "claude-3-5-haiku")
+//   - providerInstance: the provider instance name (e.g., "claude-code-main", "ollama-local")
+//     or legacy provider string (e.g., "anthropic"). Will be resolved to an explicit instance
+//     via ResolveModel (STORY-0035 AC-3). Unknown instances return an error (no guessing).
+//   - model: the model ID within the provider (e.g., "claude-3-5-haiku"). Deprecated: for
+//     backwards compatibility, if providerInstance is not a known instance name, provider and
+//     model are used as-is (legacy path). New code should use instance names.
 //   - budget: a snapshot of the token budget at dispatch time
 //
 // Returns a Run with:
 //   - WorkerID, WorkerKind: the selected worker's identity
 //   - PolicyID: the dispatching policy (as given)
-//   - ProviderInstance, ModelID: the provider/model (as given, not resolved; see ITER-0008b STORY-0035 AC-3)
+//   - ProviderInstance: the resolved or explicit provider instance name
+//   - ModelID: the resolved model ID
 //   - BudgetSnapshot: a copy of the budget snapshot
 //
 // Selection criteria:
@@ -54,9 +59,14 @@ func NewDispatcher(workers []Worker) *Dispatcher {
 // 2. Worker MUST list policyID in AllowedPolicies (STORY-0011 AC-3 enforcement).
 // 3. If multiple workers are eligible, the first in registry order is selected (deterministic).
 //
+// Model resolution (STORY-0035 AC-3):
+// - If providerInstance is a known instance name, use it directly.
+// - If providerInstance is unknown and model is set, fall back to legacy (provider, model) path.
+// - If both are unknown, return an error (never silent default).
+//
 // If no worker satisfies both criteria, returns (nil, ErrNoEligibleWorker) and creates NO Run.
 func (d *Dispatcher) Dispatch(
-	requiredCapability, policyID, provider, model string,
+	requiredCapability, policyID, providerInstance, model string,
 	budget *BudgetSnapshot,
 ) (*Run, error) {
 	// Scan the registry in order, select the first eligible worker.
@@ -74,14 +84,35 @@ func (d *Dispatcher) Dispatch(
 		return nil, fmt.Errorf("%w: required_capability=%q, policy_id=%q", ErrNoEligibleWorker, requiredCapability, policyID)
 	}
 
-	// Create a Run stamped with the dispatch decision (STORY-0011 AC-4, STORY-0035 AC-1/2).
+	// Resolve the provider instance (STORY-0035 AC-3).
+	// Try to resolve providerInstance as an explicit instance name.
+	var resolvedProvider string
+	var resolvedModel string
+
+	if inst := GetProviderInstance(providerInstance); inst != nil {
+		// Known instance name: use it directly.
+		resolvedProvider = providerInstance
+		resolvedModel = inst.Model
+	} else {
+		// Unknown instance name: fall back to legacy (provider, model) path if model is set.
+		// This maintains backwards compatibility with existing callers.
+		if model != "" {
+			resolvedProvider = providerInstance
+			resolvedModel = model
+		} else {
+			// Neither a known instance nor a legacy provider+model: error.
+			return nil, fmt.Errorf("dispatch: unknown provider instance or model: provider_instance=%q, model=%q", providerInstance, model)
+		}
+	}
+
+	// Create a Run stamped with the dispatch decision (STORY-0011 AC-4, STORY-0035 AC-1/2/3).
 	run := &Run{
 		RunID:            generateRunID(), // Helper to create a unique run ID
 		WorkerID:         selectedWorker.WorkerID,
 		WorkerKind:       string(selectedWorker.WorkerKind),
 		PolicyID:         policyID,
-		ProviderInstance: provider,
-		ModelID:          model,
+		ProviderInstance: resolvedProvider,
+		ModelID:          resolvedModel,
 		BudgetSnapshot:   copyBudgetSnapshot(budget),
 	}
 

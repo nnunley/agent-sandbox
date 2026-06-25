@@ -882,8 +882,8 @@ WorkspaceRegistry + ReconstructResumeAudit + ContinueRun)
 - Provider escalation is audited in message history
 - Both runs contribute to accounting and success metrics
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (ITER-0008b TG2)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0016`
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:358-416, 433-445`

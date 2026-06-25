@@ -12,7 +12,7 @@ const (
 	ArtifactBenchmark          ArtifactKind = "benchmark"
 	ArtifactVerificationReport ArtifactKind = "verification_report"
 	ArtifactDesignDoc          ArtifactKind = "design_doc"
-	ArtifactMutationProposal    ArtifactKind = "mutation_proposal"
+	ArtifactMutationProposal   ArtifactKind = "mutation_proposal"
 )
 
 // ArtifactRef is a typed reference to an artifact (STORY-0015 AC-1b).
@@ -57,8 +57,8 @@ type StumbleSignal struct {
 // Run is one execution attempt within a Thread. ITER-0004 carries only continuity/learning
 // fields; ITER-0008 (STORY-0011/0015/0035) ADDS worker_id/worker_kind/policy_id (STORY-0011),
 // artifact_refs/log_refs (STORY-0015), and provider_instance/model_id/budget_snapshot (STORY-0035 AC-1/2).
-// All new fields are omitempty for back-compat. Reserved for ITER-0008b (STORY-0035 AC-3/4):
-// tokens, latency, spend (enforcement metrics).
+// ITER-0008b (STORY-0035 AC-3/4) ADDS tokens_in/tokens_out/latency_ms/spend_usd (cost capture from Result).
+// All new fields are omitempty for back-compat.
 type Run struct {
 	RunID            string          `json:"run_id"`
 	ThreadID         string          `json:"thread_id"`
@@ -71,6 +71,10 @@ type Run struct {
 	ProviderInstance string          `json:"provider_instance,omitempty"` // STORY-0035 AC-1: LLM provider instance
 	ModelID          string          `json:"model_id,omitempty"`          // STORY-0035 AC-1: model id
 	BudgetSnapshot   *BudgetSnapshot `json:"budget_snapshot,omitempty"`   // STORY-0035 AC-2: budget at dispatch
+	TokensIn         int64           `json:"tokens_in,omitempty"`         // STORY-0035 AC-4: input tokens from Result
+	TokensOut        int64           `json:"tokens_out,omitempty"`        // STORY-0035 AC-4: output tokens from Result
+	LatencyMs        int64           `json:"latency_ms,omitempty"`        // STORY-0035 AC-4: provider latency from Result
+	SpendUSD         float64         `json:"spend_usd,omitempty"`         // STORY-0035 AC-4: cost from Result
 	StumbleSignals   []StumbleSignal `json:"stumble_signals,omitempty"`
 }
 
@@ -79,4 +83,25 @@ type Run struct {
 func (r *Run) AddStumble(s StumbleSignal) {
 	s.RunID = r.RunID
 	r.StumbleSignals = append(r.StumbleSignals, s)
+}
+
+// CostFromResult copies usage metrics from a Result payload onto the Run (STORY-0035 AC-4).
+// This captures tokens, latency, and spend for provider/model accounting without a live provider API.
+// Only non-zero values are copied; the Run fields remain omitted in JSON if zero.
+func (r *Run) CostFromResult(res *Result) {
+	if res == nil {
+		return
+	}
+	if res.TokensIn > 0 {
+		r.TokensIn = res.TokensIn
+	}
+	if res.TokensOut > 0 {
+		r.TokensOut = res.TokensOut
+	}
+	if res.LatencyMs > 0 {
+		r.LatencyMs = res.LatencyMs
+	}
+	if res.SpendUSD > 0 {
+		r.SpendUSD = res.SpendUSD
+	}
 }
