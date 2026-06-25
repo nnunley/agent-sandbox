@@ -5,9 +5,11 @@ baseline clean → citation OK → PAR scope review (REVISE→APPROVE) → T1 Gr
 (`3eee665`/`4a664d8`) → T3 cross-language real-wire e2e (`0d01230`/`cd9c61e`) → T4 issuer CLI (`e1cc5b5`/`6e14400`)
 → T5 corpus → wrap. Every code task through two-stage PAR. Post-iteration sentinel green (full module `-race` +
 JOURNEY-0001); zero `TODO(ITER-0007c)`. STORY-0079/0080/0081 done; STORY-0082 AC-1a done.
-**NEXT (orchestrator):** per-sprint `auditing-progress` on ITER-0007c (+ the still-owed ITER-0007b three-tier audit).
-**Gated handoff (NOT autonomous):** STORY-0082 AC-1b — external `nnunley/laneq` PR (with laneq-side PAR review) +
-live cluster `log-only→enforce` rollout — awaiting operator authorization.
+**AC-1b DONE (operator-authorized 2026-06-25):** external PR `selamy-labs/laneq#20` opened; auth-laneq deployed LIVE on
+`agent-host` and rolled **`log-only` → `enforce`** with the Temporal worker grant-wired; live cluster verified
+(authenticated worker ALLOWED, unauth `UNAUTHENTICATED`, Temporal undisturbed). Only a Mac-side grant-renewal helper
+remains (720h grant). **NEXT (orchestrator):** per-sprint `auditing-progress` on ITER-0007c (+ the still-owed
+ITER-0007b three-tier audit); then ITER-0008 capstone.
 **⚠ Incident (2026-06-25, resolved):** during the iteration RESUME, my own mishandling of the working directory /
 tree state wiped UNCOMMITTED work (NO other agents were involved) — my scope edits (re-applied + committed) and a
 pre-existing edit to `specs/2026-06-24-laneq-grant-paseto-design.md`. The spec edit was RECOVERED verbatim from

@@ -904,9 +904,11 @@ the ITER-0007b process-level invariant to authz. The full provider-credential br
 directly on the ITER-0007b seam. **Status:** **DONE:2026-06-25 (Phase 1, local — full two-stage PAR loop).**
 Delivered Go side: `grantauth` signing core + `GrantSource`/`FileGrantSource` (T1) + gRPC client interceptor + `serve_cmd`
 wiring (T2) + cross-language real-wire e2e (T3 — enforce accept/reject incl. wrong-aud/replayed-nonce/wrong-method +
-log-only) + `laneq-grant` issuer CLI (T4, atomic never-clobber key) + corpus (T5). laneq side done on `nnunley/laneq:paseto-auth`
-(PAR/code-review still owed before the external PR). **STORY-0082 AC-1b (live-cluster log-only→enforce rollout +
-external laneq PR) is the one carve-out — DEFERRED, operator-gated.** Sentinel green (full module `-race` + JOURNEY-0001);
+log-only) + `laneq-grant` issuer CLI (T4, atomic never-clobber key) + corpus (T5). laneq side done on `nnunley/laneq:paseto-auth`.
+**STORY-0082 AC-1b DONE (operator-authorized 2026-06-25):** external PR `selamy-labs/laneq#20` opened (4 CI gates green
+locally); auth-laneq deployed LIVE on `agent-host` (packaged `pyseto` via uv-build) and rolled **`log-only` → `enforce`**
+with the Temporal worker grant-wired — live cluster verified (authenticated worker ALLOWED, unauth `UNAUTHENTICATED`),
+Temporal undisturbed; only a Mac-side grant-renewal helper remains. Sentinel green (full module `-race` + JOURNEY-0001);
 no `TODO(ITER-0007c)` markers. **Scope revised by PAR scope review 2026-06-25:**
 STORY-0082 AC-1 split into **AC-1a (local e2e log-only→enforce via `run-laneq-wire.sh`, in-scope)** and
 **AC-1b (live-cluster rollout + external laneq PR — DEFERRED, gated on operator authorization, outward-facing)**;
