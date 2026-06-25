@@ -100,9 +100,9 @@
 
 **Kind:** journey
 **Proof seam:** e2e
-**Owning stories:** STORY-0073 (orchestrator file-feed steering source), STORY-0012 (delegation/claim path), STORY-0057 (daemon fast-start skeleton)
+**Owning stories:** STORY-0073 (orchestrator file-feed steering source), STORY-0012 (delegation/claim path)
+**Foundational precondition (not an owner):** STORY-0057 (daemon fast-start skeleton, done:ITER-0000)
 **Closing journey for:** ITER-0008 core
-**Planned execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0002_LiveSteering`
 
 **Preconditions:**
 - A directive is currently being processed by a worker
@@ -126,8 +126,8 @@
 - Prior context from earlier attempts is preserved in handoff
 - Lower-priority directives remain queued
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** planned (ITER-0008 closing journey)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0002_LiveSteering`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:327-328`
@@ -3521,3 +3521,151 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 
 **Sources:**
 - `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:24-46`
+
+## SCENARIO-0121 — Policy-driven dispatch produces a Run with worker_kind/policy_id
+
+**Kind:** scenario
+**Proof seam:** integration
+**Owning stories:** STORY-0011 (worker_kind + capabilities + allowed_policies + AC-4 dispatch decision), STORY-0035 (Run.provider_instance/model_id/budget_snapshot fields, AC-1/2)
+
+**Preconditions:**
+- ≥2 worker kinds registered with distinct `capabilities`
+- A versioned `Policy` (STORY-0016) with `allowed_policies` constraining worker selection
+- The unified `Run` struct (Task-0) is locked
+
+**Steps:**
+1. A directive requiring a specific capability is dispatched
+   → The coordinator selects a worker whose `worker_kind`/`capabilities` satisfy the directive and the policy `allowed_policies`
+2. A `Run` is created for the dispatch
+   → `Run.worker_id`, `Run.worker_kind`, `Run.policy_id` are populated from the dispatch decision
+   → `Run.provider_instance`, `Run.model_id`, `Run.budget_snapshot` (STORY-0035 AC-1/2 fields) are populated
+3. A directive whose required capability no worker satisfies is dispatched
+   → Dispatch is rejected (no eligible worker), no Run created
+
+**Final observables:**
+- The created Run records the chosen worker_id, worker_kind, policy_id
+- Worker selection respects capabilities + policy allowed_policies
+- An unsatisfiable capability request does not silently pick a wrong worker
+
+**Automation status:** planned (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0121_PolicyDrivenDispatch`
+
+**Sources:**
+- requirements/EPIC-001.md STORY-0011, STORY-0016; requirements/EPIC-005.md STORY-0035 AC-1/2
+
+## SCENARIO-0122 — Run captures artifact_refs and log_refs across artifact types
+
+**Kind:** scenario
+**Proof seam:** integration
+**Owning stories:** STORY-0015 (Run object: run_id/artifact_refs/log_refs)
+
+**Preconditions:**
+- The unified `Run` struct (Task-0) is locked
+- A worker run produces ≥2 artifact types (e.g. diff + note/synthesis)
+
+**Steps:**
+1. A worker run completes and emits artifacts
+   → Each artifact is recorded as an entry in `Run.artifact_refs` (typed reference, not inline blob)
+   → Run logs are recorded in `Run.log_refs`
+2. The Run is retrieved by `run_id`
+   → All artifact_refs and log_refs are resolvable back to their stored artifacts
+
+**Final observables:**
+- Run.run_id uniquely identifies the run
+- Run.artifact_refs enumerates every emitted artifact type
+- Run.log_refs points to the run's logs
+- No artifact content is lost between emission and retrieval
+
+**Automation status:** planned (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0122_RunArtifactCapture`
+
+**Sources:**
+- requirements/EPIC-001.md STORY-0015
+
+## SCENARIO-0123 — Versioned policy: dispatch v1 → revise → dispatch v2, version recorded
+
+**Kind:** scenario
+**Proof seam:** integration
+**Owning stories:** STORY-0016 (versioned execution policies)
+
+**Preconditions:**
+- A `Policy` object exists at version v1
+- The unified `Run` struct (Task-0) records `policy_id` (incl. version)
+
+**Steps:**
+1. A directive is dispatched under policy v1
+   → The created Run records the policy id at version v1
+2. The policy is revised to v2 (constraints/delegation_rules/mutation_allowed change)
+   → A new immutable version v2 is created; v1 is retained
+3. A directive is dispatched under policy v2
+   → The created Run records the policy id at version v2
+   → The v1 Run still references v1 (history preserved)
+
+**Final observables:**
+- Policy versions are immutable and monotonic (v1 retained after v2 created)
+- Each Run records the exact policy version it ran under
+- A revision does not retroactively mutate prior Runs' recorded version
+
+**Automation status:** planned (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0123_VersionedPolicy`
+
+**Sources:**
+- requirements/EPIC-001.md STORY-0016
+
+## SCENARIO-0124 — Mac stateless client: author → disconnect → reconnect → review without replay
+
+**Kind:** scenario
+**Proof seam:** e2e
+**Owning stories:** STORY-0006 (Mac stateless client — holds no fleet state)
+
+**Preconditions:**
+- The fleet (queue + workers) runs independent of the Mac
+- The Mac holds no durable fleet state (all state is in the cluster substrate)
+
+**Steps:**
+1. The Mac authors and pushes a directive, then disconnects
+   → Work proceeds on the cluster while the Mac is offline
+2. The Mac reconnects later
+   → It reads current directive/run state from the cluster substrate (laneq/Temporal/audit), not from local cache
+3. The Mac reviews results
+   → No work is replayed or recomputed on reconnect; the Mac is a thin viewer/author
+
+**Final observables:**
+- Fleet progress during Mac-offline is preserved and visible on reconnect
+- The Mac recomputes/replays nothing on reconnect
+- No fleet state is required to live on the Mac for correctness
+
+**Automation status:** planned (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0124_MacStatelessClient`
+
+**Sources:**
+- requirements/EPIC-001.md STORY-0006
+
+## SCENARIO-0125 — Audit log records every run/delegation/mutation and is replayable
+
+**Kind:** scenario
+**Proof seam:** integration
+**Owning stories:** STORY-0054 (audit all runs/delegations/mutations + replayability)
+
+**Preconditions:**
+- The audit data layer is wired into the dispatch/delegation path
+- A sequence of actions occurs: a run, a recursive delegation (child directive), and a (simulated) mutation event
+
+**Steps:**
+1. A run is dispatched, a child directive is delegated, and a mutation event is recorded
+   → Each is appended to the durable audit log with a stable id, timestamp, actor, and causal parent ref
+2. The audit log is queried by thread/run
+   → Every action is retrievable in causal order
+3. The recorded sequence is replayed
+   → The replay reconstructs the same run/delegation/mutation chain (no gaps, no reordering)
+
+**Final observables:**
+- Every run, delegation, and mutation produces an audit entry
+- Entries carry causal parent refs enabling ordered reconstruction
+- Replaying the log reproduces the action chain deterministically
+
+**Automation status:** planned (ITER-0008)
+**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0125_AuditReplay`
+
+**Sources:**
+- requirements/EPIC-007.md STORY-0054
