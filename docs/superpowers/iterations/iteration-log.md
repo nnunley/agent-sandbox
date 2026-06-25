@@ -843,3 +843,15 @@ flow + operator approval queue + escalation operator-handoff + laneq Stats/Len o
 (operator UX/governance + Mac-off capstone, closes JOURNEY-0004..0007).
 
 **Summary:** Built the autonomous-fleet core of the capstone — the Tier-2 coordinator (file-feed steering + recursive delegation) on a locked Run/dispatch/policy/audit foundation, closing JOURNEY-0002 (live-steering preemption). 13 TDD tasks, all through two-stage adversarial PAR; the gate caught and fixed a real correctness defect on essentially every production task. 514 -race tests green, zero core TODOs. Operator UX/governance + Mac-off capstone (JOURNEY-0004..0007) split to ITER-0008b.
+
+### AUDIT — ITER-0008 core three-tier (2026-06-25)
+**Method:** PAR (two parallel adversarial auditors, identical full-scope inputs). **Result: CLEAN** — both auditors
+zero findings (Critical/Serious/Minor), high confidence (agreement). Tier 1: all 12 stories + JOURNEY-0002 PASS at
+declared seam; every per-task defect-fix re-verified GENUINE (T5 audit replay reorders by audit-ID ParentRef +
+daemon-wired run audit; T3b/d depth-monotonicity bounds recursion; T2a ExecutionPolicy deep-copy immutability; T2c
+collision-free artifact refs + defensive copies; T6 JOURNEY-0002 exercises handoff via non-empty HandoffIn + spy).
+Tier 2: JOURNEY-0001 + existing daemon/queue/policy tests PASS, no regression. Tier 3: JOURNEY-0001+0002 green, full
+`go test -race ./...` = 514 (467→514, +47). Deferred items honestly marked (dnsmasq cluster-residual; STORY-0035
+AC-3/4, genome mutation, live-cluster steering, durable artifact backing → ITER-0008b). Citations OK (82). Zero
+`TODO(ITER-0008)` in the core. **Disposition: ITER-0008 core CONFIRMED done. No gap stories. NEXT: ITER-0008b
+(operator UX/governance + Mac-off capstone, closes JOURNEY-0004..0007) — the final iteration.**
