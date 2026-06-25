@@ -2364,8 +2364,15 @@ Passed=false because RunGrade computes the verdict solely from its own gate runs
 - steer message is acknowledged in events.jsonl within one phase boundary
 - worker corrects course based on orchestrator feedback
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** AUTOMATED:ITER-0008
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0064_FileFeedSteer`
+
+**Evidence:**
+- Automated harness: `modules/incus-dispatcher/scenario0064_test.go` — `TestScenario0064_FileFeedSteer`
+  drives the file-based steering mechanism (SteerChannel + EventLog) over a temp directory and asserts
+  the core observables: (1) worker polls steer file at phase boundaries; (2) orchestrator writes steer
+  message; (3) worker acks within ONE phase boundary via events.jsonl (timestamp-pinned); (4) consume-once
+  semantics (second poll finds nothing, ack count = 1); (5) worker continues without restart (same steer loop).
 
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:114-124`

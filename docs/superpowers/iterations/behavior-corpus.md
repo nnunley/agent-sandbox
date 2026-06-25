@@ -74,7 +74,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0061 | lean-ctx bridge daemon enables shell-hook compression | integration | iteration | `bash fleet-worker/spikes/leanctx-runner-smoke.sh` (cluster smoke; needs ~/.fleet-token) | STORY-0069 |
 | SCENARIO-0062 | Heartbeat projects ctx_shell as the active command, not Bash | app-level | iteration | `cd modules/incus-dispatcher && go test -run 'WorkingState|RenderHeartbeat' .` | STORY-0071 |
 | SCENARIO-0063 | Worker truncation is handled by fallback result and external grader | process-level | iteration | `cd modules/incus-dispatcher && go test -run 'Grader|RunGrade' .` | STORY-0072 |
-| SCENARIO-0064 | Orchestrator steers worker mid-run via file-feed | process-level | iteration | TBD | STORY-0073 |
+| SCENARIO-0064 | Orchestrator steers worker mid-run via file-feed | process-level | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0064_FileFeedSteer` | STORY-0073 |
 | SCENARIO-0065 | NixOS golden is built once and reused for all tasks | integration | iteration | `bash fleet-worker/cluster-tests/run.sh golden-full` (PASS 2026-06-22; STORY-0075 AC-1) | STORY-0075 |
 | SCENARIO-0066 | NixOS golden maintains clean-room integrity (byte-identical regen) | e2e | iteration | `bash fleet-worker/cluster-tests/run.sh cleanroom` (CARRIED 2026-06-22: upstream let-go lowering emits non-compiling test pkg; see results/cleanroom-2026-06-22.log) | STORY-0075 |
 | SCENARIO-0067 | Provider routing allows cheap implementers with deterministic grading | integration | iteration | `bash fleet-worker/cluster-tests/run.sh provider-routing` + `cd modules/incus-dispatcher && go test -run TestScenario0067 .` (PASS 2026-06-22) | STORY-0076 |
