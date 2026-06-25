@@ -63,7 +63,7 @@ STORY-0017 AC-3/4, STORY-0020 AC-2) proven by the ITER-0005b substrate harness �
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:45-50`
 
-**Status:** pending
+**Status:** done:ITER-0008 (T1a — deterministic zero-LLM coordination drain; SCENARIO-0002)
 
 ## STORY-0004
 
@@ -126,7 +126,7 @@ clean-room regen) is STORY-0075 / ITER-0005c.
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:60-61`
 
-**Status:** pending
+**Status:** done:ITER-0008 (T1c — Mac stateless client, no replay on reconnect; SCENARIO-0124)
 
 ## STORY-0007
 
@@ -195,7 +195,7 @@ p99 in-guest unit spin-up (SCENARIO-0004 durable-vm). Evidence: cluster harness 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:354-363`
 
-**Status:** pending
+**Status:** done:ITER-0008 (T1b — static endpoint injection, no dynamic discovery; SCENARIO-0011; AC-2 dnsmasq cluster-residual via host/networking.nix)
 
 ## STORY-0010
 
@@ -247,9 +247,7 @@ PARTIAL after ITER-0006; closes in ITER-0006b.
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:73-80, 186-201, 202-223`
 
-**Status:** pending — **deferred from ITER-0002 → ITER-0008 (PAR scope review):** Worker-object +
-dispatch routing is greenfield with no owning scenarios; worker_kind "microvm" needs ITER-0005,
-and dispatch decisions are made by the Tier-2 coordinator (ITER-0008).
+**Status:** done:ITER-0008 (T2b — Worker registry + capability/allowed-policies dispatch -> Run; SCENARIO-0121)
 
 ## STORY-0012
 
@@ -269,7 +267,7 @@ and dispatch decisions are made by the Tier-2 coordinator (ITER-0008).
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:699-730`
 
-**Status:** pending
+**Status:** done:ITER-0008 (T3b/d — durable message-queue recursive delegation; SCENARIO-0019)
 
 ## STORY-0013
 
@@ -289,7 +287,7 @@ and dispatch decisions are made by the Tier-2 coordinator (ITER-0008).
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:767-820`
 
-**Status:** pending
+**Status:** done:ITER-0008 (T3c — one-shot vs long-running runtime modes; SCENARIO-0023)
 
 ## STORY-0014
 
@@ -309,7 +307,7 @@ and dispatch decisions are made by the Tier-2 coordinator (ITER-0008).
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:821-839`
 
-**Status:** pending
+**Status:** done:ITER-0008 (T3b/d — cheap delegation via depth-bounded message emission; SCENARIO-0019)
 
 ## STORY-0015
 
@@ -328,10 +326,7 @@ and dispatch decisions are made by the Tier-2 coordinator (ITER-0008).
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:348-351, 160, 182, 225-237`
 
-**Status:** pending — **deferred from ITER-0003 → ITER-0008 (PAR scope review 2026-06-20):** the
-Run object (run_id/artifact_refs/log_refs) is not in the productization spec and its shape collides
-with STORY-0011's Run (worker_id/worker_kind/policy_id); build them together in ITER-0008. ITER-0003
-keeps artifact capture via the existing `Result.Artifacts`.
+**Status:** done:ITER-0008 (T2c — typed artifact capture into Run.ArtifactRefs/LogRefs; SCENARIO-0122)
 
 ## STORY-0016
 
@@ -351,9 +346,7 @@ keeps artifact capture via the existing `Result.Artifacts`.
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:282-286, 202-223`
 
-**Status:** pending — **deferred from ITER-0002 → ITER-0008 (PAR scope review):** greenfield
-versioned-policy object with no owning scenarios; delegation_rules/mutation_allowed gain meaning
-only with recursive delegation (ITER-0008). Avoids premature abstraction.
+**Status:** done:ITER-0008 (T2a — versioned immutable ExecutionPolicy store; SCENARIO-0123)
 
 ## STORY-0017
 

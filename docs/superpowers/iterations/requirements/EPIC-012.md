@@ -151,7 +151,7 @@ reads the worker self-report (CI-locked).
 **Sources:**
 - `docs/plans/2026-06-17-dispatcher-productization.md:114-124`
 
-**Status:** pending
+**Status:** done:ITER-0008 (T3a file-feed steering SCENARIO-0064 + T6 closing JOURNEY-0002 live-steering preempt)
 
 ## STORY-0074
 

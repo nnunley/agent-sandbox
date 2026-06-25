@@ -789,3 +789,57 @@ repos (agent-sandbox Go: grantauth/cmd/laneq-grant/temporal/queue; laneq Python:
 
 **Disposition:** ITER-0007c and ITER-0007b confirmed DONE. No gap stories appended; roadmap unchanged. ITER-0008
 GATE remains MET. Orchestrator: last_audit_clean -> proceed to ITER-0008 (capstone, only remaining pending iteration).
+
+---
+
+## ITER-0008 (core) — Tier-2 coordinator, recursive delegation & Run/dispatch/policy/audit foundation (done:2026-06-25)
+
+**Completed:** 2026-06-25
+
+**Tasks executed:** Task-0 (Run-shape lock) → T1a deterministic loop / T1b static endpoint injection / T1c Mac-stateless → T2a versioned ExecutionPolicy / T2b policy-driven dispatch / T2c artifact capture → T3b/d recursive delegation / T3c runtime modes / T3a file-feed steering → T4 child-directive inheritance → T5 audit log → T6 close JOURNEY-0002. Each task: implementer → spec-compliance PAR (2) → code-quality PAR (2), with fix loops; commits per task.
+
+**Method:** subagent-driven `implementing-tasks` — 13 TDD tasks, each: implementer → PAR spec-compliance (2 reviewers)
+→ fix loop → PAR code-quality (2 reviewers) → fix loop. Scope review converged in 5 PAR rounds (split the 22-story
+capstone into this core + ITER-0008b).
+
+**Stories delivered:** STORY-0003 (deterministic zero-LLM loop), STORY-0006 (Mac stateless client),
+STORY-0009 (service discovery v1 / static endpoints; AC-2 dnsmasq cluster-residual), STORY-0011 (worker registry +
+policy-driven dispatch), STORY-0012 (durable message-queue recursive delegation), STORY-0013 (one-shot/long-running
+modes), STORY-0014 (cheap depth-bounded delegation), STORY-0015 (typed artifact capture), STORY-0016 (versioned
+ExecutionPolicy), STORY-0035 AC-1/2 (Run provider/model/budget fields; AC-3/4→0008b), STORY-0049 AC-4 (worker
+child-directive non-privileged inheritance — closes STORY-0049), STORY-0054 (audit all runs/delegations/mutations +
+replay), STORY-0073 (Tier-2 file-feed steering + JOURNEY-0002 closer).
+
+**Scenarios:** SCENARIO-0002, 0011, 0019, 0023, 0027, 0064, 0121, 0122, 0123, 0124, 0125 +
+**JOURNEY-0002** (closing). New cards authored: SCENARIO-0121/0122/0123/0124/0125. All AUTOMATED:ITER-0008 with
+root-package `go test .` commands.
+
+**Production code added (greenfield):** unified `Run` shape extension; `ExecutionPolicy`/`ExecutionPolicyStore`
+(deep-copy immutable, versioned); `Worker`/`Dispatcher` (capability + allowed-policies dispatch, atomic RunID);
+`ArtifactStore` (collision-free opaque refs, defensive copies); `Message`/`MessageBus`/`EmitUnderPolicy`
+(depth-monotonicity-bounded recursion)/`ReconstructDelegationGraph`; `RuntimeMode` + behavior mapping;
+`SteerChannel`/`EventLog` (file-feed steering); `NewChildDirective` (inheritance); `AuditLog` (JSONL+Memory,
+replay) + daemon `Audit` wiring.
+
+**Adversarial gate value — a real defect caught + fixed on essentially every production task:** T1c Mac-stateless
+rewritten (separate-substrate tautology → single shared substrate, hard assertions); T2a `ExecutionPolicy`
+reference-field immutability hole (deep-copy fix); T2b `generateRunID` returned a constant `run-4` (atomic counter
+fix) + AC-3 only proven by rejection (added selection-isolation); T2c artifact ref delimiter-collision (→ flat
+opaque keys) + missing mutation-resistance test; T3b/d depth limit was toothless without monotonicity enforcement
+(parent-depth check + out-of-order proof); T3c artifact-linkage observable unmet (link via run_id) + RuntimeMode.Valid;
+T4 task-only non-assertion + missing end-to-end non-privileged resolution; T5 tautological replay (ParentRef used
+RunIDs not audit IDs) + AC-1 not wired (daemon run-audit) + untested kinds; T6 handoff observable unexercised
+(handoffSpy + non-empty HandoffIn).
+
+**Sentinel corpus:** JOURNEY-0001 (3 tests) + JOURNEY-0002 green; full `go test -race ./...` = **514 passing, 6
+packages, 0 fail**. `go vet` clean. Zero `TODO(ITER-0008)` markers in the core (operator/governance TODOs in
+temporal/ + queue/ re-tagged `TODO(ITER-0008b)`).
+
+**Honest seams / residuals (ITER-0008b):** STORY-0035 AC-3/4 (model resolution + cost capture); genome mutation
+flow + operator approval queue + escalation operator-handoff + laneq Stats/Len observability; live-cluster steering
+(this is the in-process journey). dnsmasq network observables are cluster-residual (config-verified).
+
+**NEXT (orchestrator):** per-sprint `auditing-progress` three-tier PAR on ITER-0008 core; then ITER-0008b
+(operator UX/governance + Mac-off capstone, closes JOURNEY-0004..0007).
+
+**Summary:** Built the autonomous-fleet core of the capstone — the Tier-2 coordinator (file-feed steering + recursive delegation) on a locked Run/dispatch/policy/audit foundation, closing JOURNEY-0002 (live-steering preemption). 13 TDD tasks, all through two-stage adversarial PAR; the gate caught and fixed a real correctness defect on essentially every production task. 514 -race tests green, zero core TODOs. Operator UX/governance + Mac-off capstone (JOURNEY-0004..0007) split to ITER-0008b.

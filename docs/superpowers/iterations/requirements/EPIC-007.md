@@ -22,4 +22,4 @@
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:132, 315-317`
 
-**Status:** pending
+**Status:** done:ITER-0008 (T5 — durable immutable replayable audit log, daemon-wired run audit; SCENARIO-0125)

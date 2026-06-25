@@ -22,7 +22,7 @@
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:164-176, 309-314, 358-416`
 
-**Status:** pending
+**Status:** done:ITER-0008 AC-1/2 (T2b — Run.provider_instance/model_id/budget_snapshot; SCENARIO-0121). AC-3/4 (model resolution + token/latency/spend) -> ITER-0008b
 
 ## STORY-0036
 

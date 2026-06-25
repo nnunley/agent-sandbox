@@ -35,7 +35,7 @@ Stories: STORY-0015, STORY-0011 (fields), STORY-0035 AC-1/2. Gate for T2.
 ## T6 — close JOURNEY-0002
 - STORY-0073 + STORY-0012: orchestrator steers high-priority directive; daemon preempts next claim → `TestJourney0002_LiveSteering`
 
-Status legend: [ ] pending  [~] in progress  [x] done:ITER-0008  (11/13 done)
+Status legend: [ ] pending  [~] in progress  [x] done:ITER-0008  (13/13 done — CORE COMPLETE)
 - [x] Task-0 Run-shape lock (be3e6c0/bf1522b)
 - [x] T1a deterministic zero-LLM drain SCENARIO-0002 (35dfe91/2ab2d19/9fbf282)
 - [x] T1b static endpoint injection SCENARIO-0011 (3356489/09116ee; honest cluster-residual dnsmasq)
@@ -48,7 +48,7 @@ Status legend: [ ] pending  [~] in progress  [x] done:ITER-0008  (11/13 done)
 - [x] T3a file-feed steering SCENARIO-0064 (fc9cefc + corrupt-file test d1365bc/2bb4436)
 - [x] T4 child-directive provisioning SCENARIO-0027 (49efacc + end-to-end proofs edbfc69)
 - [x] T5 audit SCENARIO-0125 (0ee56ce + wiring/non-tautological-replay fix 2ab35fa; two-stage PAR APPROVED)
-- [ ] T6 close JOURNEY-0002
+- [x] T6 close JOURNEY-0002 (febdcca + handoff fix 700d8c4; two-stage PAR APPROVED) — ITER-0008 CORE COMPLETE (13/13)
 
 Process note: implementer subagents may refuse orchestrator-relayed PAR fix requests (their global
 CLAUDE.md treats coordinator messages as lacking user authority). For small, fully-specified review

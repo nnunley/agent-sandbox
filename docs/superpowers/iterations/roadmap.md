@@ -1000,11 +1000,19 @@ SCENARIO-0017 (long-running scheduler) co-owns STORY-0037 (0008b) and closes the
 seam is SCENARIO-0023. STORY-0011 AC-1/2/3 are struct fields proven *through* their use in SCENARIO-0121 dispatch
 (not unit-only — the observable is that the fields drive routing). JOURNEY-0002's corpus owning-story is corrected
 from STORY-0057 (ITER-0000 skeleton) to STORY-0073 + STORY-0012.
-**Status:** pending
+**Status:** done:ITER-0008 (2026-06-25) — all 13 TDD tasks delivered via subagent-driven `implementing-tasks`,
+each through two-stage PAR (spec-compliance + code-quality). Task-0 Run-shape lock; T1a/b/c foundational
+(deterministic loop / static endpoint injection / Mac-stateless); T2a/b/c (versioned ExecutionPolicy /
+policy-driven dispatch / typed artifact capture); T3b/d recursive delegation (depth-monotonicity bounded) +
+T3c runtime modes + T3a file-feed steering; T4 child-directive non-privileged inheritance; T5 daemon-wired
+durable replayable audit; T6 closes **JOURNEY-0002** (live-steering preempt + prior-handoff applied). Sentinels
+JOURNEY-0001+0002 green; full `go test -race ./...` = 514. Zero `TODO(ITER-0008)` markers (operator/governance
+TODOs re-tagged ITER-0008b). STORY-0003/0006/0009/0011/0012/0013/0014/0015/0016/0054/0073 + STORY-0035 AC-1/2 +
+STORY-0049 AC-4 done:ITER-0008. **NEXT: per-sprint `auditing-progress` (three-tier PAR), then ITER-0008b.**
 **Impacted scenarios:** JOURNEY-0002 (closing); recursive-delegation (SCENARIO-0019/0023); deterministic-loop
 (SCENARIO-0002); service-discovery (SCENARIO-0011); dispatch (SCENARIO-0121); Run-artifact (SCENARIO-0122);
 versioned-policy (SCENARIO-0123); Mac-stateless (SCENARIO-0124); audit/replay (SCENARIO-0125); child-directive
-(SCENARIO-0027).
+(SCENARIO-0027); steering (SCENARIO-0064).
 **Look-ahead check:** ITER-0008b depends on this core (TUI/governance act on these subsystems; STORY-0074 Mac-off
 acceptance exercises all of it). Lock the Run shape and the audit API here so 0008b extends without redefining.
 **Substrate constraint (from ITER-0006 T6 real-wire, 2026-06-22):** real laneq leases are NOT
