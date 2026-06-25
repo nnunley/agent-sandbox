@@ -26,10 +26,11 @@ type Dispatcher struct {
 // The workers slice is retained in registration order (for deterministic selection —
 // when multiple workers are eligible, the first one in the registry is chosen).
 func NewDispatcher(workers []Worker) *Dispatcher {
-	// Retain the slice in its given order; no sorting or reordering.
-	// This ensures deterministic selection across calls.
+	// Defensively copy the registry (preserving order) so a later mutation of the caller's slice
+	// cannot change dispatch decisions. Selection stays deterministic: first eligible in order.
+	registry := append([]Worker(nil), workers...)
 	return &Dispatcher{
-		workers: workers,
+		workers: registry,
 	}
 }
 
