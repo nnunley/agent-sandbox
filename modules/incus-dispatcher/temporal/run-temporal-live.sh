@@ -26,6 +26,13 @@ LANEQ_ADDR="${LANEQ_LIVE_ADDR:-127.0.0.1:9999}"
 LANEQ_HOST="${LANEQ_ADDR%%:*}"
 LANEQ_PORT="${LANEQ_ADDR##*:}"
 
+# ITER-0007c AC-1b: laneq runs in ENFORCE mode — the worker harness must attach a grant+proof.
+# These paths are ON THE CONTAINER (where the test binary runs). The worker's client key + grant
+# are provisioned at /srv/laneq/ (issuer trust root stays on the Mac). Override to test other creds.
+LANEQ_GRANT_FILE="${LANEQ_GRANT_FILE:-/srv/laneq/worker.grant}"
+LANEQ_CLIENT_KEY="${LANEQ_CLIENT_KEY:-/srv/laneq/worker.key}"
+LANEQ_AUD="${LANEQ_AUD:-laneq://agent-host:9999}"
+
 INCUS_REMOTE="${INCUS_REMOTE:-ndn-desktop}"
 INCUS_CONTAINER="${INCUS_REMOTE}:agent-host"
 TIMEOUT_SEC=30
@@ -103,7 +110,7 @@ export LANEQ_LIVE_ADDR="${LANEQ_ADDR}"
 
 # First, run all tests EXCEPT the restart-survival test
 echo "  Running non-restart scenario tests..."
-if incus exec "$INCUS_CONTAINER" -- env TEMPORAL_LIVE=1 TEMPORAL_LIVE_ADDR="${TEMPORAL_ADDR}" LANEQ_LIVE_ADDR="${LANEQ_ADDR}" \
+if incus exec "$INCUS_CONTAINER" -- env TEMPORAL_LIVE=1 TEMPORAL_LIVE_ADDR="${TEMPORAL_ADDR}" LANEQ_LIVE_ADDR="${LANEQ_ADDR}" LANEQ_GRANT_FILE="${LANEQ_GRANT_FILE}" LANEQ_CLIENT_KEY="${LANEQ_CLIENT_KEY}" LANEQ_AUD="${LANEQ_AUD}" \
 	"$REMOTE_TEST_BIN" -test.run 'TestScenario(0056|0081|0093|0094)_Live|TestTemporal.*Reachability' -test.v -test.timeout 5m >"$TEST_OUTPUT" 2>&1; then
 	echo "✓ Non-restart tests passed"
 	grep -E 'no tests to run|PASS|FAIL|---' "$TEST_OUTPUT" || true
@@ -125,7 +132,7 @@ echo ""
 
 # Phase 1: Start the workflow
 echo "PHASE 1: Start DeferWorkflow with future eligibility..."
-if ! incus exec "$INCUS_CONTAINER" -- env TEMPORAL_LIVE=1 TEMPORAL_LIVE_ADDR="${TEMPORAL_ADDR}" LANEQ_LIVE_ADDR="${LANEQ_ADDR}" RESTART_PHASE=start \
+if ! incus exec "$INCUS_CONTAINER" -- env TEMPORAL_LIVE=1 TEMPORAL_LIVE_ADDR="${TEMPORAL_ADDR}" LANEQ_LIVE_ADDR="${LANEQ_ADDR}" LANEQ_GRANT_FILE="${LANEQ_GRANT_FILE}" LANEQ_CLIENT_KEY="${LANEQ_CLIENT_KEY}" LANEQ_AUD="${LANEQ_AUD}" RESTART_PHASE=start \
 	"$REMOTE_TEST_BIN" -test.run 'TestScenario0001_LiveRestartSurvival' -test.v -test.timeout 5m >"$TEST_OUTPUT" 2>&1; then
 	echo "FAIL: Phase 1 (start) failed"
 	cat "$TEST_OUTPUT"
@@ -188,7 +195,7 @@ fi
 sleep 5
 echo ""
 echo "PHASE 3: Verify workflow survived restart and fire after eligibility..."
-if ! incus exec "$INCUS_CONTAINER" -- env TEMPORAL_LIVE=1 TEMPORAL_LIVE_ADDR="${TEMPORAL_ADDR}" LANEQ_LIVE_ADDR="${LANEQ_ADDR}" RESTART_PHASE=verify \
+if ! incus exec "$INCUS_CONTAINER" -- env TEMPORAL_LIVE=1 TEMPORAL_LIVE_ADDR="${TEMPORAL_ADDR}" LANEQ_LIVE_ADDR="${LANEQ_ADDR}" LANEQ_GRANT_FILE="${LANEQ_GRANT_FILE}" LANEQ_CLIENT_KEY="${LANEQ_CLIENT_KEY}" LANEQ_AUD="${LANEQ_AUD}" RESTART_PHASE=verify \
 	"$REMOTE_TEST_BIN" -test.run 'TestScenario0001_LiveRestartSurvival' -test.v -test.timeout 5m >"$TEST_OUTPUT" 2>&1; then
 	echo "FAIL: Phase 3 (verify) failed - workflow did NOT survive restart"
 	cat "$TEST_OUTPUT"
