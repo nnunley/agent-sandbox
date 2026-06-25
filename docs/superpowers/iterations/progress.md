@@ -1,6 +1,18 @@
 # Progress
 
-**Phase:** **AUDIT CLEAN (ITER-0007c + owed ITER-0007b three-tier PAR) — 2026-06-25. NEXT: ITER-0008 capstone.**
+**Phase:** **ITER-0008 PRE-ITERATION SCOPE REVIEW (PAR) — 2026-06-25.** Sentinel baseline clean (467 + JOURNEY-0001);
+citations OK (82); status reconciliation clean. Scope review loop: **R1** REVISE → split 22-story capstone into
+**ITER-0008 core** (autonomous-fleet: coordinator + recursive delegation + Run/dispatch/policy/audit; closes
+JOURNEY-0002) + **ITER-0008b** (operator TUI/governance + Mac-off capstone; closes JOURNEY-0004..0007), with Task-0
+Run-shape lock (`c2a51a5`). **R2** REVISE → evidence seam not concrete; pinned per-story evidence plan, fixed
+JOURNEY-0002, kept STORY-0011 whole (`3398a28`). **R3** REVISE (A crit: missing scenario cards) → authored
+SCENARIO-0121-0125 cards + corpus rows, cleaned JOURNEY-0002 card (`9d871b4`). **R4** REVISE (A: corpus JOURNEY-0002
+still had STORY-0057; 5 existing core cards still TBD) → pinned all 5 cards+corpus rows, fixed corpus row
+(`af41ad5`). **R5 APPROVE/APPROVE** — scope review converged. NEXT: decompose ITER-0008 core into TDD code+evidence
+tasks (Task-0 Run-shape lock first; T1 foundational → T2 Run/policy → T3 delegation → T4 child-directive → T5 audit
+→ T6 close JOURNEY-0002) → dispatch `implementing-tasks`.
+
+**AUDIT CLEAN (ITER-0007c + owed ITER-0007b three-tier PAR) — 2026-06-25.**
 Two parallel adversarial auditors over both repos returned **zero findings** (Critical/Serious/Minor), high
 confidence (agreement). Tier 1 every AC PASS at declared seam; live/CI split verified HONEST (SCENARIO-0056
 wall-clock limitation documented, not overstated). Tier 2 interceptor additive, no regressions. Tier 3 sentinel
