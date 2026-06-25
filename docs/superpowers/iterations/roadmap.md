@@ -901,8 +901,13 @@ the ITER-0007b process-level invariant to authz. The full provider-credential br
 
 **Sequencing:** runs **before/alongside ITER-0008** — ITER-0008's multi-consumer/recursive delegation
 (non-exclusive leases) benefits from real per-consumer grants, and Phase 2 sole-writer enforcement builds
-directly on the ITER-0007b seam. **Status:** IN PROGRESS (formal `running-an-iteration` resumed 2026-06-25;
-verification side + Go signing core + GrantSource (T1 `e0f4a5d`) committed). **Scope revised by PAR scope review 2026-06-25:**
+directly on the ITER-0007b seam. **Status:** **DONE:2026-06-25 (Phase 1, local — full two-stage PAR loop).**
+Delivered Go side: `grantauth` signing core + `GrantSource`/`FileGrantSource` (T1) + gRPC client interceptor + `serve_cmd`
+wiring (T2) + cross-language real-wire e2e (T3 — enforce accept/reject incl. wrong-aud/replayed-nonce/wrong-method +
+log-only) + `laneq-grant` issuer CLI (T4, atomic never-clobber key) + corpus (T5). laneq side done on `nnunley/laneq:paseto-auth`
+(PAR/code-review still owed before the external PR). **STORY-0082 AC-1b (live-cluster log-only→enforce rollout +
+external laneq PR) is the one carve-out — DEFERRED, operator-gated.** Sentinel green (full module `-race` + JOURNEY-0001);
+no `TODO(ITER-0007c)` markers. **Scope revised by PAR scope review 2026-06-25:**
 STORY-0082 AC-1 split into **AC-1a (local e2e log-only→enforce via `run-laneq-wire.sh`, in-scope)** and
 **AC-1b (live-cluster rollout + external laneq PR — DEFERRED, gated on operator authorization, outward-facing)**;
 STORY-0080 AC-3 gains a **mandatory automated Go real-wire evidence task** (replacing "proven manually");

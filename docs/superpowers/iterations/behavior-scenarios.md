@@ -3442,8 +3442,8 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - The RPC succeeds and returns the expected result
 - An unauthenticated call (no grant) to the same enforce-mode server is rejected
 
-**Automation status:** pending → ITER-0007c (Go client interceptor + real-wire round-trip extending `queue/run-laneq-wire.sh`; laneq Python interceptor unit)
-**Execution command:** TBD — set in ITER-0007c (real-wire: signed token round-trips all RPCs)
+**Automation status:** AUTOMATED:ITER-0007c — Go interceptor unit + issuer-CLI mint unit + cross-language real-wire enforce-accept (Go client ↔ real laneq `paseto-auth` in enforce) + laneq Python unit. Gated live test (`LANEQ_AUTH_WIRE=1`).
+**Execution command:** `bash modules/incus-dispatcher/queue/run-laneq-auth-wire.sh` (→ `SCENARIO-0117-enforce-accept-auth PASS`); unit: `cd modules/incus-dispatcher && go test -race ./grantauth/ ./cmd/laneq-grant/`; laneq: `cd /Users/ndn/development/laneq && uv run pytest tests/test_grpc_auth.py -k passes_through`
 
 **Sources:**
 - `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:48-66`
@@ -3465,8 +3465,8 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - No laneq state is mutated by the rejected RPC
 - The rejection reason (bad-sig / expired / bad-aud) is logged for audit
 
-**Automation status:** pending → ITER-0007c (laneq Python interceptor unit + Go real-wire negative cases)
-**Execution command:** TBD — set in ITER-0007c
+**Automation status:** AUTOMATED:ITER-0007c — real-wire enforce-reject negatives (missing-auth, wrong-aud → proof audience mismatch, replayed-nonce → nonce dedup, wrong-method → proof method mismatch), all → gRPC `Unauthenticated`; plus laneq Python unit (forged/expired/bad-sig/bad-kid grant; forged/stale/replayed proof). Gated live test (`LANEQ_AUTH_WIRE=1`).
+**Execution command:** `bash modules/incus-dispatcher/queue/run-laneq-auth-wire.sh` (→ `SCENARIO-0118-enforce-reject-invalid-auth/{missing-auth,wrong-aud,replayed-nonce,wrong-method} PASS`); laneq: `cd /Users/ndn/development/laneq && uv run pytest tests/test_auth.py tests/test_proof.py tests/test_grpc_auth.py`
 
 **Sources:**
 - `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:60-66`
@@ -3489,8 +3489,8 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - The valid-grant RPC is allowed and logs success
 - Flipping to `enforce` then rejects the invalid-grant RPC — proving the rollout gate works without disrupting legitimate traffic
 
-**Automation status:** pending → ITER-0007c (laneq Python interceptor mode tests + cluster log-only→enforce e2e)
-**Execution command:** TBD — set in ITER-0007c
+**Automation status:** AUTOMATED locally:ITER-0007c (AC-1a) — real-wire log-only allows an unauthenticated Push (real laneq restarted in `log-only`); enforce-rejects proven in SCENARIO-0118 (same harness) → the rollout gate is demonstrated end-to-end locally. laneq Python mode unit. **LIVE cluster log-only→enforce rollout = STORY-0082 AC-1b — DEFERRED, operator-gated (external laneq PR + live mutation).**
+**Execution command:** `bash modules/incus-dispatcher/queue/run-laneq-auth-wire.sh` (→ `SCENARIO-0119-log-only-allow-unauth PASS`); laneq: `cd /Users/ndn/development/laneq && uv run pytest tests/test_grpc_auth.py -k log_only`
 
 **Sources:**
 - `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:67-79`
@@ -3514,8 +3514,8 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - A token signed by an untrusted `kid` is rejected
 - After `k1` is retired from the trust set, `k1`-signed tokens are rejected
 
-**Automation status:** pending → ITER-0007c (token-format unit round-trip under multiple kids + interceptor multi-key trust)
-**Execution command:** TBD — set in ITER-0007c
+**Automation status:** AUTOMATED:ITER-0007c — issuer CLI emits the chosen `--kid` in the grant footer (Go) + int-timestamp cross-impl interop (Go); laneq multi-key trust (current+next) + untrusted-kid reject + retire (laneq Python unit). Live multi-kid overlap on the deployed cluster rides STORY-0082 AC-1b (deferred).
+**Execution command:** `cd modules/incus-dispatcher && go test -race ./cmd/laneq-grant/ -run KidInFooter && go test -race ./grantauth/ -run IntTimestamps`; laneq: `cd /Users/ndn/development/laneq && uv run pytest tests/test_auth.py -k rotation`
 
 **Sources:**
 - `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:24-46`

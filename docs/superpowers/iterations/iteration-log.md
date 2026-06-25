@@ -719,3 +719,48 @@ urgency is calibrated in days — ITER-0008/ops should add an urgency-calibratio
 fully-live aging proof is wanted (the logic itself is CI-PROVEN); (3) rejected agent rescores route to the
 operator approval queue / escalation lane in ITER-0008; (4) laneq `Stats()/Len()` observability deferred to
 ITER-0008's operator surface. No `Run` struct introduced (defers STORY-0035 colliding-Run risk).
+
+## ITER-0007c — laneq grant signing (PASETO host-to-host auth, Phase 1)
+
+**Completed:** 2026-06-25 (formal `running-an-iteration` loop; resumed/reconciled prior hands-on TDD)
+
+**Stories delivered:** STORY-0079 (PASETO grant format + Mac issuer CLI, AC-2/AC-3), STORY-0080 (Go client grant
+attachment — `GrantSource` AC-2, client interceptor + serve wiring AC-3), STORY-0081 (laneq Python verify
+interceptor — done laneq-side on `nnunley/laneq:paseto-auth`; external PR + its own PAR review still owed),
+STORY-0082 **AC-1a** (local cross-language real-wire log-only→enforce gate). **STORY-0082 AC-1b deferred** (live-cluster
+rollout + external laneq PR — operator-gated, outward-facing).
+
+**Tasks executed:**
+- Pre-iteration: sentinel baseline clean (`go test -race ./...` green); citation check OK (82 stories); **PAR scope
+  review** → REVISE then APPROVE (split STORY-0082 AC-1→AC-1a/AC-1b, mandated automated Go real-wire evidence,
+  documented the host-level-grant → ITER-0008 per-role-issuer precondition).
+- T1 `GrantSource`/`FileGrantSource` (mtime-driven reload, whitespace-trim, `-race`) — two-stage PAR — `bf840cd`.
+- T2 gRPC client interceptor (fresh nonce + per-request proof bound to method, fail-closed, metadata
+  `laneq-grant`+`laneq-proof`) + `serve_cmd` wiring (auth flags all-or-none, fails loud on partial config — PAR
+  Critical fix) + PKCS#8 key loaders — two-stage PAR — `3eee665`/`4a664d8`.
+- T3 cross-language real-wire e2e (`queue/run-laneq-auth-wire.sh` + `laneq_authwire_test.go`, gated
+  `LANEQ_AUTH_WIRE=1`, runs real laneq `paseto-auth` via uv) — adversarial PAR drove the negative cases — `0d01230`/`cd9c61e`.
+- T4 `laneq-grant` issuer CLI (`mint`/`keygen`, file-backed issuer key, atomic `O_EXCL` never-clobbers the trust
+  root, `--kid` footer rotation) — two-stage PAR (race fix) — `e1cc5b5`/`6e14400`.
+- T5 corpus + scenario-card execution commands wired to the real tests.
+- Wrap: post-iteration sentinel + impacted scenarios green; zero `TODO(ITER-0007c)` markers.
+
+**Summary:** Phase-1 sender-constrained (DPoP-style) PASETO grant signing for laneq gRPC, end-to-end and
+local. Every laneq RPC carries an issuer-minted grant (`cnf`=client-key thumbprint) plus a per-request proof
+signed by the client key over {aud, method, nonce, iat}; laneq verifies grant + proof + freshness + nonce
+replay cache with `off|log-only|enforce` modes. The riskiest risk — the cross-language wire contract — is proven
+by a real Go-client ↔ real-Python-laneq round trip in enforce mode: a valid grant+proof is ACCEPTED, and
+missing / wrong-audience / replayed-nonce / wrong-method are each REJECTED with gRPC `Unauthenticated`; log-only
+allows an unauthenticated call (the safe-rollout gate). Trust root (issuer Ed25519 private key) stays file-backed
+on the Mac and is never exported. **Process incident:** an implementer subagent cleaned the working tree and wiped
+uncommitted work, including a pre-existing edit to the design spec; the spec edit was recovered verbatim from
+conversation history (`713f2a3`) and the practice changed to commit artifacts before each implementer dispatch +
+restrict implementers to explicit `git add`. **Owed forward:** STORY-0082 AC-1b live rollout + the external
+`nnunley/laneq` PR (with laneq-side PAR review); ITER-0007b's three-tier `auditing-progress` (still owed).
+
+**Scenarios:** SCENARIO-0117 (host-signed RPC accepted — AUTOMATED: Go interceptor unit + issuer-CLI mint +
+real-wire enforce-accept + laneq pytest), SCENARIO-0118 (forged/expired/replayed grant or proof rejected —
+AUTOMATED: real-wire enforce-reject missing/wrong-aud/replayed-nonce/wrong-method + laneq pytest), SCENARIO-0119
+(log-only allows + logs — AUTOMATED locally; live cluster = AC-1b deferred), SCENARIO-0120 (kid rotation +
+int-timestamp interop — AUTOMATED: issuer-CLI footer-kid + grantauth int-ts + laneq rotation pytest). Execution
+index: `bash modules/incus-dispatcher/queue/run-laneq-auth-wire.sh` + `go test -race ./grantauth/ ./cmd/laneq-grant/`.

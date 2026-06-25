@@ -1,14 +1,18 @@
 # Progress
 
-**Phase:** **ITER-0007c — formal `running-an-iteration` (resumed 2026-06-25).** Sentinel baseline CLEAN; citation OK;
-**PAR scope review APPROVED** (after one REVISE cycle — STORY-0082 AC-1 split AC-1a/AC-1b, mandatory Go real-wire
-evidence, ITER-0008 per-role-issuer precondition documented). **Task progress:** T1 GrantSource **DONE** (`e0f4a5d`,
-in two-stage PAR now); T2 client interceptor+wiring, T3 real-wire e2e evidence, T4 issuer CLI, T5 corpus — pending.
-**Gated handoff:** STORY-0082 AC-1b (external laneq PR + live log-only→enforce rollout) deferred for operator authorization.
-**⚠ Incident (2026-06-25):** the T1 implementer subagent cleaned the working tree before committing, wiping all
-UNCOMMITTED changes — re-applied my scope edits (now committed); the pre-existing uncommitted edit to
-`specs/2026-06-24-laneq-grant-paseto-design.md` (dirty at session start) was lost (no stash/reflog/blob). Mitigation:
-artifact edits are committed before each implementer dispatch; implementers restricted to `git add <their files>` only.
+**Phase:** **ITER-0007c COMPLETE (Phase 1, local) — done:2026-06-25.** Full `running-an-iteration` loop: sentinel
+baseline clean → citation OK → PAR scope review (REVISE→APPROVE) → T1 GrantSource (`bf840cd`) → T2 interceptor+wiring
+(`3eee665`/`4a664d8`) → T3 cross-language real-wire e2e (`0d01230`/`cd9c61e`) → T4 issuer CLI (`e1cc5b5`/`6e14400`)
+→ T5 corpus → wrap. Every code task through two-stage PAR. Post-iteration sentinel green (full module `-race` +
+JOURNEY-0001); zero `TODO(ITER-0007c)`. STORY-0079/0080/0081 done; STORY-0082 AC-1a done.
+**NEXT (orchestrator):** per-sprint `auditing-progress` on ITER-0007c (+ the still-owed ITER-0007b three-tier audit).
+**Gated handoff (NOT autonomous):** STORY-0082 AC-1b — external `nnunley/laneq` PR (with laneq-side PAR review) +
+live cluster `log-only→enforce` rollout — awaiting operator authorization.
+**⚠ Incident (2026-06-25, resolved):** an implementer subagent cleaned the working tree and wiped UNCOMMITTED work —
+my scope edits (re-applied + committed) and a pre-existing edit to `specs/2026-06-24-laneq-grant-paseto-design.md`.
+The spec edit was RECOVERED verbatim from conversation history and committed (`713f2a3`). Mitigation now standard:
+commit artifacts before each implementer dispatch; implementers restricted to explicit `git add <files>` (no
+checkout/restore/stash/clean/add -A) — held for T1-fix..T4.
 ITER-0007b COMPLETE (done:2026-06-24). ITER-0008 pending (capstone).
 **Iterations:** 11/12 base done; **ITER-0007c active**.
 

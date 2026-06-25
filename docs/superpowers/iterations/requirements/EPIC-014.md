@@ -3,7 +3,7 @@
 **Summary:** Sign and verify laneq gRPC calls with PASETO grants so laneq is safe across **non-local, untrusted** networks (transport NOT assumed); grant verification lives inside laneq. Design is **sender-constrained / DPoP-style** (2026-06-24 user directive): the grant carries `cnf`=client-key thumbprint, the client signs a per-request **proof** {aud, method, nonce, iat}, laneq verifies proof-vs-cnf + freshness window + **nonce replay cache**. Phase 1 = host-level signing; Phase 2 (deferred) = per-consumer/op/lane capabilities + sole-writer enforcement.
 **Stories:** STORY-0079, STORY-0080, STORY-0081, STORY-0082
 **Primary sources:** `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md`, `docs/plans/2026-06-16-credential-broker-architecture.md`
-**Status:** IN PROGRESS:ITER-0007c (hands-on TDD, not the formal PAR loop — code-review owed). **laneq verification side DONE** (verify_grant + verify_proof + ReplayCache + interceptor + serve wiring; 37 tests, gates green; branch `nnunley/laneq:paseto-auth`). **Go signing core DONE** (`grantauth` MintGrant/SignProof; cross-language interop with pyseto PROVEN). Remaining: Go client interceptor + GrantSource + wiring, issuer CLI, local e2e, PR + rollout. Phase 2 → separate spec.
+**Status:** **DONE:ITER-0007c (Phase 1, local) — full two-stage PAR loop.** STORY-0079/0080/0081 done; STORY-0082 **AC-1a done** (local cross-language real-wire e2e), **AC-1b deferred** (live-cluster rollout + external laneq PR — operator-gated). Go side (agent-sandbox): `grantauth` signing core + `GrantSource` + gRPC client interceptor + `serve_cmd` wiring + `laneq-grant` issuer CLI; real-wire e2e proves enforce-accept + reject (missing/wrong-aud/replayed-nonce/wrong-method) + log-only over a real Go↔Python wire (`queue/run-laneq-auth-wire.sh`). laneq side (`nnunley/laneq:paseto-auth`): verify_grant + verify_proof + ReplayCache + interceptor; 37 tests green (PAR/code-review still owed before the external PR). Phase 2 (cap/per-role/sole-writer authz) → separate spec.
 
 ## STORY-0079
 
@@ -23,7 +23,7 @@
 **Sources:**
 - `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:24-46`
 
-**Status:** partial:ITER-0007c — **AC-1 done** (Go `grantauth.MintGrant` mints the cnf-bound grant; interop with pyseto PROVEN, `e99a28b`); AC-2/AC-3 = issuer **CLI** (`laneq-grant`) + Keychain/rotation **pending**. Trust root seeds the `brokerd` of `2026-06-16-credential-broker-architecture.md`.
+**Status:** **done:ITER-0007c** — AC-1 (Go `grantauth.MintGrant`, `e99a28b`); **AC-2** issuer CLI `laneq-grant mint`/`keygen`, file-backed issuer key (atomic `O_EXCL`, never clobbers the trust root, 0600), grant verifies + cnf binds client pub (T4 `6e14400`); **AC-3** `--kid` in grant footer for rotation. Keychain hardening = Phase-2/`brokerd` (file-backed accepted for Phase 1). Trust root seeds the `brokerd` of `2026-06-16-credential-broker-architecture.md`.
 
 ## STORY-0080
 
@@ -43,7 +43,7 @@
 **Sources:**
 - `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:48-66`
 
-**Status:** partial:ITER-0007c — **AC-1 done** (Go `grantauth.SignProof`, `e99a28b`); **AC-2 done** (`grantauth.GrantSource`/`FileGrantSource`, T1 `e0f4a5d`); AC-3 (client interceptor + `serve_cmd.go` wiring + mandatory real-wire evidence) **in progress (T2/T3)**. Additive to `modules/incus-dispatcher/queue/laneq.go` + `grantauth`.
+**Status:** **done:ITER-0007c** — AC-1 (`grantauth.SignProof`, `e99a28b`); **AC-2** (`grantauth.GrantSource`/`FileGrantSource`, mtime reload + whitespace-trim, T1 `bf840cd`); **AC-3** gRPC unary client interceptor (fresh nonce/proof bound to method, fail-closed, metadata `laneq-grant`+`laneq-proof`) + `serve_cmd` wiring (all-or-none auth flags, fails loud on partial config) — T2 `3eee665`/`4a664d8`. **Mandatory real-wire evidence MET** (T3 `cd9c61e`): Go client ↔ real laneq enforce — accept + reject(missing/wrong-aud/replayed-nonce/wrong-method) + log-only, all over a real cross-language wire. Additive to `queue/laneq.go` + `grantauth`.
 
 ## STORY-0081
 
@@ -82,4 +82,4 @@
 **Sources:**
 - `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:67-79`
 
-**Status:** **AC-1a in-scope ITER-0007c** (local e2e log-only→enforce via `run-laneq-wire.sh`); **AC-1b deferred** (live-cluster rollout + external laneq PR — gated on operator authorization, outward-facing, tracked to ITER-0008/operationalization); AC-2 = design note. gRPC-TLS and a pull/fetch broker RPC are deferred (Phase 2 / broker doc).
+**Status:** **AC-1a done:ITER-0007c** (local cross-language real-wire log-only→enforce gate proven via `queue/run-laneq-auth-wire.sh` — T3 `cd9c61e`; issuer→`GrantSource` file delivery via `laneq-grant` CLI — T4); **AC-1b DEFERRED** (live-cluster rollout + external `nnunley/laneq` PR — gated on operator authorization, outward-facing, tracked to ITER-0008/operationalization); AC-2 = design note (held). gRPC-TLS and a pull/fetch broker RPC are deferred (Phase 2 / broker doc).
