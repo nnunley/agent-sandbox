@@ -23,14 +23,18 @@ python3Packages.buildPythonPackage {
   src = fetchFromGitHub {
     owner = "nnunley";
     repo = "laneq";
-    rev = "2d1b59eb05641e65377c482752dff12b21c5e6f4";
-    hash = "sha256-6/E1tTMdRnV9JLUhsIO/Y99tpysLeM/e7jbnwOno8iU=";
+    # ITER-0007c: paseto-auth branch HEAD (grant + per-request-proof gRPC auth interceptor).
+    rev = "d8b5cbe50d9685856b3e9ad57666f2c038388510";
+    hash = "sha256-uBQg2p5dSQ8b+rVVOKQCCDAVuEZTa7J+f3lVpY39Dyg=";
   };
 
-  # Propagated deps: grpcio and protobuf (match what grpcio-tools was compiled against)
-  propagatedBuildInputs = with python3Packages; [
+  # Propagated deps: grpcio and protobuf (match what grpcio-tools was compiled against),
+  # plus pyseto (ITER-0007c) for the grant-auth interceptor (not in nixpkgs — see ./pyseto.nix).
+  propagatedBuildInputs = (with python3Packages; [
     grpcio
     protobuf
+  ]) ++ [
+    (python3Packages.callPackage ./pyseto.nix { })
   ];
 
   # Native build deps: grpcio-tools for in-build proto stub regeneration, hatchling for build,

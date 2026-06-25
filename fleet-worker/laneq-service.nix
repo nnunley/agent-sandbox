@@ -14,13 +14,31 @@ let
   laneqDataDir = "/srv/laneq";
   laneqDbPath = "${laneqDataDir}/laneq.db";
   laneqPort = "9999";
+
+  # ITER-0007c: PASETO grant auth (sender-constrained; off|log-only|enforce).
+  # Rollout starts in LOG-ONLY: the interceptor verifies + logs failures but ALLOWS
+  # every RPC, so existing unauthenticated cluster clients (e.g. the Temporal worker
+  # harness) are NOT broken. Flip to "enforce" only once every live laneq client
+  # attaches a grant (the Temporal worker's laneq client must be grant-wired first).
+  laneqAuthMode = "log-only";
+  laneqAudience = "laneq://agent-host:${laneqPort}";
+  laneqIssuerPubPath = "${laneqDataDir}/issuer.pub";
+  # Issuer PUBLIC key (the Mac trust root holds the private half). Public — safe in-repo.
+  laneqIssuerPubPem = ''
+    -----BEGIN PUBLIC KEY-----
+    MCowBQYDK2VwAyEA9PzwZbioY4tb6c8KjLJQe2LntQAgfizUAP3a3YKnLTE=
+    -----END PUBLIC KEY-----
+  '';
 in
 
 {
-  # Create the data directory if it doesn't exist (idempotent).
+  # Create the data directory + install the issuer public key (idempotent, declarative).
   system.activationScripts.laneq-data-dir = stringAfter [ "users" ] ''
     mkdir -p ${laneqDataDir}
     chmod 0755 ${laneqDataDir}
+    # ITER-0007c: write the issuer public key the auth interceptor verifies grants against.
+    cp ${pkgs.writeText "laneq-issuer.pub" laneqIssuerPubPem} ${laneqIssuerPubPath}
+    chmod 0644 ${laneqIssuerPubPath}
   '';
 
   # Systemd service: laneq-grpc
@@ -33,7 +51,13 @@ in
     serviceConfig = {
       Type = "simple";
       ExecStart = "${laneqPackage}/bin/laneq-grpc --addr 0.0.0.0:${laneqPort}";
-      Environment = "LANEQ_DB=${laneqDbPath}";
+      # ITER-0007c: LANEQ_DB + PASETO grant-auth config (log-only rollout).
+      Environment = [
+        "LANEQ_DB=${laneqDbPath}"
+        "LANEQ_AUTH_MODE=${laneqAuthMode}"
+        "LANEQ_AUTH_AUDIENCE=${laneqAudience}"
+        "LANEQ_AUTH_PUBKEY_PATHS=${laneqIssuerPubPath}"
+      ];
       Restart = "on-failure";
       RestartSec = 5;
       StandardOutput = "journal";
