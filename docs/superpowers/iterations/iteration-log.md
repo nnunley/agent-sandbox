@@ -764,3 +764,28 @@ AUTOMATED: real-wire enforce-reject missing/wrong-aud/replayed-nonce/wrong-metho
 (log-only allows + logs — AUTOMATED locally; live cluster = AC-1b deferred), SCENARIO-0120 (kid rotation +
 int-timestamp interop — AUTOMATED: issuer-CLI footer-kid + grantauth int-ts + laneq rotation pytest). Execution
 index: `bash modules/incus-dispatcher/queue/run-laneq-auth-wire.sh` + `go test -race ./grantauth/ ./cmd/laneq-grant/`.
+
+---
+
+## AUDIT — ITER-0007c + owed ITER-0007b three-tier (2026-06-25)
+
+**Method:** PAR (two parallel adversarial auditors, identical full-scope inputs, competitive framing) over both
+repos (agent-sandbox Go: grantauth/cmd/laneq-grant/temporal/queue; laneq Python: paseto-auth branch).
+
+**Result: CLEAN** — both auditors returned zero findings at Critical/Serious/Minor. High confidence (agreement).
+
+- **Tier 1 Deep evidence:** every AC PASS at declared seam. ITER-0007c STORY-0079/0080/0081/0082 (incl. AC-1a local
+  e2e + AC-1b live cluster). ITER-0007b STORY-0041/0043/0044/0046/0047 (+ split-in live ACs). Live/CI split verified
+  HONEST — SCENARIO-0056 Q2→Q1 wall-clock limitation is documented (urgency calibrated in days; seconds-out deadline
+  is already-Q1), live proves only the durable-timer + gRPC reproject mechanism; quadrant logic CI-proven.
+- **Tier 2 Impacted:** Go gRPC client interceptor additive (nil GrantSource == legacy passthrough); no regressions.
+  queue 89 + temporal 142 green.
+- **Tier 3 Sentinel:** JOURNEY-0001 green (2 tests); full `go test -race ./...` = **467 passing, 6 packages, 0 fail**.
+  laneq: 186 tests, 96% coverage (>=95 gate), ruff format/check + pytest all green.
+- **Security review (auth code):** replay cache TTL-bounded + pruned every check; fail-closed (all errors ->
+  GrantError -> UNAUTHENTICATED in enforce); atomic O_EXCL never-clobber issuer key (mode 0600); sender-constrained
+  proof cryptographically bound to client key (cnf) + method + aud + nonce + iat. No unrequested features, no debug
+  artifacts, no observable behavior without a corresponding scenario.
+
+**Disposition:** ITER-0007c and ITER-0007b confirmed DONE. No gap stories appended; roadmap unchanged. ITER-0008
+GATE remains MET. Orchestrator: last_audit_clean -> proceed to ITER-0008 (capstone, only remaining pending iteration).

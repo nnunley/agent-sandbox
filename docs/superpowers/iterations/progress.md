@@ -1,6 +1,16 @@
 # Progress
 
-**Phase:** **ITER-0007c COMPLETE (Phase 1, local) — done:2026-06-25.** Full `running-an-iteration` loop: sentinel
+**Phase:** **AUDIT CLEAN (ITER-0007c + owed ITER-0007b three-tier PAR) — 2026-06-25. NEXT: ITER-0008 capstone.**
+Two parallel adversarial auditors over both repos returned **zero findings** (Critical/Serious/Minor), high
+confidence (agreement). Tier 1 every AC PASS at declared seam; live/CI split verified HONEST (SCENARIO-0056
+wall-clock limitation documented, not overstated). Tier 2 interceptor additive, no regressions. Tier 3 sentinel
+green: JOURNEY-0001 + full `go test -race ./...` **467 passing**; laneq 186 tests / 96% cov / 4 CI gates green.
+Security review clean (replay cache bounded, fail-closed, atomic O_EXCL key, sender-constrained proof). No gap
+stories; roadmap unchanged. ITER-0007c & ITER-0007b CONFIRMED DONE. Both owed audits now discharged. **All
+prerequisite audits clear → run ITER-0008 (Tier-2 coordinator, recursive delegation & operator UX — capstone,
+the sole remaining pending iteration) via `running-an-iteration`.**
+
+**ITER-0007c COMPLETE (Phase 1, local) — done:2026-06-25.** Full `running-an-iteration` loop: sentinel
 baseline clean → citation OK → PAR scope review (REVISE→APPROVE) → T1 GrantSource (`bf840cd`) → T2 interceptor+wiring
 (`3eee665`/`4a664d8`) → T3 cross-language real-wire e2e (`0d01230`/`cd9c61e`) → T4 issuer CLI (`e1cc5b5`/`6e14400`)
 → T5 corpus → wrap. Every code task through two-stage PAR. Post-iteration sentinel green (full module `-race` +
