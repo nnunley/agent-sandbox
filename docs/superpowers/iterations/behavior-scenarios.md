@@ -366,8 +366,8 @@ half of this scenario (the durability assertion). Run the AC-1 timer-ownership c
 - Audit trail shows all coordination decisions
 - No non-deterministic delays
 
-**Automation status:** planned (ITER-0008)
-**Execution command:** `cd modules/incus-dispatcher && go test ./daemon/ -run TestScenario0002_DeterministicDrain`
+**Automation status:** automated (ITER-0008) — proven by TestScenario0002_DeterministicDrain in the root package
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0002_DeterministicDrain`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:45-50`
