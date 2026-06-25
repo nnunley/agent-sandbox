@@ -21,7 +21,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0008 | Benchmark shows nspawn spin-up time with boot-readiness probe | process-level | spike | `cd fleet-worker/spikes && ./bench-spinup.sh nspawn 100` | STORY-0025 |
 | SCENARIO-0009 | Benchmark shows per-task microVM spin-up time is not the limiting fact | process-level | spike | `cd fleet-worker/spikes && ./bench-spinup.sh microvm 20` | STORY-0025 |
 | SCENARIO-0010 | Mac disconnected → fleet still claims, runs, grades, escalates; succes | e2e | iteration | TBD | STORY-0026 |
-| SCENARIO-0011 | Static endpoint injection: worker receives fixed llm-proxy and queue a | integration | iteration | PLANNED (ITER-0008): `cd modules/incus-dispatcher && go test ./... -run TestScenario0011_StaticEndpointInjection` | STORY-0009 |
+| SCENARIO-0011 | Static endpoint injection: worker receives fixed llm-proxy and queue a | integration | iteration | AUTOMATED (ITER-0008) — `cd modules/incus-dispatcher && go test . -run TestScenario0011_StaticEndpointInjection` (AC-1 + AC-3 code part; AC-2 dnsmasq config verified at host/networking.nix:83-94, cluster-residual) | STORY-0009 |
 | SCENARIO-0012 | [BLOCKED-ON-SUBSTRATE-DECISION] Laneq-as-cluster-service: MCP clients  | e2e | iteration | TBD | STORY-0010 |
 | SCENARIO-0013 | [BLOCKED-ON-SUBSTRATE-DECISION] Network-native backend (Postgres/NATS) | integration | iteration | TBD | STORY-0010 |
 | SCENARIO-0014 | [BLOCKED-ON-SUBSTRATE-DECISION] Dedicated queue host: survives worker- | process-level | iteration | TBD | STORY-0010 |

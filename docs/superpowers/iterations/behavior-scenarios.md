@@ -679,8 +679,11 @@ task — boot is NOT the limiting factor; nspawn (76 ms) is the substrate-select
 - Network trace shows queries only to br-microvm dnsmasq (10.88.0.1:53), not external resolvers
 - Worker successfully pulls tasks from queue without any discovery-phase latency
 
-**Automation status:** planned (ITER-0008)
-**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0011_StaticEndpointInjection`
+**AC mapping (ITER-0008 T1b):** STORY-0009 **AC-1** (static endpoint injection deterministic, no discovery client) is **AUTOMATED IN CI** by `TestScenario0011_StaticEndpointInjection` (in-process, integration seam): proves given a Task with static endpoints (QUEUE_ADDR, LLM_PROXY_ADDR) injected by template, the Task.Env carries them deterministically after provider routing, and no discovery client is constructed (pure functional injection in `applyProviderRouting`). STORY-0009 **AC-3** (queue-mediated pull coordination, no discovery lookup) is **AUTOMATED IN CI** by the same test: verifies the daemon hot path uses only Queue.Claim/Done/Requeue/Escalate seams for work dispatch — no service-discovery client appears in the coordination logic. Static endpoints are preserved in the launched task. **AC-2** (dnsmasq on br-microvm for DHCP + name resolution) is **CLUSTER-RESIDUAL** (config-verified, not Go-CI): `host/networking.nix:83-94` declares `services.dnsmasq.enable = true` on br-microvm bridge with DHCP + DNS pointing to gateway 10.88.0.1; network-trace observables (dnsmasq queries, /etc/hosts injection) cannot be tested in Go CI and are cluster-level concerns.
+
+**Automation status:** AUTOMATED:ITER-0008 (Go-CI for AC-1 + AC-3 code part); CLUSTER-RESIDUAL (AC-2 config, verified manually)
+**Execution command (CI, AC-1 + AC-3):** `cd modules/incus-dispatcher && go test . -run TestScenario0011_StaticEndpointInjection`
+**Config reference (AC-2):** `host/networking.nix:83-94` (dnsmasq enable + DHCP + DNS on br-microvm bridge)
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:354-363`
