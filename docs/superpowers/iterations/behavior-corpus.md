@@ -29,7 +29,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0016 | Escalate to stronger model on verification failure | integration | iteration | TBD | STORY-0035, STORY-0038, STORY-0031 |
 | SCENARIO-0017 | Long-running scheduler maintains priority queue | process-level | iteration | TBD | STORY-0037, STORY-0013, STORY-0012 |
 | SCENARIO-0018 | Capture and learn from repeated stumble pattern | process-level | iteration | TBD | STORY-0031, STORY-0032 |
-| SCENARIO-0019 | Recursive delegation via message emission | e2e | iteration | PLANNED (ITER-0008): `cd modules/incus-dispatcher && go test . -run TestScenario0019_RecursiveDelegation` | STORY-0012, STORY-0014 |
+| SCENARIO-0019 | Recursive delegation via message emission | e2e | iteration | AUTOMATED (ITER-0008, T3b/d): `cd modules/incus-dispatcher && go test . -run TestScenario0019_RecursiveDelegation` | STORY-0012, STORY-0014 |
 | SCENARIO-0020 | Worker accesses provider through broker proxy without exposing credent | integration | iteration | `cd modules/llm-proxy && go test -race -run TestScenario0020` | STORY-0048 |
 | SCENARIO-0021 | Operator uses TUI to create, inspect, and manage threads | app-level | iteration | TBD | STORY-0028 |
 | SCENARIO-0022 | Budget enforcement prevents runaway spending | integration | iteration | TBD | STORY-0036, STORY-0032 |

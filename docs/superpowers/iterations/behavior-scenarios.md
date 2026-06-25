@@ -978,7 +978,7 @@ WorkspaceRegistry + ReconstructResumeAudit + ContinueRun)
 - Depth field prevents unbounded recursion
 - No heavyweight in-memory orchestration was needed
 
-**Automation status:** planned (ITER-0008)
+**Automation status:** automated (ITER-0008, T3b/d)
 **Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0019_RecursiveDelegation`
 
 **Sources:**
