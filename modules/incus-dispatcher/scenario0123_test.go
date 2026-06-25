@@ -22,9 +22,9 @@ func TestScenario0123_VersionedPolicy(t *testing.T) {
 
 	// Construct ExecutionPolicy v1
 	policyV1 := ExecutionPolicy{
-		Kind:    PolicyKindOneShot,
-		Constraints: map[string]string{"timeout": "1h", "max_retries": "3"},
-		DelegationRules: []string{"allow-child-directives", "enforce-parent-consent"},
+		Kind:                     PolicyKindOneShot,
+		Constraints:              map[string]string{"timeout": "1h", "max_retries": "3"},
+		DelegationRules:          []string{"allow-child-directives", "enforce-parent-consent"},
 		VerificationRequirements: []string{"external-grade-required"},
 		MutationAllowed:          false,
 	}
@@ -55,9 +55,9 @@ func TestScenario0123_VersionedPolicy(t *testing.T) {
 
 	// --- Step 2: Revise the policy to v2 (v1 must remain unchanged) ---
 	policyV2 := ExecutionPolicy{
-		Kind:    PolicyKindOneShot,
-		Constraints: map[string]string{"timeout": "2h", "max_retries": "5"}, // Changed
-		DelegationRules: []string{"allow-child-directives"}, // Changed
+		Kind:                     PolicyKindOneShot,
+		Constraints:              map[string]string{"timeout": "2h", "max_retries": "5"}, // Changed
+		DelegationRules:          []string{"allow-child-directives"},                     // Changed
 		VerificationRequirements: []string{"external-grade-required"},
 		MutationAllowed:          true, // Changed
 	}
@@ -125,9 +125,64 @@ func TestScenario0123_VersionedPolicy(t *testing.T) {
 // This helper just creates a Run with the policy version recorded.
 func dispatchUnderPolicy(store *ExecutionPolicyStore, policyID, directiveID string) Run {
 	run := Run{
-		RunID:       "run-" + directiveID,
-		ThreadID:    "thread-" + directiveID,
-		PolicyID:    policyID, // Stamp with the exact version
+		RunID:    "run-" + directiveID,
+		ThreadID: "thread-" + directiveID,
+		PolicyID: policyID, // Stamp with the exact version
 	}
 	return run
+}
+
+// TestExecutionPolicyStore_ImmutabilityOfReferenceFields proves the store deep-copies the
+// reference-type fields (Constraints map, DelegationRules/VerificationRequirements slices), so a
+// stored version is genuinely immutable — mutating the caller's original after Save, OR mutating a
+// value returned by Get/Revert, must NOT change the stored version (STORY-0016 AC-1 immutability).
+func TestExecutionPolicyStore_ImmutabilityOfReferenceFields(t *testing.T) {
+	store := NewExecutionPolicyStore()
+
+	orig := ExecutionPolicy{
+		Kind:                     PolicyKindOneShot,
+		Constraints:              map[string]string{"timeout": "1h"},
+		DelegationRules:          []string{"allow-child"},
+		VerificationRequirements: []string{"external-grade"},
+		MutationAllowed:          false,
+	}
+	id := store.Save("p", orig)
+
+	// 1. Mutating the caller's ORIGINAL after Save must not reach the stored version.
+	orig.Constraints["timeout"] = "999h"
+	orig.DelegationRules[0] = "MUTATED"
+	orig.VerificationRequirements = append(orig.VerificationRequirements, "extra")
+
+	got, ok := store.Get(id)
+	if !ok {
+		t.Fatalf("Get(%q) not found", id)
+	}
+	if got.Constraints["timeout"] != "1h" {
+		t.Errorf("stored Constraints mutated via caller's original: got %q, want 1h", got.Constraints["timeout"])
+	}
+	if got.DelegationRules[0] != "allow-child" {
+		t.Errorf("stored DelegationRules mutated via caller's original: got %q", got.DelegationRules[0])
+	}
+	if len(got.VerificationRequirements) != 1 {
+		t.Errorf("stored VerificationRequirements mutated via caller's original: len=%d, want 1", len(got.VerificationRequirements))
+	}
+
+	// 2. Mutating a value returned by Get must not reach the stored version.
+	got.Constraints["timeout"] = "0s"
+	got.DelegationRules[0] = "HACKED"
+	got2, _ := store.Get(id)
+	if got2.Constraints["timeout"] != "1h" || got2.DelegationRules[0] != "allow-child" {
+		t.Errorf("stored version corrupted by mutating a Get() result: %+v", got2)
+	}
+
+	// 3. Mutating a value returned by Revert must not reach the stored version.
+	rev := store.Revert(id)
+	if rev == nil {
+		t.Fatalf("Revert(%q) returned nil", id)
+	}
+	rev.Constraints["timeout"] = "evil"
+	got3, _ := store.Get(id)
+	if got3.Constraints["timeout"] != "1h" {
+		t.Errorf("stored version corrupted by mutating a Revert() result: got %q", got3.Constraints["timeout"])
+	}
 }

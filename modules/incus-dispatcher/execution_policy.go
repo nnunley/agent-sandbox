@@ -9,12 +9,12 @@ import (
 type PolicyKind string
 
 const (
-	PolicyKindOneShot      PolicyKind = "one-shot"       // Single directive execution
-	PolicyKindRalphLoop    PolicyKind = "ralph-loop"     // Ralph-style iterative loop
-	PolicyKindResearchBurst PolicyKind = "research-burst" // Burst of research directives
-	PolicyKindVerifyFix    PolicyKind = "verify-fix"     // Verification-followed-by-fix loop
-	PolicyKindSummarizer   PolicyKind = "background-summarizer" // Background summarization
-	PolicyKindReviewOnly   PolicyKind = "review-only"    // Read-only review, no mutations
+	PolicyKindOneShot       PolicyKind = "one-shot"              // Single directive execution
+	PolicyKindRalphLoop     PolicyKind = "ralph-loop"            // Ralph-style iterative loop
+	PolicyKindResearchBurst PolicyKind = "research-burst"        // Burst of research directives
+	PolicyKindVerifyFix     PolicyKind = "verify-fix"            // Verification-followed-by-fix loop
+	PolicyKindSummarizer    PolicyKind = "background-summarizer" // Background summarization
+	PolicyKindReviewOnly    PolicyKind = "review-only"           // Read-only review, no mutations
 )
 
 // ExecutionPolicy defines the versioned execution policy (STORY-0016 AC-2).
@@ -37,6 +37,29 @@ type ExecutionPolicy struct {
 	MutationAllowed bool `json:"mutation_allowed"`
 }
 
+// deepCopy returns an independent copy of the policy. A plain Go struct copy is NOT enough for
+// immutability: the Constraints map and the DelegationRules/VerificationRequirements slices are
+// reference types, so a value copy would alias the same backing storage and let a caller mutate a
+// stored "immutable" version. The store deep-copies on Save (so a later mutation of the caller's
+// original cannot reach the stored version) and on Get/Revert (so a mutation of the returned value
+// cannot reach the stored version).
+func (p ExecutionPolicy) deepCopy() ExecutionPolicy {
+	out := ExecutionPolicy{Kind: p.Kind, MutationAllowed: p.MutationAllowed}
+	if p.Constraints != nil {
+		out.Constraints = make(map[string]string, len(p.Constraints))
+		for k, v := range p.Constraints {
+			out.Constraints[k] = v
+		}
+	}
+	if p.DelegationRules != nil {
+		out.DelegationRules = append([]string(nil), p.DelegationRules...)
+	}
+	if p.VerificationRequirements != nil {
+		out.VerificationRequirements = append([]string(nil), p.VerificationRequirements...)
+	}
+	return out
+}
+
 // ExecutionPolicyStore is the durable versioned policy store (STORY-0016 AC-1, AC-4).
 // It maintains an immutable history of versions keyed by (policy name, version).
 // Each Save() appends a new version; prior versions are never mutated.
@@ -44,8 +67,8 @@ type ExecutionPolicy struct {
 type ExecutionPolicyStore struct {
 	mu       sync.RWMutex
 	policies map[string]map[int]ExecutionPolicy // policies[name][version_number] = ExecutionPolicy
-	versions map[string][]int                    // versions[name] = [v1, v2, ...] sorted ascending
-	nextVer  map[string]int                      // nextVer[name] = next version number to assign
+	versions map[string][]int                   // versions[name] = [v1, v2, ...] sorted ascending
+	nextVer  map[string]int                     // nextVer[name] = next version number to assign
 }
 
 // NewExecutionPolicyStore creates a new empty policy store.
@@ -76,8 +99,9 @@ func (s *ExecutionPolicyStore) Save(name string, policy ExecutionPolicy) string 
 	ver := s.nextVer[name]
 	s.nextVer[name]++
 
-	// Store the immutable policy value
-	s.policies[name][ver] = policy
+	// Store an independent deep copy so a later mutation of the caller's original (or its
+	// Constraints map / rule slices) cannot reach the stored, immutable version.
+	s.policies[name][ver] = policy.deepCopy()
 
 	// Append version to the ordered list
 	s.versions[name] = append(s.versions[name], ver)
@@ -108,7 +132,9 @@ func (s *ExecutionPolicyStore) Get(versionedID string) (*ExecutionPolicy, bool) 
 		return nil, false
 	}
 
-	return &policy, true
+	// Return a deep copy so mutating the returned value cannot corrupt the stored version.
+	cp := policy.deepCopy()
+	return &cp, true
 }
 
 // ListVersions returns all version IDs for a given policy name in order (STORY-0016 AC-4).
@@ -151,8 +177,9 @@ func (s *ExecutionPolicyStore) Revert(versionedID string) *ExecutionPolicy {
 		return nil
 	}
 
-	// Return a copy so the caller cannot mutate the stored version
-	return &policy
+	// Return a deep copy so the caller cannot mutate the stored version.
+	cp := policy.deepCopy()
+	return &cp
 }
 
 // parseVersionedID extracts (name, version) from a versioned ID like "policy-1@v1".
