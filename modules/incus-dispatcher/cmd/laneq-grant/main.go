@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"flag"
@@ -77,18 +76,18 @@ Mint flags:
 `)
 }
 
-// runKeygen generates an Ed25519 keypair and writes it to disk.
+// runKeygen generates an Ed25519 keypair and writes it to disk atomically.
 // Fails if --out-priv exists unless --force is given.
+// Uses atomic file creation (O_EXCL) to prevent TOCTOU races on the clobber protection.
 func runKeygen(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("keygen", flag.ContinueOnError)
-	var buf bytes.Buffer
-	fs.SetOutput(&buf) // Capture flag errors
+	fs.SetOutput(io.Discard) // Discard flag errors
 	outPriv := fs.String("out-priv", "", "path to write private key PEM (mode 0600)")
 	outPub := fs.String("out-pub", "", "path to write public key PEM (mode 0644)")
 	force := fs.Bool("force", false, "overwrite existing --out-priv")
 
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("invalid keygen flags: %v", err)
+		return fmt.Errorf("invalid keygen flags: %w", err)
 	}
 
 	if *outPriv == "" {
@@ -98,14 +97,7 @@ func runKeygen(args []string, stdout io.Writer) error {
 		return fmt.Errorf("keygen: --out-pub is required")
 	}
 
-	// Check if private key already exists.
-	if _, err := os.Stat(*outPriv); err == nil {
-		if !*force {
-			return fmt.Errorf("--out-priv %s already exists; use --force to clobber", *outPriv)
-		}
-	}
-
-	// Generate a new key.
+	// Generate a new key before opening files (fail early on key gen errors).
 	key, err := grantauth.NewKey()
 	if err != nil {
 		return fmt.Errorf("generate key: %w", err)
@@ -123,10 +115,32 @@ func runKeygen(args []string, stdout io.Writer) error {
 		return fmt.Errorf("export public key: %w", err)
 	}
 
-	// Write private key with mode 0600 (readable only by owner).
-	if err := os.WriteFile(*outPriv, []byte(privPEM), 0600); err != nil {
+	// Atomically create or overwrite the private key file.
+	// Use O_EXCL to fail if file exists (unless --force).
+	var privFlags int
+	if *force {
+		privFlags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	} else {
+		privFlags = os.O_WRONLY | os.O_CREATE | os.O_EXCL
+	}
+
+	privFile, err := os.OpenFile(*outPriv, privFlags, 0600)
+	if err != nil {
+		if os.IsExist(err) && !*force {
+			return fmt.Errorf("--out-priv %s already exists; use --force to clobber", *outPriv)
+		}
+		return fmt.Errorf("create private key file: %w", err)
+	}
+	_, err = privFile.WriteString(privPEM)
+	if err != nil {
+		privFile.Close()
 		return fmt.Errorf("write private key: %w", err)
 	}
+	if err := privFile.Sync(); err != nil {
+		privFile.Close()
+		return fmt.Errorf("sync private key: %w", err)
+	}
+	privFile.Close()
 
 	// Write public key with mode 0644 (readable by all).
 	if err := os.WriteFile(*outPub, []byte(pubPEM), 0644); err != nil {
@@ -137,10 +151,10 @@ func runKeygen(args []string, stdout io.Writer) error {
 }
 
 // runMint loads or creates an issuer key and mints a PASETO grant with sender-constraint.
+// Uses atomic key creation (O_EXCL) to ensure the trust root is never clobbered.
 func runMint(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("mint", flag.ContinueOnError)
-	var buf bytes.Buffer
-	fs.SetOutput(&buf) // Capture flag errors
+	fs.SetOutput(io.Discard) // Discard flag errors
 
 	sub := fs.String("sub", "", "subject claim (identity)")
 	aud := fs.String("aud", "", "audience claim (target laneq instance)")
@@ -182,40 +196,66 @@ func runMint(args []string, stdout io.Writer) error {
 		*issuerKeyPath = filepath.Join(home, ".laneq", "issuer.key")
 	}
 
-	// Load or generate issuer key.
+	// Load or generate issuer key atomically.
+	// The issuer key is the trust root and MUST NEVER be clobbered.
 	var issuerKey *grantauth.Key
-	if _, err := os.Stat(*issuerKeyPath); err == nil {
-		// Key exists; load it.
-		issuerKey, err = grantauth.LoadEd25519PrivateKeyPEM(*issuerKeyPath)
-		if err != nil {
-			return fmt.Errorf("mint: load issuer key: %w", err)
-		}
-	} else if os.IsNotExist(err) {
-		// Key doesn't exist; generate it.
+	var isNewKey bool
+
+	// Try to atomically create the file; if it exists, load it instead.
+	// This ensures exactly one key is ever created.
+	dir := filepath.Dir(*issuerKeyPath)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("mint: create directory %s: %w", dir, err)
+	}
+
+	// Attempt atomic creation with O_EXCL.
+	keyFile, err := os.OpenFile(*issuerKeyPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err == nil {
+		// Successfully created a new file; generate and persist the key.
 		issuerKey, err = grantauth.NewKey()
 		if err != nil {
+			keyFile.Close()
 			return fmt.Errorf("mint: generate issuer key: %w", err)
 		}
 
-		// Create directory if needed.
-		dir := filepath.Dir(*issuerKeyPath)
-		if err := os.MkdirAll(dir, 0700); err != nil {
-			return fmt.Errorf("mint: create directory %s: %w", dir, err)
-		}
-
-		// Persist the private key with mode 0600.
 		privPEM, err := issuerKey.PrivateKeyPEM()
 		if err != nil {
+			keyFile.Close()
 			return fmt.Errorf("mint: export issuer private key: %w", err)
 		}
-		if err := os.WriteFile(*issuerKeyPath, []byte(privPEM), 0600); err != nil {
+
+		_, err = keyFile.WriteString(privPEM)
+		if err != nil {
+			keyFile.Close()
 			return fmt.Errorf("mint: write issuer key: %w", err)
 		}
+		if err := keyFile.Sync(); err != nil {
+			keyFile.Close()
+			return fmt.Errorf("mint: sync issuer key: %w", err)
+		}
+		keyFile.Close()
 
-		// Notify via stderr that a new issuer key was created.
+		isNewKey = true
 		fmt.Fprintf(os.Stderr, "created new issuer key at %s\n", *issuerKeyPath)
+	} else if os.IsExist(err) {
+		// File already exists; load it.
+		// Retry a few times in case another goroutine is still writing.
+		const maxRetries = 10
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			issuerKey, err = grantauth.LoadEd25519PrivateKeyPEM(*issuerKeyPath)
+			if err == nil {
+				break
+			}
+			// If this is the last attempt, return the error.
+			if attempt == maxRetries-1 {
+				return fmt.Errorf("mint: load issuer key: %w", err)
+			}
+			// Brief sleep before retry.
+			time.Sleep(time.Millisecond)
+		}
+		isNewKey = false
 	} else {
-		return fmt.Errorf("mint: stat issuer key path: %w", err)
+		return fmt.Errorf("mint: create issuer key file: %w", err)
 	}
 
 	// Read client public key PEM.
@@ -229,7 +269,10 @@ func runMint(args []string, stdout io.Writer) error {
 	}
 
 	// Generate a unique JTI (token ID).
-	jti := randomHexString(16) // 16 bytes = 32 hex chars
+	jti, err := randomHexString(16) // 16 bytes = 32 hex chars
+	if err != nil {
+		return fmt.Errorf("mint: generate jti: %w", err)
+	}
 
 	// Mint the grant.
 	now := time.Now()
@@ -248,6 +291,8 @@ func runMint(args []string, stdout io.Writer) error {
 		return fmt.Errorf("mint: mint grant: %w", err)
 	}
 
+	_ = isNewKey // Suppress unused variable; kept for future logging/metrics
+
 	// Write grant to file or stdout.
 	if *outPath != "" {
 		// Write to file with mode 0600.
@@ -263,10 +308,10 @@ func runMint(args []string, stdout io.Writer) error {
 }
 
 // randomHexString generates a random hex string of length 2*numBytes.
-func randomHexString(numBytes int) string {
+func randomHexString(numBytes int) (string, error) {
 	b := make([]byte, numBytes)
 	if _, err := rand.Read(b); err != nil {
-		panic(err) // Should never happen in normal operation
+		return "", fmt.Errorf("generate random bytes: %w", err)
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(b), nil
 }

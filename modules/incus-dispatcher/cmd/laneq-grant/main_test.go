@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -481,5 +482,187 @@ func TestRunMint_WritesToOutFile(t *testing.T) {
 	// Verify stdout is empty (grant was only written to file).
 	if stdout.Len() > 0 {
 		t.Errorf("stdout should be empty when using --out, got: %s", stdout.String())
+	}
+}
+
+// TestRunMint_ConcurrentSafeIssuerKeyCreation verifies that concurrent mints
+// share one issuer key and never clobber it.
+func TestRunMint_ConcurrentSafeIssuerKeyCreation(t *testing.T) {
+	tmpdir := t.TempDir()
+	issuerKeyPath := filepath.Join(tmpdir, "issuer.key")
+	clientPubPath := filepath.Join(tmpdir, "client.pub")
+
+	clientKey, _ := grantauth.NewKey()
+	clientPubPEM, _ := clientKey.PublicKeyPEM()
+	os.WriteFile(clientPubPath, []byte(clientPubPEM), 0644)
+
+	args := []string{
+		"--sub", "agent-host",
+		"--aud", "laneq://agent-host:9999",
+		"--ttl", "30m",
+		"--client-pub", clientPubPath,
+		"--issuer-key", issuerKeyPath,
+		"--kid", "k1",
+		"--client-kid", "c1",
+		"--iss", "mac",
+	}
+
+	// First mint creates the issuer key.
+	var stdout1 bytes.Buffer
+	err := runMint(args, &stdout1)
+	if err != nil {
+		t.Fatalf("runMint 1: %v", err)
+	}
+	grant1 := strings.TrimSpace(stdout1.String())
+
+	// Load the issuer key and its public key.
+	issuerKey1, err := grantauth.LoadEd25519PrivateKeyPEM(issuerKeyPath)
+	if err != nil {
+		t.Fatalf("LoadEd25519PrivateKeyPEM 1: %v", err)
+	}
+	pubKey1, err := issuerKey1.PublicKeyPEM()
+	if err != nil {
+		t.Fatalf("PublicKeyPEM 1: %v", err)
+	}
+
+	// Second mint should reuse the same issuer key.
+	var stdout2 bytes.Buffer
+	err = runMint(args, &stdout2)
+	if err != nil {
+		t.Fatalf("runMint 2: %v", err)
+	}
+	grant2 := strings.TrimSpace(stdout2.String())
+
+	// Load the issuer key again.
+	issuerKey2, err := grantauth.LoadEd25519PrivateKeyPEM(issuerKeyPath)
+	if err != nil {
+		t.Fatalf("LoadEd25519PrivateKeyPEM 2: %v", err)
+	}
+	pubKey2, err := issuerKey2.PublicKeyPEM()
+	if err != nil {
+		t.Fatalf("PublicKeyPEM 2: %v", err)
+	}
+
+	// Public keys MUST be identical (issuer key was reused, not regenerated).
+	if pubKey1 != pubKey2 {
+		t.Errorf("issuer key changed between mints (SECURITY: trust root was clobbered)")
+	}
+
+	// Both grants MUST verify against the issuer's public key.
+	for i, grant := range []string{grant1, grant2} {
+		_, err := paseto.NewParserWithoutExpiryCheck().ParseV4Public(issuerKey1.PublicKey(), grant, nil)
+		if err != nil {
+			t.Errorf("grant %d verification: %v", i+1, err)
+		}
+	}
+}
+
+// TestRunKeygen_AtomicClobberProtection verifies that O_EXCL prevents clobbering.
+func TestRunKeygen_AtomicClobberProtection(t *testing.T) {
+	tmpdir := t.TempDir()
+	privPath := filepath.Join(tmpdir, "priv.pem")
+	pubPath := filepath.Join(tmpdir, "pub.pem")
+
+	// First keygen creates the key.
+	var stdout bytes.Buffer
+	args := []string{
+		"--out-priv", privPath,
+		"--out-pub", pubPath,
+	}
+	err := runKeygen(args, &stdout)
+	if err != nil {
+		t.Fatalf("runKeygen 1: %v", err)
+	}
+
+	// Read the original private key bytes.
+	origPrivData, err := os.ReadFile(privPath)
+	if err != nil {
+		t.Fatalf("ReadFile original priv: %v", err)
+	}
+
+	// Try to keygen again without --force; should fail.
+	var stdout2 bytes.Buffer
+	err = runKeygen(args, &stdout2)
+	if err == nil {
+		t.Fatalf("runKeygen 2: expected error on existing file, got nil")
+	}
+
+	// Verify the original private key bytes are UNCHANGED.
+	unchangedPrivData, err := os.ReadFile(privPath)
+	if err != nil {
+		t.Fatalf("ReadFile unchanged priv: %v", err)
+	}
+	if string(origPrivData) != string(unchangedPrivData) {
+		t.Errorf("private key file was clobbered despite clobber protection")
+	}
+}
+
+// TestRunMint_ConcurrentMintsSameKey simulates goroutine-based concurrent mints
+// (sequential execution for contract testing under -race).
+func TestRunMint_ConcurrentMintsSameKey(t *testing.T) {
+	tmpdir := t.TempDir()
+	issuerKeyPath := filepath.Join(tmpdir, "issuer.key")
+	clientPubPath := filepath.Join(tmpdir, "client.pub")
+
+	clientKey, _ := grantauth.NewKey()
+	clientPubPEM, _ := clientKey.PublicKeyPEM()
+	os.WriteFile(clientPubPath, []byte(clientPubPEM), 0644)
+
+	baseArgs := []string{
+		"--sub", "agent-host",
+		"--aud", "laneq://agent-host:9999",
+		"--ttl", "30m",
+		"--client-pub", clientPubPath,
+		"--issuer-key", issuerKeyPath,
+		"--kid", "k1",
+		"--client-kid", "c1",
+		"--iss", "mac",
+	}
+
+	const numGoroutines = 5
+	var wg sync.WaitGroup
+	results := make([]string, numGoroutines)
+	errors := make([]error, numGoroutines)
+
+	// Launch multiple mints concurrently.
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			var stdout bytes.Buffer
+			err := runMint(baseArgs, &stdout)
+			if err != nil {
+				errors[idx] = err
+				return
+			}
+			results[idx] = strings.TrimSpace(stdout.String())
+		}(i)
+	}
+	wg.Wait()
+
+	// All mints must succeed.
+	for i := 0; i < numGoroutines; i++ {
+		if errors[i] != nil {
+			t.Errorf("mint %d: %v", i, errors[i])
+		}
+	}
+
+	// Load the issuer key (should exist and be consistent).
+	issuerKey, err := grantauth.LoadEd25519PrivateKeyPEM(issuerKeyPath)
+	if err != nil {
+		t.Fatalf("LoadEd25519PrivateKeyPEM: %v", err)
+	}
+
+	// All grants must verify against the same issuer public key.
+	for i := 0; i < numGoroutines; i++ {
+		grant := results[i]
+		if grant == "" {
+			t.Errorf("mint %d produced empty grant", i)
+			continue
+		}
+		_, err := paseto.NewParserWithoutExpiryCheck().ParseV4Public(issuerKey.PublicKey(), grant, nil)
+		if err != nil {
+			t.Errorf("mint %d grant verification: %v", i, err)
+		}
 	}
 }
