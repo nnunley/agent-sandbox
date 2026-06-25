@@ -290,11 +290,10 @@ func testAC2_DeterministicZeroLLM(t *testing.T) {
 // trackingRunner is a test double that records all Run and Cleanup calls.
 // It returns predetermined outcomes based on the task name and attempt count.
 type trackingRunner struct {
-	outcomes    map[string]*Result // task name → result
-	runCount    int
+	runCount     int
 	cleanupCount int
-	runs        []recordedRun
-	taskAttempts map[string]int    // tracks number of calls per task name
+	runs         []recordedRun
+	taskAttempts map[string]int // tracks number of calls per task name
 }
 
 type recordedRun struct {
