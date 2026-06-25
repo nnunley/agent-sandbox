@@ -6,9 +6,18 @@ package main
 type RuntimeMode string
 
 const (
-	RuntimeOneShot    RuntimeMode = "one_shot"
+	RuntimeOneShot     RuntimeMode = "one_shot"
 	RuntimeLongRunning RuntimeMode = "long_running"
 )
+
+// Valid reports whether m is one of the two declared runtime modes. The behavior methods below treat
+// any non-long_running value (including the "" zero value) as one_shot-like — a deliberately SAFE
+// default (no persistent state, exit after one) — but a caller that wants to detect a misconfigured
+// or typo'd mode ("one-shot", "longrunning", ...) should use Valid() rather than relying on the
+// silent fallback (STORY-0013 AC-1).
+func (m RuntimeMode) Valid() bool {
+	return m == RuntimeOneShot || m == RuntimeLongRunning
+}
 
 // StaysSubscribed reports whether this runtime mode requires a long-lived subscription (STORY-0013 AC-4).
 // one_shot: false — exit after one message

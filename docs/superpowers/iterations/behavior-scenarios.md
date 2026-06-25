@@ -1124,7 +1124,8 @@ microVM host-socket isolation → ITER-0005)
 - Worker exited after emitting result
 - No ephemeral cache or coordination state persisted
 
-**Automation status:** automated (ITER-0008, T3c): `cd modules/incus-dispatcher && go test . -run TestScenario0023_OneShotWorker` passes; also proves AC-3 (long-running) via TestScenario0023_LongRunningWorker
+**Automation status:** automated (ITER-0008, T3c): `cd modules/incus-dispatcher && go test . -run TestScenario0023_OneShotWorker` passes; also proves AC-3 (long-running) via TestScenario0023_LongRunningWorker.
+**Evidence notes:** "artifacts are linked" / artifact_refs is proven by linkage, NOT by an inline Message field — artifacts live on the Run (Run.ArtifactRefs, STORY-0015/SCENARIO-0122) addressable by run_id; the one-shot result message carries the run_id and the test asserts that run's artifacts are captured + resolvable in the ArtifactStore. AC-3 heartbeat proves the message STRUCTURE + stays-subscribed + emission, not wall-clock PERIODICITY (the full long-running scheduler over time is SCENARIO-0017 / STORY-0037, ITER-0008b).
 **Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0023`
 
 **Sources:**

@@ -9,25 +9,25 @@ import (
 // return correct values for one_shot and long_running modes.
 func TestRuntimeMode_Behavior(t *testing.T) {
 	tests := []struct {
-		mode              RuntimeMode
+		mode                RuntimeMode
 		wantStaysSubscribed bool
-		wantHeartbeat     bool
-		wantRetries       bool
-		wantCache         bool
+		wantHeartbeat       bool
+		wantRetries         bool
+		wantCache           bool
 	}{
 		{
-			mode:              RuntimeOneShot,
+			mode:                RuntimeOneShot,
 			wantStaysSubscribed: false,
-			wantHeartbeat:     false,
-			wantRetries:       false,
-			wantCache:         false,
+			wantHeartbeat:       false,
+			wantRetries:         false,
+			wantCache:           false,
 		},
 		{
-			mode:              RuntimeLongRunning,
+			mode:                RuntimeLongRunning,
 			wantStaysSubscribed: true,
-			wantHeartbeat:     true,
-			wantRetries:       true,
-			wantCache:         true,
+			wantHeartbeat:       true,
+			wantRetries:         true,
+			wantCache:           true,
 		},
 	}
 
@@ -97,7 +97,16 @@ func TestScenario0023_OneShotWorker(t *testing.T) {
 		t.Fatalf("task lost CorrelationID: got %q, want corr-task-1", claimedTask.CorrelationID)
 	}
 
-	// 3. Worker does bounded work and emits result
+	// 3. Worker does bounded work, captures its output artifacts (linked to its run), and emits a
+	// result that references that run. Per the card observable "artifacts are linked": artifacts live
+	// on the Run (Run.ArtifactRefs, STORY-0015/T2c), addressable by run_id — NOT inlined into the
+	// Message. The result message carries the run_id; the artifacts are linked to that run in the store.
+	artifacts := NewArtifactStore()
+	workerRun := &Run{RunID: workerID, ThreadID: claimedTask.ThreadID}
+	if err := CaptureArtifacts(artifacts, workerRun, map[string][]byte{"feature.patch": []byte("diff …")}, []byte("build ok")); err != nil {
+		t.Fatalf("CaptureArtifacts failed: %v", err)
+	}
+
 	resultMsg := Message{
 		ThreadID:      claimedTask.ThreadID,
 		RunID:         workerID,
@@ -132,6 +141,21 @@ func TestScenario0023_OneShotWorker(t *testing.T) {
 	}
 	if result.RunID != workerID {
 		t.Fatalf("response RunID mismatch: got %q, want %q", result.RunID, workerID)
+	}
+
+	// Card observable "artifacts are linked": the run the result references must have linked,
+	// resolvable artifacts in the store (run_id → Run.ArtifactRefs → ArtifactStore).
+	if len(workerRun.ArtifactRefs) == 0 {
+		t.Fatalf("worker run %q has no linked ArtifactRefs", result.RunID)
+	}
+	linkedRefs := artifacts.RefsForRun(result.RunID)
+	if len(linkedRefs) == 0 {
+		t.Fatalf("no artifacts linked to result run_id %q in the store", result.RunID)
+	}
+	for _, ar := range workerRun.ArtifactRefs {
+		if _, ok := artifacts.Resolve(ar.Ref); !ok {
+			t.Fatalf("artifact %q (kind %s) linked to run %q does not resolve", ar.Ref, ar.Kind, result.RunID)
+		}
 	}
 
 	// 5. Verify one-shot semantics: no re-subscription (AC-2)
@@ -437,5 +461,22 @@ func BenchmarkOneShotWorkerThroughput(b *testing.B) {
 
 		// Receive result (drain)
 		bus.Receive("task.response")
+	}
+}
+
+// TestRuntimeMode_Valid proves STORY-0013 AC-1: the two declared modes are valid, and an empty or
+// typo'd mode is detectably invalid (even though the behavior methods fall back to safe one_shot).
+func TestRuntimeMode_Valid(t *testing.T) {
+	if !RuntimeOneShot.Valid() || !RuntimeLongRunning.Valid() {
+		t.Fatalf("declared modes must be Valid()")
+	}
+	for _, bad := range []RuntimeMode{"", "one-shot", "longrunning", "async"} {
+		if bad.Valid() {
+			t.Errorf("mode %q should be invalid", bad)
+		}
+		// Safe fallback: an invalid mode behaves one_shot-like (no persistent subscription).
+		if bad.StaysSubscribed() {
+			t.Errorf("invalid mode %q must fall back to one_shot-like (not stay subscribed)", bad)
+		}
 	}
 }
