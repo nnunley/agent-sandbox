@@ -267,3 +267,73 @@ func TestAuditLog_StableIDAssignment(t *testing.T) {
 		}
 	}
 }
+
+// TestMemoryAuditLog_Replay_OutOfOrder proves Replay GENUINELY reconstructs causal order (not a
+// tautology): entries are appended in REVERSE causal order (mutation, then delegation, then run) yet
+// Replay returns them in causal order (run → delegation → mutation), linked by ParentRef = parent ID.
+func TestMemoryAuditLog_Replay_OutOfOrder(t *testing.T) {
+	log := NewMemoryAuditLog()
+	// Pre-assigned explicit IDs so a child can reference its parent before the parent is appended.
+	run := AuditEntry{ID: "a-run", Kind: AuditKindRun, ThreadID: "T", RunID: "R1"}
+	del := AuditEntry{ID: "a-del", Kind: AuditKindDelegation, ThreadID: "T", RunID: "R2", ParentRef: "a-run"}
+	mut := AuditEntry{ID: "a-mut", Kind: AuditKindMutation, ThreadID: "T", RunID: "R2", ParentRef: "a-del"}
+
+	// Append in REVERSE causal order.
+	if _, err := log.Append(mut); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(del); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(run); err != nil {
+		t.Fatal(err)
+	}
+
+	got := log.Replay()
+	if len(got) != 3 {
+		t.Fatalf("Replay = %d, want 3", len(got))
+	}
+	wantOrder := []string{"a-run", "a-del", "a-mut"}
+	for i, id := range wantOrder {
+		if got[i].ID != id {
+			t.Fatalf("Replay reorder failed at %d: got %q, want %q (full: %q,%q,%q)", i, got[i].ID, id, got[0].ID, got[1].ID, got[2].ID)
+		}
+	}
+}
+
+// TestMemoryAuditLog_AllKinds proves AC-1 covers every AuditKind: an entry of each of the five kinds
+// (run, delegation, transition, tool_action, mutation) is logged and retrievable.
+func TestMemoryAuditLog_AllKinds(t *testing.T) {
+	log := NewMemoryAuditLog()
+	kinds := []AuditKind{AuditKindRun, AuditKindDelegation, AuditKindTransition, AuditKindToolAction, AuditKindMutation}
+	for _, k := range kinds {
+		if _, err := log.Append(AuditEntry{Kind: k, ThreadID: "T", RunID: "R"}); err != nil {
+			t.Fatalf("append kind %q: %v", k, err)
+		}
+	}
+	got := log.Entries()
+	if len(got) != len(kinds) {
+		t.Fatalf("Entries = %d, want %d", len(got), len(kinds))
+	}
+	seen := map[AuditKind]bool{}
+	for _, e := range got {
+		seen[e.Kind] = true
+	}
+	for _, k := range kinds {
+		if !seen[k] {
+			t.Errorf("kind %q was not logged/retrievable", k)
+		}
+	}
+}
+
+// TestMemoryAuditLog_Replay_MissingParent proves a missing ParentRef does not drop an entry (no gap /
+// no data loss — every entry is still returned) and does not panic/loop forever.
+func TestMemoryAuditLog_Replay_MissingParent(t *testing.T) {
+	log := NewMemoryAuditLog()
+	_, _ = log.Append(AuditEntry{ID: "orphan", Kind: AuditKindMutation, ThreadID: "T", RunID: "R", ParentRef: "does-not-exist"})
+	_, _ = log.Append(AuditEntry{ID: "root", Kind: AuditKindRun, ThreadID: "T", RunID: "R"})
+	got := log.Replay()
+	if len(got) != 2 {
+		t.Fatalf("Replay dropped an entry on missing parent (gap): got %d, want 2", len(got))
+	}
+}

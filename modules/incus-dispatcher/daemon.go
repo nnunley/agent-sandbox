@@ -38,6 +38,7 @@ type Daemon struct {
 	MapToTask   func(queue.Directive) Task // converts a directive to a Task; defaults to DefaultMapToTask
 	Backend     BackendFactory             // tier→Runner selection (optional; nil → always use Runner)
 	Log         DecisionLog                // D6 append-only decision log (optional)
+	Audit       AuditLog                   // STORY-0054 system audit log (optional); every processed run is auto-logged
 	Threads     *ThreadTracker             // thread-status tracking (optional)
 	Escalations EscalationLane             // non-blocking human escalations lane (optional)
 	Now         func() time.Time           // clock for decision timestamps (optional; defaults to time.Now)
@@ -70,6 +71,29 @@ func (dm *Daemon) record(directiveID, grade, rule, action string, reason ...stri
 		}
 		_ = dm.Log.Append(Decision{DirectiveID: directiveID, Grade: grade, Rule: rule, Action: action, Reason: r, Ts: dm.clock()})
 	}
+}
+
+// audit appends a system audit entry (STORY-0054) if an audit log is wired. Nil-safe, like record().
+func (dm *Daemon) audit(kind AuditKind, runID, threadID, parentRef, actor, detail string) {
+	if dm.Audit != nil {
+		_, _ = dm.Audit.Append(AuditEntry{
+			Ts:        dm.clock(),
+			Actor:     actor,
+			Kind:      kind,
+			ThreadID:  threadID,
+			RunID:     runID,
+			ParentRef: parentRef,
+			Detail:    detail,
+		})
+	}
+}
+
+// originActor maps a directive origin to an audit actor (defaulting empty/unknown to "orchestrator").
+func originActor(origin string) string {
+	if origin == "" {
+		return OriginOrchestrator
+	}
+	return origin
 }
 
 // emitRetryHandoff produces a FRESH handoff bundle for the upcoming retry (STORY-0058 AC-25),
@@ -156,6 +180,11 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 
 	task := mapFn(d)
 	result, runErr := runner.Run(ctx, task)
+	// STORY-0054 AC-1: every run the daemon processes is logged to the system audit log (wired here,
+	// not just by tests). Worker-origin runs carry their origin as the actor; the directive id is the
+	// run/thread key. A worker-authored child directive (origin "worker:<id>") is also a delegation —
+	// callers that emit child directives audit the delegation at the emit seam.
+	dm.audit(AuditKindRun, d.ID, d.ID, "", originActor(d.Origin), d.Intent)
 	// Teardown always runs (stop-then-delete lives in the Runner's Cleanup); log the reap (D6).
 	_ = runner.Cleanup()
 	dm.record(d.ID, "", "teardown", "reap")

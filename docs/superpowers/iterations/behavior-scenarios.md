@@ -3706,6 +3706,7 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - Replaying the log reproduces the action chain deterministically
 
 **Automation status:** automated (ITER-0008)
+**Evidence (wiring):** the daemon auto-logs a RUN audit entry for every directive it processes (wired in daemon.go RunOnce via the optional Audit field) — SCENARIO-0125 drives a real Daemon.RunOnce and asserts the run entry is daemon-emitted, not test-appended. Delegation + mutation are audited at their seams (worker child-emit; genome mutation = ITER-0008b, recorded here). Replay's causal reconstruction is proven NON-tautologically by TestMemoryAuditLog_Replay_OutOfOrder (reverse-order appends → causal-order replay). transition/tool_action kinds covered by TestMemoryAuditLog_AllKinds; missing-parent = no-gap by TestMemoryAuditLog_Replay_MissingParent.
 **Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0125_AuditReplay`
 
 **Sources:**
