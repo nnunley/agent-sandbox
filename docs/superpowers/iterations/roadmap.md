@@ -1053,10 +1053,36 @@ ACs) → T2 STORY-0027 AC-3 (after TUI) → T3 governance/dispatch (STORY-0011 A
 STORY-0036, STORY-0037, STORY-0038, STORY-0039 — mostly parallel) → T4 STORY-0026 (Mac-off autonomy) → T5
 STORY-0074 (full Mac-off acceptance — exercises ITER-0008 core + all of ITER-0008b end-to-end; closes
 JOURNEY-0004..0007).
+**PAR scope review (2026-06-25) — 2 adversarial reviewers → both REVISE; revisions applied below → APPROVE.**
+Aggregated findings (same-issue-both = high confidence; severity disagreement = worst):
+- **(CRITICAL, both) STORY-0074 Mac-off proof honesty + AC-5 durability** → RESOLVED: the gating CI evidence is
+  the `journey_test.go` fake-backend harness, which models Mac-disconnection by construction (no operator input;
+  autonomous claim/grade). AC-5 ("Mac returns") requires a **durable JSONL file-backed `EscalationLane`** (mirrors
+  `JSONLAuditLog`/`JSONLDecisionLog`) so a second `Daemon` instance reads escalations queued during downtime;
+  `MemoryEscalationLane` cannot prove it. A live cluster Mac-off run is enrichment with an explicit
+  cluster-evidence carry-allowance (precedent ITER-0003 0068 AC-2, ITER-0005c 0075 AC-2/3). Noted on STORY-0074
+  card + JOURNEY-0006 seam. **New T3 component: `FileEscalationLane`.**
+- **(CRITICAL, A) STORY-0036 AC-2 ↔ STORY-0032 AC-3 guardrail semantics conflict** → RESOLVED: hard budget
+  *ceilings* can NEVER be auto-mutated by the genome engine (0032 AC-3 hard block); they change only via explicit
+  operator action through the TUI ("human-approved" = operator edit, not autonomous). Mac-off ⇒ ceilings stay
+  fixed (safe default). The tunable `budget_escalation` heuristic IS a mutation target; the ceiling is not.
+  Documented in EPIC-005 STORY-0036 card + `genome-pattern-detection.md` §4.
+- **(SERIOUS, A; B PASS) STORY-0074 AC citations all said JOURNEY-0004** → RESOLVED: relabeled AC-2→JOURNEY-0005,
+  AC-3→JOURNEY-0006, AC-4→JOURNEY-0007, AC-5→JOURNEY-0006 (return phase) in EPIC-012.
+- **(SERIOUS, A) journey specs `Execution command: TBD`** → RESOLVED: Task-0 filled automation seam + execution
+  command (`TestJourney0004..0007`) for all four in behavior-scenarios.md.
+- **(SERIOUS, B) STORY-0035 AC-4 unit-vs-integration seam** → RESOLVED: tokens/latency/spend captured from the
+  worker `Result` payload (unit-testable with a populated Result), NOT a live provider API. Seam note added.
+- **(SERIOUS, B) STORY-0037 AC-4 Temporal coupling** → RESOLVED: daemon-local resurfacing (`last_served < now -
+  staleThreshold` → boost), distinct from Temporal STORY-0043 (done:ITER-0007b). Note added to card.
+- **(SERIOUS, A) T3 parallelization gates** → RESOLVED in decomposition: T0 gates STORY-0032 (pattern note);
+  STORY-0028 TUI gates STORY-0027 AC-3; STORY-0036 AC-3 composes the existing escalation ladder; rest parallel.
+- **(MINOR, B) SCENARIO-0016 cited by 0035/0038/0031** → deliberate multi-surface (data/policy/signal planes),
+  documented; non-blocking.
 **Status:** pending
-**Impacted scenarios:** operator-TUI (SCENARIO-0021); genome-mutation (SCENARIO-0018); budget-guardrails;
-thread-aging (operator half of SCENARIO-0087); provider-routing; multi-repo; **JOURNEY-0004/0005/0006/0007 (closing,
-Mac-off)**; SCENARIO-0010 (Mac-off SPOF).
+**Impacted scenarios:** operator-TUI (SCENARIO-0021); genome-mutation (SCENARIO-0018); budget-guardrails
+(SCENARIO-0022); thread-aging (SCENARIO-0017 + operator half of SCENARIO-0087); provider-routing (SCENARIO-0016);
+multi-repo; **JOURNEY-0004/0005/0006/0007 (closing, Mac-off)**; SCENARIO-0010 (Mac-off SPOF).
 **Look-ahead check:** final iteration. On completion the orchestrator runs the final behavior-evidence audit over
 every user-facing surface from the original spec.
 

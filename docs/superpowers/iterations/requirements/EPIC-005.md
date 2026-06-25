@@ -19,6 +19,11 @@
 - AC-3: System resolves model name to explicit provider instance, not by guessing · impact:`local` · seam:`unit` · scenario:`SCENARIO-0016`
 - AC-4: Run object captures tokens, latency, and spend for provider/model accounting · impact:`local` · seam:`unit` · scenario:`SCENARIO-0016`
 
+**Seam note (PAR scope review 2026-06-25):** AC-4's tokens/latency/spend are captured ON the Run from the
+worker `Result` payload (the runner reports usage it already collected), NOT pulled from a live provider API.
+The seam is therefore genuinely `unit`: tests populate a `Result` with usage fields and assert the Run records
+them. A live-provider feed (llm-proxy usage headers) is future enrichment, out of scope here.
+
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:164-176, 309-314, 358-416`
 
@@ -37,6 +42,15 @@
 - AC-1: Budget policy object supports levels: per-message, per-run, per-thread, per-worker-class, per-provider, per-time-window · impact:`local` · seam:`unit` · scenario:`SCENARIO-0022`
 - AC-2: Budget guardrails remain protected from automatic mutation unless explicitly human-approved · impact:`local` · seam:`unit` · scenario:`SCENARIO-0022`
 - AC-3: When budget threshold is exceeded, run escalates or is rejected · impact:`cross-surface` · seam:`integration` · scenario:`SCENARIO-0022`
+
+**Guardrail-semantics reconciliation (PAR scope review 2026-06-25):** AC-2 ("protected unless explicitly
+human-approved") and STORY-0032 AC-3 ("hard budget guardrails remain protected from mutation") are
+consistent under one distinction: a **hard budget ceiling** can NEVER be raised by the autonomous genome
+mutation engine (STORY-0032's protected-invariant hard block, `genome-pattern-detection.md` §4) — only by an
+explicit **operator action through the TUI** (STORY-0028). "Human-approved" therefore means an operator edit,
+not an autonomous promotion. In a Mac-off scenario (no operator), hard guardrails stay fixed — the safe
+default. The tunable `budget_escalation` *heuristic* (when to escalate to a cheaper/stronger model under cost
+pressure) is a legitimate mutation target; the hard *ceiling* fields are not.
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:387-398, 455-463`
@@ -57,6 +71,12 @@
 - AC-2: Queue ordering is by priority plus aging · impact:`cross-surface` · seam:`integration` · scenario:`SCENARIO-0017`
 - AC-3: System supports multiple queue classes: urgent, active, incubating, maintenance · impact:`local` · seam:`unit` · scenario:`SCENARIO-0017`
 - AC-4: System resurfaces long-dormant but valuable threads via stale-thread resurfacing policy · impact:`cross-surface` · seam:`integration` · scenario:`SCENARIO-0017`
+
+**Temporal-decoupling note (PAR scope review 2026-06-25):** AC-2/AC-4 are **daemon-local, NOT Temporal-coupled**.
+The Temporal-side wall-clock *urgency aging* (Q2→Q1) is STORY-0043 (done:ITER-0007b). STORY-0037 is the distinct
+thread-registry concern: a deterministic queue-class + aging_score ordering computed locally (e.g.
+`resurface if thread.last_served < now - staleThreshold` → boost effective priority). It consumes an injected
+clock like the rest of the codebase; no Temporal workflow dependency. CI-provable.
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:150-151, 506-519`

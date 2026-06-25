@@ -164,10 +164,21 @@ reads the worker self-report (CI-locked).
 
 **Acceptance criteria:**
 - AC-1: Mac offline: daemon claims a task and runs it to completion · impact:`journey` · seam:`e2e` · scenario:`JOURNEY-0004`
-- AC-2: Mac offline: autonomous grading produces a result without human feedback · impact:`journey` · seam:`e2e` · scenario:`JOURNEY-0004`
-- AC-3: Mac offline: low-cost escalations proceed autonomously; privileged escalations queue in escalations lane · impact:`journey` · seam:`e2e` · scenario:`JOURNEY-0004`
-- AC-4: Mac offline: successor task resumes via ctx_handoff without replaying completed work · impact:`journey` · seam:`e2e` · scenario:`JOURNEY-0004`
-- AC-5: Mac returns: human-only escalations queued during downtime are processed and old context is discarded · impact:`journey` · seam:`e2e` · scenario:`JOURNEY-0004`
+- AC-2: Mac offline: autonomous grading produces a result without human feedback · impact:`journey` · seam:`e2e` · scenario:`JOURNEY-0005`
+- AC-3: Mac offline: low-cost escalations proceed autonomously; privileged escalations queue in escalations lane · impact:`journey` · seam:`e2e` · scenario:`JOURNEY-0006`
+- AC-4: Mac offline: successor task resumes via ctx_handoff without replaying completed work · impact:`journey` · seam:`e2e` · scenario:`JOURNEY-0007`
+- AC-5: Mac returns: human-only escalations queued during downtime are processed and old context is discarded · impact:`journey` · seam:`e2e` · scenario:`JOURNEY-0006`
+
+**Proof-seam note (PAR scope review 2026-06-25, CRITICAL — both reviewers):** the gating CI evidence for
+JOURNEY-0004..0007 is the `journey_test.go` harness driving the **real Daemon** against the
+**architecturally-accurate fake backend** — which models Mac-disconnection by construction: the daemon loop
+takes NO operator/interactive input, claims and grades autonomously, and the escalation lane + handoff store
+are **durable across a daemon restart** (a second `Daemon` instance reads the same file-backed
+`EscalationLane` + handoff store the first wrote — proving AC-5's "Mac returns, queued escalations processed").
+This requires a **durable (JSONL file-backed) `EscalationLane`** (mirrors `JSONLAuditLog`/`JSONLDecisionLog`);
+`MemoryEscalationLane` cannot prove AC-5 because it dies with the process. A **live cluster Mac-off run**
+(queue+daemon+lean-ctx on `ndn-desktop`, Mac physically off) is **enrichment, not the CI gate** — it may carry
+with an explicit cluster-evidence note (precedent: ITER-0003 STORY-0068 AC-2, ITER-0005c STORY-0075 AC-2/3).
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:416-418`

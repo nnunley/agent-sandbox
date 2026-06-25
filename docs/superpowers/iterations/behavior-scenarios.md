@@ -203,8 +203,11 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - task.state is running or completed
 - execution proceeded without Mac input
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation seam (Task-0, ITER-0008b):** `journey_test.go` drives the real `Daemon.RunOnce` against the
+fake backend with NO operator/interactive handler wired — the daemon claims and runs autonomously. Asserts the
+claimed directive reaches a terminal run outcome with zero operator input consulted.
+**Automation status:** pending (ITER-0008b T5 — STORY-0074 AC-1)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0004`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:416-418`
@@ -233,8 +236,11 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - grade was assigned autonomously
 - no human-in-loop delay occurred
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation seam (Task-0, ITER-0008b):** the fake backend returns a `Result` carrying an
+`ExternalGradingResult`; the daemon's authoritative-grade path assigns pass/fail with no human-confirmation
+gate. Asserts the directive outcome is decided from the grade alone.
+**Automation status:** pending (ITER-0008b T5 — STORY-0074 AC-2)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0005`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:416-418`
@@ -266,8 +272,14 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - privileged escalation is queued, not blocked
 - no human on Mac prevented either action
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation seam (Task-0, ITER-0008b):** the fake backend forces repeated grade failures so the daemon
+climbs the escalation ladder; pre-approved rungs (retry-same/stronger-worker/hard-tier) execute autonomously,
+and the privileged (human) rung is enqueued onto a **durable file-backed `EscalationLane`** rather than
+blocking. AC-5 return-phase: a SECOND `Daemon` instance constructed over the same file-backed lane reads the
+queued escalation (proving downtime durability) and processes it. Asserts: ≥1 autonomous rung ran, the human
+rung is present+durable in the lane, and nothing blocked.
+**Automation status:** pending (ITER-0008b T5 — STORY-0074 AC-3/AC-5)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0006`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:416-418`
@@ -298,8 +310,12 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - handoff context was used
 - no replay of completed work observed
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation seam (Task-0, ITER-0008b):** a predecessor run writes a handoff bundle via the
+`ContextProvider`; a successor directive (same repo/branch) is claimed and the daemon imports that handoff
+(spy provider records the import path, à la `handoffSpy` in journey_test.go). Asserts the successor consumed
+the predecessor's handoff and did NOT re-run the predecessor's completed work (run count reflects no replay).
+**Automation status:** pending (ITER-0008b T5 — STORY-0074 AC-4)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0007`
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:416-418`
