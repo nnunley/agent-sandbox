@@ -135,7 +135,7 @@ func RetryWorkflow(ctx workflow.Context, input RetryWorkflowInput) error {
 		"directiveID", input.DirectiveID,
 		"maxAttempts", input.MaxAttempts)
 
-	// TODO(ITER-0008): on retry exhaustion, hand off to the escalation ladder
+	// TODO(ITER-0008b): on retry exhaustion, hand off to the escalation ladder
 	// (STORY-0058 AC-3 stronger-worker rung) via the coordinator.
 	// Current behavior: the directive remains in laneq and becomes eligible again when its
 	// not-before passes (the daemon/coordinator re-claims it). It is not silently held forever.
