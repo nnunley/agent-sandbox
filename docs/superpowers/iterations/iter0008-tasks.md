@@ -37,7 +37,7 @@ Stories: STORY-0015, STORY-0011 (fields), STORY-0035 AC-1/2. Gate for T2.
 
 Status legend: [ ] pending  [~] in progress  [x] done:ITER-0008
 - [x] Task-0 (be3e6c0 + review-fix bf1522b; two-stage PAR APPROVED; suite 468 green)  [x] T1a (35dfe91/2ab2d19/9fbf282; two-stage PAR APPROVED) [x] T1b (3356489/09116ee; two-stage PAR APPROVED; honest cluster-residual AC-2) [x] T1c (5791df2 rework 948d1af; two-stage PAR APPROVED; single shared substrate, hard assertions) [x] T2a (996b738 + immutability fix 9d436c1; two-stage PAR APPROVED) [x] T2b (8ef171a + fixes 0e8fb13/this; two-stage PAR APPROVED; unique RunID, AC-3 isolation) [x] T2c (948ad58 + fixes 1e2b49d; two-stage PAR APPROVED; collision-free refs) [~] T3 (delegation group)
-  [ ] T3a [x] T3b/d (690b9f5 + fixes 99bfc0a/doc; two-stage PAR APPROVED; depth-monotonicity bound) [~] T3c [x] T3b/d (690b9f5 + fixes 99bfc0a/doc; two-stage PAR APPROVED; depth-monotonicity bound) [~] T3c  [ ] T4  [ ] T5  [ ] T6
+  [ ] T3a [x] T3b/d (690b9f5 + fixes 99bfc0a/doc; two-stage PAR APPROVED; depth-monotonicity bound) [x] T3c (d85fff6 + fixes 2dc65ff; two-stage PAR APPROVED; one-shot lifecycle + artifact linkage + Valid()) [x] T3b/d (690b9f5 + fixes 99bfc0a/doc; two-stage PAR APPROVED; depth-monotonicity bound) [x] T3c (d85fff6 + fixes 2dc65ff; two-stage PAR APPROVED; one-shot lifecycle + artifact linkage + Valid())  [ ] T4  [ ] T5  [ ] T6
 
 Process note: implementer subagents may refuse orchestrator-relayed PAR fix requests (their global
 CLAUDE.md treats coordinator messages as lacking user authority). For small, fully-specified review

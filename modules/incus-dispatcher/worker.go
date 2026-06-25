@@ -4,10 +4,10 @@ package main
 type WorkerKind string
 
 const (
-	WorkerKindLocal          WorkerKind = "local"            // Local machine / embedded
-	WorkerKindIncusContainer WorkerKind = "incus-container"  // Incus-managed container
-	WorkerKindMicroVM        WorkerKind = "microvm"          // Firecracker micro-VM
-	WorkerKindResearch       WorkerKind = "research"         // Research-dedicated worker
+	WorkerKindLocal          WorkerKind = "local"           // Local machine / embedded
+	WorkerKindIncusContainer WorkerKind = "incus-container" // Incus-managed container
+	WorkerKindMicroVM        WorkerKind = "microvm"         // Firecracker micro-VM
+	WorkerKindResearch       WorkerKind = "research"        // Research-dedicated worker
 )
 
 // Worker represents a dispatching target — a registered worker capable of executing
@@ -22,11 +22,11 @@ const (
 // RuntimeMode specifies the worker's execution mode — one_shot or long_running (STORY-0013 AC-1).
 // The zero value (empty string) defaults to one_shot for backwards compatibility.
 type Worker struct {
-	WorkerID         string      // Unique identifier for this worker
-	WorkerKind       WorkerKind  // Class of worker (local, incus-container, microvm, research)
-	Capabilities     []string    // Available tools/features (e.g., ["code-review", "deployment"])
-	AllowedPolicies  []string    // Allowed policy IDs (e.g., ["policy-1@v1", "policy-2@v2"])
-	RuntimeMode      RuntimeMode // Runtime mode: one_shot or long_running (STORY-0013 AC-1)
+	WorkerID        string      // Unique identifier for this worker
+	WorkerKind      WorkerKind  // Class of worker (local, incus-container, microvm, research)
+	Capabilities    []string    // Available tools/features (e.g., ["code-review", "deployment"])
+	AllowedPolicies []string    // Allowed policy IDs (e.g., ["policy-1@v1", "policy-2@v2"])
+	RuntimeMode     RuntimeMode // Runtime mode: one_shot or long_running (STORY-0013 AC-1)
 }
 
 // HasCapability reports whether this worker offers the given capability.
