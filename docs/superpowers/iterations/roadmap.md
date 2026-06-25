@@ -944,17 +944,23 @@ finding, both reviewers). ITER-0008 builds the autonomous-fleet subsystems and *
 steering)**; ITER-0008b operationalizes them and **closes the Mac-off journeys JOURNEY-0004..0007** via STORY-0074.
 
 **Stories (autonomous-fleet core):** STORY-0003 (deterministic coordination loop), STORY-0006 (Mac stateless
-client — holds no fleet state), STORY-0009 (service discovery v1 / static endpoint injection), **STORY-0011
-AC-1/AC-2/AC-3** (Worker.worker_kind + capabilities + Policy.allowed_policies — the **dispatch-decision AC-4 →
-ITER-0008b**, it needs STORY-0073's Tier-2 dispatch + the locked Run shape), STORY-0015 (Run object:
-run_id/artifact_refs/log_refs), STORY-0016 (versioned execution policies — delegation_rules/mutation_allowed gain
-meaning with recursive delegation here), **STORY-0035 AC-1/AC-2** (Run.provider_instance/model_id + budget_snapshot
-fields — **model-resolution AC-3 + token/latency/spend capture AC-4 → ITER-0008b**, they need provider
-integration/cost tracking), STORY-0054 (audit all runs/delegations/mutations + replayability — moved from ITER-0001;
-the audit data layer that STORY-0032's genome mutation builds on), STORY-0073 (Tier-2 bidirectional coordinator /
-file-feed steering), STORY-0012 (durable message-queue recursive delegation), STORY-0013 (one-shot vs long-running
-modes), STORY-0014 (recursive delegation via message emission), STORY-0049 AC-4 (worker-authored child-directive
-inherits non-privileged provisioning — needs the recursive child-directive emit path; sequence after 0012/0013/0014).
+client — holds no fleet state), STORY-0009 (service discovery v1 / static endpoint injection), **STORY-0011 (all
+ACs)** (Worker.worker_kind + capabilities + Policy.allowed_policies, AND AC-4 dispatch-decision that creates a Run
+with worker_id/worker_kind/policy_id — AC-4 is satisfiable in-core: Run shape from Task-0, worker registry from
+STORY-0009, policy from STORY-0016, delegation path from STORY-0012/0013/0014; sequence AC-4 after those. *(Prior
+revision wrongly deferred AC-4 to 0008b citing "STORY-0073 Tier-2 dispatch" — but STORY-0073 is file-feed STEERING,
+not task→worker dispatch-decision; both PAR re-reviewers flagged the mislabel. AC-4 belongs in the core delegation
+path.)*), STORY-0015 (Run object: run_id/artifact_refs/log_refs), STORY-0016 (versioned execution policies —
+delegation_rules/mutation_allowed gain meaning with recursive delegation here), **STORY-0035 AC-1/AC-2**
+(Run.provider_instance/model_id + budget_snapshot fields — **model-resolution AC-3 + token/latency/spend capture
+AC-4 → ITER-0008b**, they need provider integration/cost tracking), STORY-0054 (audit all runs/delegations/mutations
++ replayability — moved from ITER-0001; the audit data layer that STORY-0032's genome mutation builds on), STORY-0073
+(Tier-2 bidirectional coordinator / file-feed steering — the orchestrator-side steering source; the file-feed
+channel is implementable in parallel with delegation, but it is the trigger that **closes JOURNEY-0002** so the
+journey gate runs after the delegation/claim path exists), STORY-0012 (durable message-queue recursive delegation),
+STORY-0013 (one-shot vs long-running modes), STORY-0014 (recursive delegation via message emission), STORY-0049 AC-4
+(worker-authored child-directive inherits non-privileged provisioning — needs the recursive child-directive emit
+path; sequence after 0012/0013/0014).
 
 **Task-0 (BLOCKING, before any story impl) — lock the unified `Run` struct shape.** STORY-0011/0015/0035 converge
 on one `Run`; sequential implementation would generate conflicting definitions (CRITICAL, both reviewers). Design +
@@ -968,16 +974,37 @@ shape (STORY-0011 AC-1/2/3 + STORY-0015 + STORY-0016 + STORY-0035 AC-1/2, parall
 core (STORY-0073 + STORY-0012/0013/0014) → T4 STORY-0049 AC-4 (after T3) → T5 STORY-0054 audit layer → T6 close
 JOURNEY-0002 (live steering exercises coordinator + delegation end-to-end).
 
-**Scenario coverage (both reviewers — SERIOUS gap to close in-iteration):** several owning scenarios are TBD and
-must be authored as evidence tasks before their stories are marked done — SCENARIO-0002 (deterministic loop,
-STORY-0003), SCENARIO-0011 (static-endpoint injection, STORY-0009), a Mac-stateless scenario (STORY-0006: author →
-disconnect → reconnect → review without replay), SCENARIO-0016/versioned-policy flow (STORY-0016: dispatch v1 →
-revise → dispatch v2, version recorded), SCENARIO-0017/0019/0023 (delegation + modes, STORY-0012/0013/0014),
-SCENARIO-0027 (child-directive, STORY-0049 AC-4), and the STORY-0054 audit/replay scenario. **JOURNEY-0002**
-(live-steering high-priority preempt) is ITER-0008's closing journey and must get a non-TBD execution command.
+**Evidence plan (concrete seam per story — both PAR re-reviewers required this pinned BEFORE decomposition).** Each
+row is an in-iteration evidence task; "planned command" is the test the evidence task creates (all under
+`cd modules/incus-dispatcher`). Status flips TBD→passing as each lands; commands are committed here so the seam is
+not discovered mid-implementation:
+
+| Story | Scenario | Seam | Planned execution command |
+|---|---|---|---|
+| STORY-0003 | SCENARIO-0002 (deterministic queue drain, zero-LLM loop) | integration | `go test ./daemon/ -run TestScenario0002_DeterministicDrain` |
+| STORY-0006 | SCENARIO-0124 NEW (Mac stateless: author→disconnect→reconnect→review, no replay) | e2e | `go test . -run TestScenario0124_MacStatelessClient` |
+| STORY-0009 | SCENARIO-0011 (static endpoint injection: worker gets fixed llm-proxy + queue addr) | integration | `go test ./... -run TestScenario0011_StaticEndpointInjection` |
+| STORY-0011 (AC-1/2/3 fields; AC-4 dispatch) | SCENARIO-0121 NEW (worker_kind/capabilities/policy drive dispatch → Run carries worker_id/worker_kind/policy_id) | integration | `go test ./... -run TestScenario0121_PolicyDrivenDispatch` |
+| STORY-0015 | SCENARIO-0122 NEW (Run captures artifact_refs/log_refs across artifact types) | integration | `go test ./... -run TestScenario0122_RunArtifactCapture` |
+| STORY-0016 | SCENARIO-0123 NEW (versioned policy: dispatch v1 → revise → dispatch v2; Run records policy version) | integration | `go test ./... -run TestScenario0123_VersionedPolicy` |
+| STORY-0035 AC-1/2 | folded into SCENARIO-0121/0122 (Run.provider_instance/model_id/budget_snapshot fields populated) | integration | (asserted in TestScenario0121/0122) |
+| STORY-0012/0014 | SCENARIO-0019 (recursive delegation via durable message emission) | e2e | `go test . -run TestScenario0019_RecursiveDelegation` |
+| STORY-0013 | SCENARIO-0023 (one-shot worker consumes task, exits) | integration | `go test ./... -run TestScenario0023_OneShotWorker` |
+| STORY-0049 AC-4 | SCENARIO-0027 (worker child-directive inherits non-privileged provisioning) | integration | `go test ./... -run TestScenario0027_ChildDirectiveProvisioning` |
+| STORY-0054 | SCENARIO-0125 NEW (audit log records every run/delegation/mutation; replayable) | integration | `go test ./... -run TestScenario0125_AuditReplay` |
+| STORY-0073 + 0012 | **JOURNEY-0002 (closing)** — orchestrator steers a high-priority directive; daemon preempts current work next claim cycle | e2e | `go test . -run TestJourney0002_LiveSteering` |
+
+Notes: SCENARIO-0016 in the corpus ("escalate to stronger model") is a **0008b** provider-routing scenario (owned by
+STORY-0035 AC-3/4 + STORY-0038), NOT the versioned-policy flow — hence STORY-0016 gets the NEW SCENARIO-0123.
+SCENARIO-0017 (long-running scheduler) co-owns STORY-0037 (0008b) and closes there; the core's STORY-0013 one-shot
+seam is SCENARIO-0023. STORY-0011 AC-1/2/3 are struct fields proven *through* their use in SCENARIO-0121 dispatch
+(not unit-only — the observable is that the fields drive routing). JOURNEY-0002's corpus owning-story is corrected
+from STORY-0057 (ITER-0000 skeleton) to STORY-0073 + STORY-0012.
 **Status:** pending
-**Impacted scenarios:** JOURNEY-0002 (closing); recursive-delegation (SCENARIO-0017/0019/0023); deterministic-loop
-(SCENARIO-0002); service-discovery (SCENARIO-0011); versioned-policy (SCENARIO-0016); audit/replay (STORY-0054).
+**Impacted scenarios:** JOURNEY-0002 (closing); recursive-delegation (SCENARIO-0019/0023); deterministic-loop
+(SCENARIO-0002); service-discovery (SCENARIO-0011); dispatch (SCENARIO-0121); Run-artifact (SCENARIO-0122);
+versioned-policy (SCENARIO-0123); Mac-stateless (SCENARIO-0124); audit/replay (SCENARIO-0125); child-directive
+(SCENARIO-0027).
 **Look-ahead check:** ITER-0008b depends on this core (TUI/governance act on these subsystems; STORY-0074 Mac-off
 acceptance exercises all of it). Lock the Run shape and the audit API here so 0008b extends without redefining.
 **Substrate constraint (from ITER-0006 T6 real-wire, 2026-06-22):** real laneq leases are NOT
@@ -998,9 +1025,8 @@ orchestrator's final behavior-evidence audit.
 **Stories (operator UX + governance + Mac-off capstone):** STORY-0028 (operator TUI for thread/worker management),
 STORY-0027 AC-3 (operator pause/block/resume from TUI — needs the TUI; sequence after STORY-0028), STORY-0032
 (safe/auditable genome mutation — builds on ITER-0008's STORY-0054 audit data layer; **AC-4 mutation flow
-detect→propose→trial→measure→promote needs the pattern-detection design note below**), **STORY-0011 AC-4** (the
-dispatch decision that augments a Run with worker_id/worker_kind/policy_id — deferred from ITER-0008 because it needs
-STORY-0073's Tier-2 dispatch + the locked Run shape), **STORY-0035 AC-3/AC-4** (model-name resolution + per-Run
+detect→propose→trial→measure→promote needs the pattern-detection design note below**), **STORY-0035 AC-3/AC-4**
+(model-name resolution + per-Run
 token/latency/spend capture — needs provider integration/cost tracking, orthogonal to the Run shape), STORY-0036
 (multi-level budget guardrails — dispatch/resource-allocation enforcement), STORY-0037 (thread aging + queue classes
 + stale-thread resurfacing — thread-registry/operator concern; pairs with the operator-resurface half of

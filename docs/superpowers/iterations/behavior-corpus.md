@@ -5,7 +5,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | Scenario ID | Title | Proof seam | Run cadence | Command | Owning stories |
 |---|---|---|---|---|---|
 | JOURNEY-0001 | Complete one-shot lifecycle: directive to completion (walking skeleton | e2e | sentinel | `cd modules/incus-dispatcher && go test . -run TestJourney0001` | STORY-0057, STORY-0050, STORY-0051, STORY-0052, STORY-0019, STORY-0065, STORY-0066, STORY-0058, STORY-0063 |
-| JOURNEY-0002 | Live steering: high-priority directive preempts current work | e2e | sentinel | TBD | STORY-0057 |
+| JOURNEY-0002 | Live steering: high-priority directive preempts current work | e2e | sentinel | PLANNED (ITER-0008 closing): `cd modules/incus-dispatcher && go test . -run TestJourney0002_LiveSteering` | STORY-0073, STORY-0012, STORY-0057 |
 | JOURNEY-0003 | External grading reproduces 13→0 result | e2e | sentinel | AC-1 CI: `cd modules/incus-dispatcher && go test -run 'Grade\|RunGrade' .`; AC-2 cluster (refs pinned, pending): `incus-dispatcher grade --checkout <let-go@d4c36cf2d> --diff testdata/journey0003/lvl1-focused.diff` | STORY-0068 |
 | JOURNEY-0004 | Mac-off: daemon claims and runs task offline | e2e | sentinel | TBD | STORY-0074 |
 | JOURNEY-0005 | Mac-off: autonomous grading without human feedback | e2e | sentinel | TBD | STORY-0074 |

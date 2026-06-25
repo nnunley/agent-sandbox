@@ -100,7 +100,9 @@
 
 **Kind:** journey
 **Proof seam:** e2e
-**Owning stories:** STORY-0057
+**Owning stories:** STORY-0073 (orchestrator file-feed steering source), STORY-0012 (delegation/claim path), STORY-0057 (daemon fast-start skeleton)
+**Closing journey for:** ITER-0008 core
+**Planned execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0002_LiveSteering`
 
 **Preconditions:**
 - A directive is currently being processed by a worker
