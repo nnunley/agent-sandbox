@@ -35,9 +35,20 @@ Stories: STORY-0015, STORY-0011 (fields), STORY-0035 AC-1/2. Gate for T2.
 ## T6 — close JOURNEY-0002
 - STORY-0073 + STORY-0012: orchestrator steers high-priority directive; daemon preempts next claim → `TestJourney0002_LiveSteering`
 
-Status legend: [ ] pending  [~] in progress  [x] done:ITER-0008
-- [x] Task-0 (be3e6c0 + review-fix bf1522b; two-stage PAR APPROVED; suite 468 green)  [x] T1a (35dfe91/2ab2d19/9fbf282; two-stage PAR APPROVED) [x] T1b (3356489/09116ee; two-stage PAR APPROVED; honest cluster-residual AC-2) [x] T1c (5791df2 rework 948d1af; two-stage PAR APPROVED; single shared substrate, hard assertions) [x] T2a (996b738 + immutability fix 9d436c1; two-stage PAR APPROVED) [x] T2b (8ef171a + fixes 0e8fb13/this; two-stage PAR APPROVED; unique RunID, AC-3 isolation) [x] T2c (948ad58 + fixes 1e2b49d; two-stage PAR APPROVED; collision-free refs) [~] T3 (delegation group)
-  [ ] T3a [x] T3b/d (690b9f5 + fixes 99bfc0a/doc; two-stage PAR APPROVED; depth-monotonicity bound) [x] T3c (d85fff6 + fixes 2dc65ff; two-stage PAR APPROVED; one-shot lifecycle + artifact linkage + Valid()) [x] T3b/d (690b9f5 + fixes 99bfc0a/doc; two-stage PAR APPROVED; depth-monotonicity bound) [x] T3c (d85fff6 + fixes 2dc65ff; two-stage PAR APPROVED; one-shot lifecycle + artifact linkage + Valid())  [ ] T4  [ ] T5  [ ] T6
+Status legend: [ ] pending  [~] in progress  [x] done:ITER-0008  (11/13 done)
+- [x] Task-0 Run-shape lock (be3e6c0/bf1522b)
+- [x] T1a deterministic zero-LLM drain SCENARIO-0002 (35dfe91/2ab2d19/9fbf282)
+- [x] T1b static endpoint injection SCENARIO-0011 (3356489/09116ee; honest cluster-residual dnsmasq)
+- [x] T1c Mac-stateless SCENARIO-0124 (5791df2 rework 948d1af; single shared substrate)
+- [x] T2a versioned ExecutionPolicy SCENARIO-0123 (996b738 + immutability fix 9d436c1)
+- [x] T2b policy-driven dispatch SCENARIO-0121 (8ef171a/0e8fb13/ffb6c20; unique RunID, AC-3 isolation)
+- [x] T2c typed artifact capture SCENARIO-0122 (948ad58 + collision-free refs 1e2b49d)
+- [x] T3b/d recursive delegation SCENARIO-0019 (690b9f5 + depth-monotonicity 99bfc0a/c243029)
+- [x] T3c runtime modes SCENARIO-0023 (d85fff6 + artifact-linkage/Valid 2dc65ff/c468780)
+- [x] T3a file-feed steering SCENARIO-0064 (fc9cefc + corrupt-file test d1365bc/2bb4436)
+- [x] T4 child-directive provisioning SCENARIO-0027 (49efacc + end-to-end proofs edbfc69)
+- [~] T5 audit SCENARIO-0125 (in progress)
+- [ ] T6 close JOURNEY-0002
 
 Process note: implementer subagents may refuse orchestrator-relayed PAR fix requests (their global
 CLAUDE.md treats coordinator messages as lacking user authority). For small, fully-specified review
