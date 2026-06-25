@@ -3609,8 +3609,20 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 - Each Run records the exact policy version it ran under
 - A revision does not retroactively mutate prior Runs' recorded version
 
-**Automation status:** planned (ITER-0008)
-**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0123_VersionedPolicy`
+**Automation status:** AUTOMATED:ITER-0008
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0123_VersionedPolicy`
+
+**Evidence:**
+- Automated harness: `modules/incus-dispatcher/scenario0123_test.go` — `TestScenario0123_VersionedPolicy`
+  proves all acceptance criteria by:
+  1. **AC-1 (versioned storage):** `ExecutionPolicyStore` maintains immutable versions keyed by policy name + version number.
+  2. **AC-2 (policy shape):** `ExecutionPolicy` struct includes Kind, Constraints (map), DelegationRules ([]string), 
+     VerificationRequirements ([]string), and MutationAllowed (bool).
+  3. **AC-3 (six policy kinds):** `PolicyKind` constants defined: OneShot, RalphLoop, ResearchBurst, VerifyFix, Summarizer, ReviewOnly.
+  4. **AC-4 (inspectable/revertible):** Store provides ListVersions(), Get(versionedID), and Revert(versionedID) methods.
+  The test constructs a store, saves v1, dispatches under v1 (Run records v1 id), revises to v2 (v1 retained unchanged),
+  dispatches under v2 (Run records v2 id, v1 Run still references v1), and asserts immutability, version monotonicity,
+  and history preservation (no retroactive mutation).
 
 **Sources:**
 - requirements/EPIC-001.md STORY-0016
