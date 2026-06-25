@@ -1,6 +1,19 @@
 # Progress
 
-**Phase:** **ITER-0008 PRE-ITERATION SCOPE REVIEW (PAR) — 2026-06-25.** Sentinel baseline clean (467 + JOURNEY-0001);
+**Phase:** **ITER-0008 core IMPLEMENTING (subagent-driven TDD, two-stage PAR per task) — 2026-06-25.** Scope review
+APPROVED (5 rounds). **8/13 tasks done:** Task-0 Run-shape lock (be3e6c0/bf1522b); T1a deterministic zero-LLM drain
+SCENARIO-0002 (35dfe91…); T1b static-endpoint injection SCENARIO-0011 (honest cluster-residual dnsmasq); T1c
+Mac-stateless SCENARIO-0124 (rewritten: single shared substrate); T2a versioned ExecutionPolicy SCENARIO-0123
+(+deep-copy immutability fix); T2b policy-driven dispatch SCENARIO-0121 (+unique RunID + AC-3 isolation); T2c typed
+artifact capture SCENARIO-0122 (+collision-free refs); T3b/d recursive-delegation core SCENARIO-0019 (Message/bus/
+EmitUnderPolicy/graph; +depth-monotonicity fix that genuinely bounds recursion). Every task: implementer → spec-PAR
+→ code-quality-PAR, fixes applied directly, committed; the adversarial gate caught a real defect on each production
+task (T1c rewrite, T2a immutability, T2b constant-RunID, T2c ref-collision, T3b/d toothless depth-limit). Suite
+~490+ green. **REMAINING: T3c (one-shot/long-running modes SCENARIO-0023), T3a (Tier-2 file-feed steering STORY-0073),
+T4 (child-directive provisioning SCENARIO-0027), T5 (audit SCENARIO-0125), T6 (close JOURNEY-0002).** Then
+per-sprint `auditing-progress` PAR, then ITER-0008b (operator UX/governance + Mac-off capstone).
+
+**ITER-0008 PRE-ITERATION SCOPE REVIEW (PAR) — 2026-06-25.** Sentinel baseline clean (467 + JOURNEY-0001);
 citations OK (82); status reconciliation clean. Scope review loop: **R1** REVISE → split 22-story capstone into
 **ITER-0008 core** (autonomous-fleet: coordinator + recursive delegation + Run/dispatch/policy/audit; closes
 JOURNEY-0002) + **ITER-0008b** (operator TUI/governance + Mac-off capstone; closes JOURNEY-0004..0007), with Task-0
