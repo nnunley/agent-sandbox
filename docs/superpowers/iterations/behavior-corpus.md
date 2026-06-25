@@ -33,7 +33,7 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0020 | Worker accesses provider through broker proxy without exposing credent | integration | iteration | `cd modules/llm-proxy && go test -race -run TestScenario0020` | STORY-0048 |
 | SCENARIO-0021 | Operator uses TUI to create, inspect, and manage threads | app-level | iteration | TBD | STORY-0028 |
 | SCENARIO-0022 | Budget enforcement prevents runaway spending | integration | iteration | TBD | STORY-0036, STORY-0032 |
-| SCENARIO-0023 | One-shot worker consumes task, exits | integration | iteration | PLANNED (ITER-0008): `cd modules/incus-dispatcher && go test ./... -run TestScenario0023_OneShotWorker` | STORY-0013 |
+| SCENARIO-0023 | One-shot worker consumes task, exits | integration | iteration | AUTOMATED (ITER-0008, T3c): `cd modules/incus-dispatcher && go test . -run TestScenario0023` | STORY-0013 |
 | SCENARIO-0024 | Coordinator rejects superseding work without explicit declaration | integration | iteration | TBD | STORY-0030 |
 | SCENARIO-0025 | D1: Worker directive with root flag is rejected | integration | iteration | `cd modules/incus-dispatcher && go test -race -run TestScenario0025` | STORY-0049 |
 | SCENARIO-0026 | D1: Directive body contains no access_cmd or root flag | unit | iteration | `cd modules/incus-dispatcher && go test -run TestParseDirective ./queue` | STORY-0049 |

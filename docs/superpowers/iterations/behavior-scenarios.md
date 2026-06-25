@@ -1124,8 +1124,8 @@ microVM host-socket isolation → ITER-0005)
 - Worker exited after emitting result
 - No ephemeral cache or coordination state persisted
 
-**Automation status:** planned (ITER-0008)
-**Execution command:** `cd modules/incus-dispatcher && go test ./... -run TestScenario0023_OneShotWorker`
+**Automation status:** automated (ITER-0008, T3c): `cd modules/incus-dispatcher && go test . -run TestScenario0023_OneShotWorker` passes; also proves AC-3 (long-running) via TestScenario0023_LongRunningWorker
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0023`
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:767-820`

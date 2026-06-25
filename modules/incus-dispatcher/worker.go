@@ -19,11 +19,14 @@ const (
 // AllowedPolicies lists the policy IDs (including version, e.g., "policy-1@v1") that are permitted
 // to dispatch to this worker. If a policy is NOT in this list, dispatch MUST reject it, preventing
 // unauthorized or inappropriate task delegation.
+// RuntimeMode specifies the worker's execution mode — one_shot or long_running (STORY-0013 AC-1).
+// The zero value (empty string) defaults to one_shot for backwards compatibility.
 type Worker struct {
-	WorkerID         string   // Unique identifier for this worker
-	WorkerKind       WorkerKind   // Class of worker (local, incus-container, microvm, research)
-	Capabilities     []string // Available tools/features (e.g., ["code-review", "deployment"])
-	AllowedPolicies  []string // Allowed policy IDs (e.g., ["policy-1@v1", "policy-2@v2"])
+	WorkerID         string      // Unique identifier for this worker
+	WorkerKind       WorkerKind  // Class of worker (local, incus-container, microvm, research)
+	Capabilities     []string    // Available tools/features (e.g., ["code-review", "deployment"])
+	AllowedPolicies  []string    // Allowed policy IDs (e.g., ["policy-1@v1", "policy-2@v2"])
+	RuntimeMode      RuntimeMode // Runtime mode: one_shot or long_running (STORY-0013 AC-1)
 }
 
 // HasCapability reports whether this worker offers the given capability.
