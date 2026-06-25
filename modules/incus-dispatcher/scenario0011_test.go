@@ -37,7 +37,7 @@ func TestScenario0011_StaticEndpointInjection(t *testing.T) {
 	testAC1_StaticEndpointInjection(t)
 
 	// AC-3 (code part): Coordination uses only Queue seam for work discovery (no discovery client).
-	testAC3_QueueMediadPullCoordination(t)
+	testAC3_QueueMediatedPullCoordination(t)
 }
 
 // testAC1_StaticEndpointInjection proves AC-1: given a Task with static service endpoint fields,
@@ -132,10 +132,10 @@ func testAC1_StaticEndpointInjection(t *testing.T) {
 	// No discovery lookup, no network call, purely deterministic.
 }
 
-// testAC3_QueueMediadPullCoordination proves AC-3 (code part): coordination uses ONLY the Queue
+// testAC3_QueueMediatedPullCoordination proves AC-3 (code part): coordination uses ONLY the Queue
 // seam for work discovery; there is NO service-discovery lookup in the hot path. Workers are
 // launched via explicit claim/push (not discovered).
-func testAC3_QueueMediadPullCoordination(t *testing.T) {
+func testAC3_QueueMediatedPullCoordination(t *testing.T) {
 	// Create a fake queue and daemon, then verify the hot path uses ONLY Queue seam methods.
 
 	q := queue.NewMemoryQueue()
