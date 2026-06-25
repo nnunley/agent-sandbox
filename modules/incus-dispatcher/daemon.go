@@ -135,6 +135,18 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 	if err != nil {
 		return OutcomeEmpty, "", fmt.Errorf("claim: %w", err)
 	}
+
+	// Thread status gating: if the thread is paused or blocked, requeue the directive
+	// and leave the thread status unchanged. This prevents execution while the thread is held.
+	if dm.Threads != nil {
+		threadStatus := dm.Threads.Status(d.ID)
+		if threadStatus == StatusPaused || threadStatus == StatusBlocked {
+			_ = dm.Q.Requeue(lease, time.Time{})
+			dm.record(d.ID, "", "thread-held", "requeue", fmt.Sprintf("thread status %s prevents dispatch", threadStatus))
+			return OutcomeRequeued, d.ID, nil
+		}
+	}
+
 	dm.setStatus(d.ID, StatusActive)
 
 	// D1: validate the PROPOSED template against the allowlist + origin before anything is

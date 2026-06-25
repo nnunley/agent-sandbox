@@ -53,3 +53,14 @@ func (s *ThreadStore) Get(id string) (Thread, bool) {
 	t, ok := s.threads[id]
 	return t, ok
 }
+
+// ListAll returns all stored threads in a defensive copy (order unspecified).
+func (s *ThreadStore) ListAll() []Thread {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Thread, 0, len(s.threads))
+	for _, t := range s.threads {
+		out = append(out, t)
+	}
+	return out
+}

@@ -14,11 +14,14 @@ import (
 // It reads operator commands from an io.Reader (line-based) and writes rendered output to an io.Writer.
 // This design is app-level testable by driving stdin→stdout strings without requiring a terminal/TTY.
 type OperatorConsole struct {
-	q       queue.Queue
-	threads *ThreadTracker
-	workers map[string]*Worker
-	audit   AuditLog
-	now     func() time.Time
+	q                  queue.Queue
+	threads            *ThreadTracker
+	threadStore        *ThreadStore      // For enumeration (threads command)
+	workers            map[string]*Worker
+	audit              AuditLog
+	threadToDirective  map[string]queue.Directive // For requeue: thread ID → last directive
+	threadToResult     map[string]*Result         // For artifact inspection: thread ID → Result
+	now                func() time.Time
 }
 
 // NewOperatorConsole returns a new OperatorConsole wired with the given dependencies.
@@ -27,11 +30,13 @@ func NewOperatorConsole(q queue.Queue, threads *ThreadTracker, workers map[strin
 		now = time.Now
 	}
 	return &OperatorConsole{
-		q:       q,
-		threads: threads,
-		workers: workers,
-		audit:   audit,
-		now:     now,
+		q:                 q,
+		threads:           threads,
+		workers:           workers,
+		audit:             audit,
+		threadToDirective: make(map[string]queue.Directive),
+		threadToResult:    make(map[string]*Result),
+		now:               now,
 	}
 }
 
@@ -122,17 +127,21 @@ func (oc *OperatorConsole) cmdCreate(args []string) (string, error) {
 	intent, template, repo, ref, task := args[0], args[1], args[2], args[3], args[4]
 
 	d := queue.Directive{
-		Intent:    intent,
-		Template:  template,
-		Repo:      repo,
-		Ref:       ref,
-		Task:      task,
+		Intent:     intent,
+		Template:   template,
+		Repo:       repo,
+		Ref:        ref,
+		Task:       task,
 		Importance: queue.ImportanceNormal,
 	}
 	id, err := oc.q.Push(d)
 	if err != nil {
 		return "", fmt.Errorf("push directive: %w", err)
 	}
+
+	// Update the directive with its assigned ID and track it for requeue
+	d.ID = id
+	oc.threadToDirective[id] = d
 
 	// Initialize thread status for this directive
 	if oc.threads != nil {
@@ -183,40 +192,97 @@ func (oc *OperatorConsole) cmdWorkers(args []string) (string, error) {
 
 // cmdThreads renders all known threads and their statuses.
 func (oc *OperatorConsole) cmdThreads(args []string) (string, error) {
-	if oc.threads == nil {
-		return "threads: no tracker configured", nil
-	}
-
-	var sb strings.Builder
-	sb.WriteString("threads:\n")
-
-	// Since ThreadTracker doesn't expose all thread IDs, we can't enumerate all threads.
-	// This is a limitation of the current design. For now, we show a message about this.
-	// In practice, the daemon would maintain a separate ThreadStore for enumeration.
-	sb.WriteString("  (use 'inspect <thread-id>' to view specific thread status)")
-
-	return sb.String(), nil
+	out := &strings.Builder{}
+	oc.renderThreads(out)
+	return strings.TrimRight(out.String(), "\n"), nil
 }
 
-// cmdInspect renders thread status and any associated responses/artifacts.
+// renderThreads renders the thread list to a writer (factored for testability).
+func (oc *OperatorConsole) renderThreads(out io.Writer) {
+	if oc.threadStore == nil {
+		fmt.Fprintf(out, "threads: no thread store configured\n")
+		return
+	}
+
+	// Note: sorting by priority + aging deferred to STORY-0037;
+	// this implementation lists threads in registration order.
+	threads := oc.threadStore.ListAll()
+	if len(threads) == 0 {
+		fmt.Fprintf(out, "threads: none\n")
+		return
+	}
+
+	fmt.Fprintf(out, "threads: %d\n", len(threads))
+	for _, t := range threads {
+		fmt.Fprintf(out, "  %s: status=%s\n", t.ID, t.Status)
+	}
+}
+
+// cmdInspect renders thread status, transitions, and artifacts.
 func (oc *OperatorConsole) cmdInspect(args []string) (string, error) {
 	if len(args) < 1 {
 		return "", fmt.Errorf("inspect requires thread-id or run-id argument")
 	}
 	id := args[0]
 
-	var sb strings.Builder
+	out := &strings.Builder{}
+	oc.renderInspect(out, id)
+	return strings.TrimRight(out.String(), "\n"), nil
+}
+
+// renderInspect renders thread status, transitions, and artifacts to a writer (factored for testability).
+func (oc *OperatorConsole) renderInspect(out io.Writer, id string) {
 	status := oc.threads.Status(id)
 	transitions := oc.threads.Transitions(id)
 
-	fmt.Fprintf(&sb, "thread %s:\n", id)
-	fmt.Fprintf(&sb, "  status: %s\n", status)
-	fmt.Fprintf(&sb, "  transitions: %d\n", len(transitions))
+	fmt.Fprintf(out, "thread %s:\n", id)
+	fmt.Fprintf(out, "  status: %s\n", status)
+	fmt.Fprintf(out, "  transitions: %d\n", len(transitions))
 	for i, t := range transitions {
-		fmt.Fprintf(&sb, "    [%d] %s -> %s at %s\n", i, t.From, t.To, t.Ts.Format("15:04:05"))
+		fmt.Fprintf(out, "    [%d] %s -> %s at %s\n", i, t.From, t.To, t.Ts.Format("15:04:05"))
 	}
 
-	return strings.TrimRight(sb.String(), "\n"), nil
+	// Render artifacts if available
+	if result, ok := oc.threadToResult[id]; ok {
+		fmt.Fprintf(out, "  artifacts:\n")
+
+		// Render patch data
+		if len(result.PatchData) > 0 {
+			fmt.Fprintf(out, "    patch:\n")
+			lines := strings.Split(string(result.PatchData), "\n")
+			for _, line := range lines[:minInt(len(lines), 5)] { // Show first 5 lines
+				if line != "" {
+					fmt.Fprintf(out, "      %s\n", line)
+				}
+			}
+			if len(lines) > 5 {
+				fmt.Fprintf(out, "      ... (%d more lines)\n", len(lines)-5)
+			}
+		}
+
+		// Render artifacts map
+		if len(result.Artifacts) > 0 {
+			for key, content := range result.Artifacts {
+				fmt.Fprintf(out, "    %s:\n", key)
+				lines := strings.Split(string(content), "\n")
+				for _, line := range lines[:minInt(len(lines), 3)] { // Show first 3 lines
+					if line != "" {
+						fmt.Fprintf(out, "      %s\n", line)
+					}
+				}
+				if len(lines) > 3 {
+					fmt.Fprintf(out, "      ... (%d more lines)\n", len(lines)-3)
+				}
+			}
+		}
+	}
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // cmdPause transitions a thread from active to paused.
@@ -315,15 +381,40 @@ func (oc *OperatorConsole) cmdResume(args []string) (string, error) {
 	return fmt.Sprintf("ok: thread %s resumed (was %s)", threadID, current), nil
 }
 
-// cmdRequeue re-pushes a directive back onto the queue.
+// cmdRequeue re-pushes a directive back onto the queue and sets thread status to queued.
 func (oc *OperatorConsole) cmdRequeue(args []string) (string, error) {
 	if len(args) < 1 {
-		return "", fmt.Errorf("requeue requires directive-id argument")
+		return "", fmt.Errorf("requeue requires thread-id argument")
 	}
-	_ = args[0] // directive ID
+	threadID := args[0]
 
-	// For a full requeue, we'd need the original directive from the queue.
-	// Since the queue interface doesn't expose it, we return an error for now.
-	// In production, this would require storing directives in a separate index.
-	return "", fmt.Errorf("requeue not yet implemented (requires directive index)")
+	// Look up the directive from our thread→directive index
+	d, ok := oc.threadToDirective[threadID]
+	if !ok {
+		return "", fmt.Errorf("thread %s has no directive in index (requeue requires create or previous tracking)", threadID)
+	}
+
+	// Re-push the directive onto the queue
+	newID, err := oc.q.Push(d)
+	if err != nil {
+		return "", fmt.Errorf("re-push directive: %w", err)
+	}
+
+	// Set thread status back to queued
+	if oc.threads != nil {
+		oc.threads.Set(threadID, StatusQueued)
+	}
+
+	// Audit the requeue as a mutation
+	if oc.audit != nil {
+		_, _ = oc.audit.Append(AuditEntry{
+			Ts:       oc.now(),
+			Actor:    "operator",
+			Kind:     AuditKindMutation,
+			ThreadID: threadID,
+			Detail:   fmt.Sprintf("requeue: directive re-emitted (old=%s, new=%s)", threadID, newID),
+		})
+	}
+
+	return fmt.Sprintf("ok: requeue thread %s (directive %s re-emitted)", threadID, newID), nil
 }

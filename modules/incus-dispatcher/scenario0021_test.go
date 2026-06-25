@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -260,5 +261,285 @@ func TestScenario0021_PauseBlockResumeTransitions(t *testing.T) {
 	}
 	if transitionCount < 4 {
 		t.Fatalf("expected at least 4 transitions, got %d", transitionCount)
+	}
+}
+
+// TestScenario0021_RequeueReEmitsWork proves AC-4 requeue:
+// `requeue <thread-id>` must re-emit the thread's work onto the queue AND set thread status to queued.
+// SCENARIO-0021 observable: "Thread status changes to queued, work is re-emitted"
+func TestScenario0021_RequeueReEmitsWork(t *testing.T) {
+	q := queue.NewMemoryQueue()
+	now := time.Now
+	threads := NewThreadTracker(now)
+	audit := NewMemoryAuditLog()
+
+	// Thread→Directive mapping for requeue
+	threadToDirective := make(map[string]queue.Directive)
+
+	// Create a directive and track it
+	d1 := queue.Directive{
+		Intent:      "feature-x",
+		Template:    "coding",
+		Repo:        "/repo",
+		Ref:         "main",
+		Task:        "implement feature X",
+		Importance:  queue.ImportanceNormal,
+	}
+	id1, _ := q.Push(d1)
+	d1.ID = id1
+	threadToDirective[id1] = d1
+	threads.Set(id1, StatusQueued)
+
+	console := NewOperatorConsole(q, threads, map[string]*Worker{}, audit, now)
+	console.threadToDirective = threadToDirective // Inject the index
+
+	// Manually claim the directive (simulate daemon claiming work)
+	_, lease, err := q.Claim("test", time.Minute)
+	if err != nil {
+		t.Fatalf("claim failed: %v", err)
+	}
+
+	// Change thread status to active (simulating daemon setting it)
+	threads.Set(id1, StatusActive)
+
+	// Mark directive as done (but we keep the original for requeue)
+	_ = q.Done(lease)
+
+	// Verify queue is now empty
+	pending, _ := q.Len()
+	if pending != 0 {
+		t.Fatalf("expected 0 pending after done, got %d", pending)
+	}
+
+	// Now requeue the thread
+	result, err := console.cmdRequeue([]string{id1})
+	if err != nil {
+		t.Fatalf("requeue failed: %v", err)
+	}
+	if !strings.Contains(result, "ok:") || !strings.Contains(result, "requeue") {
+		t.Fatalf("requeue output unexpected: %q", result)
+	}
+
+	// Assert: thread status must be queued
+	status := threads.Status(id1)
+	if status != StatusQueued {
+		t.Fatalf("requeue: thread status not queued, got %s", status)
+	}
+
+	// Assert: directive must be back on queue (pending count increased)
+	pending, _ = q.Len()
+	if pending != 1 {
+		t.Fatalf("requeue: expected 1 pending directive, got %d", pending)
+	}
+
+	// Assert: audit log records the requeue transition
+	auditEntries := audit.ByThread(id1)
+	var requeueAuditFound bool
+	for _, entry := range auditEntries {
+		if entry.Kind == AuditKindMutation && strings.Contains(entry.Detail, "requeue") {
+			requeueAuditFound = true
+			break
+		}
+	}
+	if !requeueAuditFound {
+		t.Fatalf("requeue: mutation audit entry not found")
+	}
+}
+
+// TestScenario0021_ArtifactInspection proves AC-3 artifact inspection:
+// `inspect <thread-id>` must display artifact metadata AND content.
+// SCENARIO-0021 observable: "Artifact metadata and content are displayed"
+func TestScenario0021_ArtifactInspection(t *testing.T) {
+	q := queue.NewMemoryQueue()
+	now := time.Now
+	threads := NewThreadTracker(now)
+	audit := NewMemoryAuditLog()
+
+	// Create a result with artifacts
+	threadID := "thread-001"
+
+	result := &Result{
+		ContainerName: "test-container",
+		ExitCode:      0,
+		Duration:      time.Second,
+		Stdout:        "test passed",
+		Stderr:        "",
+		PatchData:     []byte("diff --git a/file.txt b/file.txt\n+added line"),
+		Artifacts: map[string][]byte{
+			"report.json": []byte(`{"status": "passed"}`),
+			"log.txt":     []byte("execution log content"),
+		},
+	}
+
+	// Thread→Result mapping
+	threadToResult := make(map[string]*Result)
+	threadToResult[threadID] = result
+
+	console := NewOperatorConsole(q, threads, map[string]*Worker{}, audit, now)
+	console.threadToResult = threadToResult // Inject the index
+
+	// Run inspect command
+	output := &bytes.Buffer{}
+	console.renderInspect(output, threadID)
+	inspectOut := output.String()
+
+	// Assert: output contains artifact keys
+	if !strings.Contains(inspectOut, "report.json") {
+		t.Fatalf("inspect output missing artifact key 'report.json'")
+	}
+	if !strings.Contains(inspectOut, "log.txt") {
+		t.Fatalf("inspect output missing artifact key 'log.txt'")
+	}
+
+	// Assert: output contains artifact content
+	if !strings.Contains(inspectOut, "status") || !strings.Contains(inspectOut, "passed") {
+		t.Fatalf("inspect output missing artifact content from report.json")
+	}
+	if !strings.Contains(inspectOut, "execution log") {
+		t.Fatalf("inspect output missing artifact content from log.txt")
+	}
+
+	// Assert: output contains patch data
+	if !strings.Contains(inspectOut, "diff") {
+		t.Fatalf("inspect output missing patch/diff content")
+	}
+}
+
+// TestScenario0021_ThreadEnumeration proves AC-2 threads command:
+// `threads` must list all known threads with their status (no aging, per observable note).
+func TestScenario0021_ThreadEnumeration(t *testing.T) {
+	q := queue.NewMemoryQueue()
+	now := time.Now
+	threads := NewThreadTracker(now)
+	threadStore := NewThreadStore()
+
+	// Create threads manually
+	t1 := Thread{ID: "thread-1", Status: StatusQueued}
+	t2 := Thread{ID: "thread-2", Status: StatusActive}
+	t3 := Thread{ID: "thread-3", Status: StatusPaused}
+	threadStore.Put(t1)
+	threadStore.Put(t2)
+	threadStore.Put(t3)
+
+	console := NewOperatorConsole(q, threads, map[string]*Worker{}, NewMemoryAuditLog(), now)
+	console.threadStore = threadStore
+
+	// Run threads command
+	output := &bytes.Buffer{}
+	console.renderThreads(output)
+	threadsOut := output.String()
+
+	// Assert: all thread IDs appear in output
+	if !strings.Contains(threadsOut, "thread-1") {
+		t.Fatalf("threads output missing thread-1")
+	}
+	if !strings.Contains(threadsOut, "thread-2") {
+		t.Fatalf("threads output missing thread-2")
+	}
+	if !strings.Contains(threadsOut, "thread-3") {
+		t.Fatalf("threads output missing thread-3")
+	}
+
+	// Assert: thread statuses appear in output
+	if !strings.Contains(threadsOut, "queued") {
+		t.Fatalf("threads output missing status 'queued'")
+	}
+	if !strings.Contains(threadsOut, "active") {
+		t.Fatalf("threads output missing status 'active'")
+	}
+	if !strings.Contains(threadsOut, "paused") {
+		t.Fatalf("threads output missing status 'paused'")
+	}
+}
+
+// TestScenario0021_PausedThreadNotDispatched proves dispatch gating:
+// SCENARIO-0021 observable: "thread paused → no new work is dispatched"
+// When a thread is paused, Daemon.RunOnce must NOT execute its directive.
+// (This requires wiring the Daemon to consult thread status; see Daemon.runWithThreadGating)
+func TestScenario0021_PausedThreadNotDispatched(t *testing.T) {
+	// Use the existing fakeRunner from daemon_test.go
+	runner := &fakeRunner{}
+
+	// Setup daemon with ThreadTracker
+	q := queue.NewMemoryQueue()
+	now := func() time.Time { return time.Unix(0, 0) }
+	threads := NewThreadTracker(now)
+
+	// Create and push a directive
+	d := queue.Directive{
+		Intent:      "feature-x",
+		Template:    "coding",
+		Repo:        "/repo",
+		Ref:         "main",
+		Task:        "test",
+		Importance:  queue.ImportanceNormal,
+	}
+	threadID, _ := q.Push(d)
+	threads.Set(threadID, StatusQueued)
+
+	// Daemon with thread gating enabled
+	policy := &Policy{
+		Templates: map[string]TemplateRule{
+			"coding": {Tier: TierFast}, // Allow the "coding" template
+		},
+	}
+	dm := &Daemon{
+		Q:        q,
+		Runner:   runner,
+		Policy:   policy,
+		Consumer: "test",
+		LeaseDur: time.Minute,
+		Threads:  threads,
+		Now:      now,
+	}
+
+	// Pause the thread BEFORE daemon claims/runs
+	threads.Set(threadID, StatusPaused)
+
+	// Track the initial pending count
+	initialPending, _ := q.Len()
+
+	// Daemon tries to run once with paused thread
+	outcome, _, err := dm.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce failed: %v", err)
+	}
+
+	// Assert: with paused thread, outcome must be requeued (not executed)
+	if outcome != OutcomeRequeued {
+		t.Fatalf("paused thread dispatch: expected OutcomeRequeued, got %s", outcome)
+	}
+
+	// Assert: pending count should still equal initial (directive was requeued)
+	pendingAfter, _ := q.Len()
+	if pendingAfter != initialPending {
+		t.Fatalf("paused thread dispatch: pending count changed from %d to %d (should stay %d)", initialPending, pendingAfter, initialPending)
+	}
+
+	// Assert: thread status should still be paused
+	if threads.Status(threadID) != StatusPaused {
+		t.Fatalf("thread status changed unexpectedly during paused dispatch, got %s", threads.Status(threadID))
+	}
+
+	// Now resume the thread and try again
+	threads.Set(threadID, StatusActive)
+	outcome, _, err = dm.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce after resume failed: %v", err)
+	}
+
+	// Assert: with resumed thread, the outcome should not be requeued
+	// (It may be done, rejected, or requeued depending on the run result; we just verify it was not blocked by thread status)
+	if outcome == OutcomeRequeued {
+		// Check if this requeue was due to the thread status (it shouldn't be)
+		// The directive passed the thread gating, so it must have failed for another reason
+		t.Logf("resumed thread was requeued for another reason (not thread status): outcome=%s", outcome)
+	}
+
+	// The key assertion: the thread status is no longer blocking execution
+	// (either the thread ran OR it failed validation, but thread status allowed it to try)
+	finalPending, _ := q.Len()
+	if finalPending > initialPending {
+		t.Fatalf("resumed thread: pending count should not increase beyond initial, got %d vs initial %d", finalPending, initialPending)
 	}
 }

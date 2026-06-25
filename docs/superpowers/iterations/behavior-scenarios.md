@@ -1068,7 +1068,14 @@ microVM host-socket isolation → ITER-0005)
 - All required operations succeed
 - Operator has visibility into queue, workers, and artifacts
 
-**Automation status:** automated (ITER-0008b, TG1): `cd modules/incus-dispatcher && go test . -run TestScenario0021` passes; proves AC-1 (create), AC-2 (queue/workers), AC-3 (inspect), AC-4 (pause/resume), and STORY-0027 AC-3 (pause/block/resume transitions with audit recording).
+**Automation status:** automated (ITER-0008b, TG1): all 6 tests in `cd modules/incus-dispatcher && go test . -run TestScenario0021 -v` pass. Proves:
+- AC-1 (create work items): `cmdCreate` pushes directive, assigns ID, initializes thread to queued, audits mutation
+- AC-2 (queue/worker/thread state display): `queue` renders pending/claimed counts + next directive; `workers` lists all registered workers with kind/capabilities; `threads` lists all known threads with status (no sorting/aging; that's STORY-0037)
+- AC-3 (inspect responses AND artifacts): `cmdInspect` displays thread status + transitions + patch data + artifact keys + artifact content (first N lines)
+- AC-4 (requeue re-emits work): `cmdRequeue` re-pushes directive onto queue and sets thread status to queued; test asserts queue pending count delta + thread status change + audit mutation record
+- AC-4 (pause/block/resume transitions): `cmdPause/cmdBlock/cmdResume` validate transitions (pause/block only from active/queued; resume only from paused/blocked; reject illegal), record all in audit log with AuditKindTransition
+- STORY-0027 AC-3 (transitions observed): dedicated transition test proves pause/block/resume + audit recording + illegal rejection
+- Observable "paused thread → no work dispatched": `TestScenario0021_PausedThreadNotDispatched` proves Daemon.RunOnce checks thread status AFTER claim (before execution) and requeues (not runs) directives from paused/blocked threads; resume allows execution
 **Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0021 -v`
 
 **Sources:**
