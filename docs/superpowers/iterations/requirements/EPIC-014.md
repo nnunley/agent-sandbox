@@ -17,6 +17,7 @@
 **Acceptance criteria:**
 - AC-1: Grant token format defined (claims `iss`/`sub`/`aud`/`iat`/`nbf`/`exp`/`jti` + **`cnf`=client-key thumbprint (sender-constraint)** + footer `kid`; unix-int timestamps for cross-impl parity); Go encode + Ed25519 sign + cross-language verify round-trip (pyseto); tampered token fails verification · impact:`local` · seam:`unit` · scenario:`SCENARIO-0120`
 - AC-2: Mac issuer `laneq-grant mint --sub <id> --aud laneq://<host>:<port> --ttl <dur>` produces a valid grant binding the client key into `cnf`; Ed25519 private key is generated and held on the Mac (Keychain / secstore vault) and is never exported · impact:`local` · seam:`integration` · scenario:`SCENARIO-0117`
+  - **Phase-1 key-storage note (PAR re-review 2026-06-25):** Phase 1 accepts a **file-backed** issuer key (e.g. `~/.laneq/issuer.key`, mode 0600) — autonomous-safe and not coupled to the user's macOS Keychain. Keychain / secstore vault hardening is a Phase-2 / `brokerd` concern. The `--sub` flag stays `agent-host` in Phase 1 (per the STORY-0080 AC-2 boxing-in note); per-role `--sub` is the ITER-0008 precondition.
 - AC-3: Key rotation supported — issuer can mint under a new `kid`; the format carries `kid` in the footer so verifiers can trust current + next public keys · impact:`local` · seam:`unit` · scenario:`SCENARIO-0120`
 
 **Sources:**
@@ -35,13 +36,14 @@
 
 **Acceptance criteria:**
 - AC-1: Client holds its own Ed25519 keypair and signs a per-request **proof** (PASETO v4.public over {aud, method, nonce, iat}) — sender-constraint so a captured grant is useless · impact:`local` · seam:`unit` · scenario:`SCENARIO-0117`
-- AC-2: `GrantSource` interface + file-backed implementation loads the current grant, caches it in memory, reloads on file change / before `exp` · impact:`local` · seam:`unit` · scenario:`SCENARIO-0117`
-- AC-3: `LaneqQueue` attaches grant+proof via a gRPC unary client interceptor (metadata `laneq-grant` + `laneq-proof`, proof bound to the actual method); an absent/nil grant source preserves today's behavior (no RPC-shape change, nothing breaks pre-rollout) · impact:`cross-surface` · seam:`integration` · scenario:`SCENARIO-0117`
+- AC-2: `GrantSource` interface + file-backed implementation loads the current grant, caches it in memory, reloads on file change / before `exp` · impact:`local` · seam:`unit` · scenario:`SCENARIO-0117` · **done:ITER-0007c** (T1 — `grantauth.GrantSource`/`FileGrantSource`, mtime cache + optional exp-aware reload + `-race`, `e0f4a5d`)
+  - **Phase-1/2 boxing-in note (PAR scope review 2026-06-25):** the Phase-1 `GrantSource` loads a SINGLE pre-minted grant with `sub=agent-host` (host-level). Multi-consumer / per-role grants (`sub=temporal-writer|daemon-consumer`) are a **Phase-2 / ITER-0008 precondition**: ITER-0008 recursive delegation (STORY-0028/0073) + sole-writer authz (Phase 2) will require the issuer to mint per-role grants and `GrantSource` to select among them. Not a Phase-1 blocker; the file-backed model is intentionally not consumer-aware yet.
+- AC-3: `LaneqQueue` attaches grant+proof via a gRPC unary client interceptor (metadata `laneq-grant` + `laneq-proof`, proof bound to the actual method); an absent/nil grant source preserves today's behavior (no RPC-shape change, nothing breaks pre-rollout). **Implemented as ONE TDD task block with AC-2 (the interceptor consumes `GrantSource`).** **Mandatory automated evidence (PAR scope review 2026-06-25 — Critical):** a Go real-wire test (extend `queue/run-laneq-wire.sh` and/or a `go test` real-wire case) proves the interceptor attaches a valid grant+proof and laneq accepts it, a missing grant preserves legacy passthrough, and a wrong-method/replayed proof is rejected — replacing the prior "proven manually" note · impact:`cross-surface` · seam:`integration` · scenario:`SCENARIO-0117`
 
 **Sources:**
 - `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:48-66`
 
-**Status:** partial:ITER-0007c — **AC-1 done** (Go `grantauth.SignProof`, `e99a28b`); AC-2 (`GrantSource`) + AC-3 (client interceptor + `serve_cmd.go` wiring) **pending**. Additive to `modules/incus-dispatcher/queue/laneq.go` + `grantauth`.
+**Status:** partial:ITER-0007c — **AC-1 done** (Go `grantauth.SignProof`, `e99a28b`); **AC-2 done** (`grantauth.GrantSource`/`FileGrantSource`, T1 `e0f4a5d`); AC-3 (client interceptor + `serve_cmd.go` wiring + mandatory real-wire evidence) **in progress (T2/T3)**. Additive to `modules/incus-dispatcher/queue/laneq.go` + `grantauth`.
 
 ## STORY-0081
 
@@ -73,10 +75,11 @@
 **So that** laneq becomes authenticated across non-local networks safely, with confidentiality carried by Tailscale
 
 **Acceptance criteria:**
-- AC-1: The Mac issuer pushes the minted token to `agent-host` via the Incus systemd-credential / file mechanism; a Mac-side renewal helper re-mints + re-pushes before expiry; the cluster transitions `log-only` → `enforce` with no legitimate RPC rejected · impact:`journey` · seam:`e2e` · scenario:`SCENARIO-0119`
+- AC-1a: **(in-scope ITER-0007c — local e2e)** A file-backed grant token at a known path is loaded by the Go `GrantSource`; extending `queue/run-laneq-wire.sh` brings up a local laneq in `log-only`→`enforce` and proves a Go client with a valid grant+proof is accepted while an absent/forged/replayed one is rejected (enforce) or logged-and-allowed (log-only) · impact:`journey` · seam:`e2e` · scenario:`SCENARIO-0119`
+- AC-1b: **(DEFERRED — live-cluster rollout, gated on operator authorization; tracked for ITER-0008/operationalization)** The Mac issuer pushes the minted token to the live `agent-host` via the Incus systemd-credential / file mechanism; a Mac-side renewal helper re-mints + re-pushes before expiry; the live cluster transitions `log-only` → `enforce` with no legitimate RPC rejected. Outward-facing + hard-to-reverse (external laneq PR merge + live mutation) — NOT done autonomously inside the iteration loop · impact:`journey` · seam:`e2e` · scenario:`SCENARIO-0119`
 - AC-2: Transport confidentiality (Tailscale/WireGuard or gRPC-TLS) is recommended but auth/replay-resistance does NOT depend on it (sender-constrained proof + nonce cache hold on an observed channel); the residual within-skew-window same-method race is documented and bounded by the freshness window + nonce cache · impact:`none` · seam:`integration`
 
 **Sources:**
 - `docs/superpowers/specs/2026-06-24-laneq-grant-paseto-design.md:67-79`
 
-**Status:** pending (ITER-0007c). gRPC-TLS and a pull/fetch broker RPC are deferred (Phase 2 / broker doc).
+**Status:** **AC-1a in-scope ITER-0007c** (local e2e log-only→enforce via `run-laneq-wire.sh`); **AC-1b deferred** (live-cluster rollout + external laneq PR — gated on operator authorization, outward-facing, tracked to ITER-0008/operationalization); AC-2 = design note. gRPC-TLS and a pull/fetch broker RPC are deferred (Phase 2 / broker doc).

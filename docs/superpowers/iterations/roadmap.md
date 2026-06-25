@@ -901,7 +901,17 @@ the ITER-0007b process-level invariant to authz. The full provider-credential br
 
 **Sequencing:** runs **before/alongside ITER-0008** — ITER-0008's multi-consumer/recursive delegation
 (non-exclusive leases) benefits from real per-consumer grants, and Phase 2 sole-writer enforcement builds
-directly on the ITER-0007b seam. **Status:** pending (spec approved; requirements extraction next).
+directly on the ITER-0007b seam. **Status:** IN PROGRESS (formal `running-an-iteration` resumed 2026-06-25;
+verification side + Go signing core + GrantSource (T1 `e0f4a5d`) committed). **Scope revised by PAR scope review 2026-06-25:**
+STORY-0082 AC-1 split into **AC-1a (local e2e log-only→enforce via `run-laneq-wire.sh`, in-scope)** and
+**AC-1b (live-cluster rollout + external laneq PR — DEFERRED, gated on operator authorization, outward-facing)**;
+STORY-0080 AC-3 gains a **mandatory automated Go real-wire evidence task** (replacing "proven manually");
+STORY-0080 AC-2+AC-3 implemented as one TDD task block.
+**ITER-0008 precondition (PAR boxing-in finding 2026-06-25):** the Phase-1 grant is host-level (`sub=agent-host`),
+single-consumer. ITER-0008 recursive delegation (STORY-0028/0073) + Phase-2 sole-writer authz REQUIRE the Mac
+issuer to mint **per-role grants** (`--sub temporal-writer|daemon-consumer`) and `GrantSource` to select among
+them. The ITER-0007c issuer/`GrantSource` are intentionally NOT consumer-aware; this issuer upgrade is a
+precondition for ITER-0008 multi-consumer delegation, not a Phase-1 blocker.
 
 **Python/uv toolchain decision (2026-06-24 research):** the laneq side (STORY-0081) is a `uv`-managed
 Python project; the offline fleet worker has no PyPI egress (binary-cache only) and prebuilt manylinux

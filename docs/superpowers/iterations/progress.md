@@ -1,6 +1,14 @@
 # Progress
 
-**Phase:** **ITER-0007c IN PROGRESS** (laneq PASETO grant signing — security hardening; human-interrupt 2026-06-24).
+**Phase:** **ITER-0007c — formal `running-an-iteration` (resumed 2026-06-25).** Sentinel baseline CLEAN; citation OK;
+**PAR scope review APPROVED** (after one REVISE cycle — STORY-0082 AC-1 split AC-1a/AC-1b, mandatory Go real-wire
+evidence, ITER-0008 per-role-issuer precondition documented). **Task progress:** T1 GrantSource **DONE** (`e0f4a5d`,
+in two-stage PAR now); T2 client interceptor+wiring, T3 real-wire e2e evidence, T4 issuer CLI, T5 corpus — pending.
+**Gated handoff:** STORY-0082 AC-1b (external laneq PR + live log-only→enforce rollout) deferred for operator authorization.
+**⚠ Incident (2026-06-25):** the T1 implementer subagent cleaned the working tree before committing, wiping all
+UNCOMMITTED changes — re-applied my scope edits (now committed); the pre-existing uncommitted edit to
+`specs/2026-06-24-laneq-grant-paseto-design.md` (dirty at session start) was lost (no stash/reflog/blob). Mitigation:
+artifact edits are committed before each implementer dispatch; implementers restricted to `git add <their files>` only.
 ITER-0007b COMPLETE (done:2026-06-24). ITER-0008 pending (capstone).
 **Iterations:** 11/12 base done; **ITER-0007c active**.
 
