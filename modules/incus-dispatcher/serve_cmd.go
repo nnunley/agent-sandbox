@@ -122,8 +122,25 @@ func buildQueue(queueType, laneqAddr, grantFile, clientKeyPath, aud string) (que
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		}
 
-		// ITER-0007c AC-3: Wire auth if all three flags are set.
-		if grantFile != "" && clientKeyPath != "" && aud != "" {
+		// ITER-0007c AC-3: Fail loudly on partial auth config (PAR fix).
+		// All three must be set OR all three must be empty (legacy passthrough).
+		// Partial config (some but not all) is a misconfiguration error.
+		numAuthFlagsSet := 0
+		if grantFile != "" {
+			numAuthFlagsSet++
+		}
+		if clientKeyPath != "" {
+			numAuthFlagsSet++
+		}
+		if aud != "" {
+			numAuthFlagsSet++
+		}
+
+		if numAuthFlagsSet > 0 && numAuthFlagsSet < 3 {
+			return nil, fmt.Errorf("laneq auth is partially configured: --laneq-grant-file, --laneq-client-key, and --laneq-aud must be set together (or all omitted)")
+		}
+
+		if numAuthFlagsSet == 3 {
 			// Load grant source.
 			grantSource, err := grantauth.NewFileGrantSource(grantFile)
 			if err != nil {
@@ -140,6 +157,7 @@ func buildQueue(queueType, laneqAddr, grantFile, clientKeyPath, aud string) (que
 			interceptor := grantauth.NewClientInterceptor(grantSource, clientKey, aud)
 			dialOpts = append(dialOpts, grpc.WithChainUnaryInterceptor(interceptor))
 		}
+		// numAuthFlagsSet == 0: legacy passthrough, no interceptor
 
 		// Dial the laneq gRPC server.
 		conn, err := grpc.NewClient(laneqAddr, dialOpts...)

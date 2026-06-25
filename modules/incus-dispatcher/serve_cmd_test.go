@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -92,6 +93,104 @@ func TestBuildQueue(t *testing.T) {
 					if err := tt.cleanup(q); err != nil {
 						t.Errorf("buildQueue(%q, %q): cleanup failed: %v", tt.queueType, tt.laneqAddr, err)
 					}
+				}
+			}
+		})
+	}
+}
+
+// TestBuildQueueAuthPartialConfig verifies that partial auth flag configuration fails loudly.
+// ITER-0007c PAR fix: misconfiguration must not silently disable auth.
+func TestBuildQueueAuthPartialConfig(t *testing.T) {
+	tests := []struct {
+		name          string
+		grantFile     string
+		clientKeyPath string
+		aud           string
+		wantErr       bool
+		errContains   string
+	}{
+		{
+			name:          "all three set (happy path, but key files don't exist)",
+			grantFile:     "/tmp/nonexistent_grant",
+			clientKeyPath: "/tmp/nonexistent_key",
+			aud:           "laneq://agent-host:9999",
+			wantErr:       true, // Fails on file load, but not on partial-config
+			errContains:   "load", // Expected error path: file load (grant or key), not config validation
+		},
+		{
+			name:          "none set (legacy passthrough)",
+			grantFile:     "",
+			clientKeyPath: "",
+			aud:           "",
+			wantErr:       false, // Should succeed with legacy passthrough
+		},
+		{
+			name:          "only grantFile set",
+			grantFile:     "/tmp/grant",
+			clientKeyPath: "",
+			aud:           "",
+			wantErr:       true,
+			errContains:   "partially configured",
+		},
+		{
+			name:          "only clientKeyPath set",
+			grantFile:     "",
+			clientKeyPath: "/tmp/key",
+			aud:           "",
+			wantErr:       true,
+			errContains:   "partially configured",
+		},
+		{
+			name:          "only aud set",
+			grantFile:     "",
+			clientKeyPath: "",
+			aud:           "laneq://agent-host:9999",
+			wantErr:       true,
+			errContains:   "partially configured",
+		},
+		{
+			name:          "grantFile and clientKeyPath set, aud missing",
+			grantFile:     "/tmp/grant",
+			clientKeyPath: "/tmp/key",
+			aud:           "",
+			wantErr:       true,
+			errContains:   "partially configured",
+		},
+		{
+			name:          "grantFile and aud set, clientKeyPath missing",
+			grantFile:     "/tmp/grant",
+			clientKeyPath: "",
+			aud:           "laneq://agent-host:9999",
+			wantErr:       true,
+			errContains:   "partially configured",
+		},
+		{
+			name:          "clientKeyPath and aud set, grantFile missing",
+			grantFile:     "",
+			clientKeyPath: "/tmp/key",
+			aud:           "laneq://agent-host:9999",
+			wantErr:       true,
+			errContains:   "partially configured",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := buildQueue("laneq", "localhost:50051", tt.grantFile, tt.clientKeyPath, tt.aud)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("buildQueue: got err=%v, want err=%v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && tt.errContains != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("buildQueue: error %q does not contain %q", err, tt.errContains)
+				}
+			}
+			if !tt.wantErr && q != nil {
+				// Clean up the queue if it was created.
+				if c, ok := q.(interface{ Close() error }); ok {
+					c.Close()
 				}
 			}
 		})
