@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/agent-sandbox/incus-dispatcher/grantauth"
 	"github.com/agent-sandbox/incus-dispatcher/queue"
 )
 
@@ -30,6 +31,9 @@ func runServeCommand(args []string) int {
 	consumer := fs.String("consumer", "coordinator", "consumer id for queue leases")
 	queueType := fs.String("queue", "memory", "queue backend: 'memory' (default) or 'laneq'")
 	laneqAddr := fs.String("laneq-addr", "localhost:50051", "laneq gRPC server address (used if --queue=laneq)")
+	laneqGrantFile := fs.String("laneq-grant-file", "", "path to laneq PASETO grant file (enables gRPC auth if set)")
+	laneqClientKey := fs.String("laneq-client-key", "", "path to laneq client Ed25519 private key PEM (enables gRPC auth if set)")
+	laneqAud := fs.String("laneq-aud", "", "laneq audience for grants, e.g. laneq://agent-host:9999 (enables gRPC auth if set)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -48,8 +52,9 @@ func runServeCommand(args []string) int {
 		TierHard: NewFirecrackerRunner(*remote),
 	})
 
-	// ITER-0006 T5: Backend selector (STORY-0002 AC-2).
-	q, err := buildQueue(*queueType, *laneqAddr)
+	// ITER-0007c T2 AC-3: Wire gRPC auth if all three flags are set (grant file, client key, audience).
+	// Absent/nil → legacy passthrough (backward compatible, nothing breaks pre-rollout).
+	q, err := buildQueue(*queueType, *laneqAddr, *laneqGrantFile, *laneqClientKey, *laneqAud)
 	if err != nil {
 		log.Printf("serve: queue init failed: %v", err)
 		return 1
@@ -92,13 +97,18 @@ func runServeCommand(args []string) int {
 // Supported types: "memory" (default, ITER-0000 stub) and "laneq" (ITER-0006 cluster substrate).
 // For laneq, laneqAddr must be a valid gRPC server address (e.g., "localhost:50051").
 //
+// ITER-0007c T2 AC-3: When queue=laneq AND all three of (grantFile, clientKeyPath, aud) are
+// provided, the interceptor is wired to attach PASETO grant + per-request proof (sender-constrained,
+// replay-resistant). When they are NOT set, dial exactly as today (insecure, no interceptor) —
+// legacy passthrough preserves backward compatibility (nothing breaks pre-rollout).
+//
 // ITER-0006 T5 / STORY-0002 AC-2: The Temporal-sole-writer seam.
 // The daemon's claim path (Claim/Touch/Done/Requeue) only READS the scheduling fields
 // (priority, not_before_unix). These fields are written ONLY via laneq's gRPC Defer and
 // Reprioritize ops. In ITER-0007, Temporal becomes the sole caller of those gRPC ops,
 // enabling external urgency resurfacing and backoff management. The daemon remains a
 // read-only consumer of the scheduling state; Temporal drives the scheduling decision.
-func buildQueue(queueType, laneqAddr string) (queue.Queue, error) {
+func buildQueue(queueType, laneqAddr, grantFile, clientKeyPath, aud string) (queue.Queue, error) {
 	switch queueType {
 	case "memory":
 		return queue.NewMemoryQueue(), nil
@@ -108,10 +118,31 @@ func buildQueue(queueType, laneqAddr string) (queue.Queue, error) {
 			return nil, fmt.Errorf("laneq backend requires --laneq-addr (e.g., localhost:50051)")
 		}
 
-		// Dial the laneq gRPC server with insecure transport (no TLS for now; ITER-0007 adds cert-based auth).
-		conn, err := grpc.NewClient(laneqAddr,
+		dialOpts := []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
+		}
+
+		// ITER-0007c AC-3: Wire auth if all three flags are set.
+		if grantFile != "" && clientKeyPath != "" && aud != "" {
+			// Load grant source.
+			grantSource, err := grantauth.NewFileGrantSource(grantFile)
+			if err != nil {
+				return nil, fmt.Errorf("load grant source: %w", err)
+			}
+
+			// Load client private key.
+			clientKey, err := grantauth.LoadEd25519PrivateKeyPEM(clientKeyPath)
+			if err != nil {
+				return nil, fmt.Errorf("load client key: %w", err)
+			}
+
+			// Create interceptor and add to dial options.
+			interceptor := grantauth.NewClientInterceptor(grantSource, clientKey, aud)
+			dialOpts = append(dialOpts, grpc.WithChainUnaryInterceptor(interceptor))
+		}
+
+		// Dial the laneq gRPC server.
+		conn, err := grpc.NewClient(laneqAddr, dialOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("laneq dial %q: %w", laneqAddr, err)
 		}

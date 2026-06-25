@@ -7,9 +7,11 @@
 package grantauth
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -19,6 +21,8 @@ import (
 	"time"
 
 	paseto "aidanwoods.dev/go-paseto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 // Metadata keys carrying the grant and per-request proof on each gRPC call.
@@ -141,6 +145,94 @@ func (k *Key) sign(claims map[string]any, footer map[string]string) (string, err
 type GrantSource interface {
 	// Current returns the current grant token string, or an error if unavailable.
 	Current() (string, error)
+}
+
+// LoadEd25519PrivateKeyPEM reads a PKCS#8 PEM-encoded Ed25519 private key from a file
+// and returns a *Key ready to use for signing proofs.
+func LoadEd25519PrivateKeyPEM(path string) (*Key, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read private key file: %w", err)
+	}
+
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("decode PEM: no PEM block found")
+	}
+	if block.Type != "PRIVATE KEY" {
+		return nil, fmt.Errorf("decode PEM: expected PRIVATE KEY, got %s", block.Type)
+	}
+
+	privKeyInterface, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse PKCS#8 key: %w", err)
+	}
+
+	privKey, ok := privKeyInterface.(ed25519.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("private key is not Ed25519")
+	}
+
+	return KeyFromEd25519(privKey)
+}
+
+// PrivateKeyPEM exports this key's private key as a PKCS#8 PEM-encoded string.
+func (k *Key) PrivateKeyPEM() (string, error) {
+	der, err := x509.MarshalPKCS8PrivateKey(k.priv)
+	if err != nil {
+		return "", fmt.Errorf("marshal PKCS#8 key: %w", err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})), nil
+}
+
+// NewClientInterceptor creates a gRPC unary client interceptor that attaches
+// a PASETO grant (from src) and a per-request proof (signed by clientKey) to
+// each outgoing RPC. The interceptor is bound to a specific audience (aud) to
+// prevent cross-target replay.
+//
+// SCENARIO-0117: On each call:
+//  1. Load current grant via src.Current(); fail closed if unavailable.
+//  2. Generate a fresh cryptographically-random nonce.
+//  3. Sign a proof binding the RPC method, aud, nonce, and timestamp.
+//  4. Attach both via gRPC metadata (GrantMetadataKey, ProofMetadataKey).
+//  5. Invoke the RPC; propagate any invoker error.
+func NewClientInterceptor(src GrantSource, clientKey *Key, aud string) grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply interface{},
+		cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+
+		// Load the current grant; fail closed if unavailable.
+		grant, err := src.Current()
+		if err != nil {
+			return fmt.Errorf("load grant: %w", err)
+		}
+
+		// Generate a fresh nonce: 24 bytes → 32 chars base64url.
+		nonce := make([]byte, 24)
+		if _, err := rand.Read(nonce); err != nil {
+			return fmt.Errorf("generate nonce: %w", err)
+		}
+		nonceStr := base64.RawURLEncoding.EncodeToString(nonce)
+
+		// Sign a per-request proof binding method, aud, nonce, and now.
+		proof, err := clientKey.SignProof(ProofParams{
+			Aud:    aud,
+			Method: method,
+			Nonce:  nonceStr,
+			Now:    time.Now(),
+		})
+		if err != nil {
+			return fmt.Errorf("sign proof: %w", err)
+		}
+
+		// Attach grant and proof to outgoing metadata.
+		ctx = metadata.AppendToOutgoingContext(ctx,
+			GrantMetadataKey, grant,
+			ProofMetadataKey, proof,
+		)
+
+		// Invoke the RPC with the enriched context.
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
 }
 
 // FileGrantSourceOptions configures a FileGrantSource (currently unused but kept for future extensibility).

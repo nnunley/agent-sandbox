@@ -77,7 +77,8 @@ func TestBuildQueue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q, err := buildQueue(tt.queueType, tt.laneqAddr)
+			// ITER-0007c T2 AC-3: Pass empty strings for auth flags (legacy passthrough, no interceptor).
+			q, err := buildQueue(tt.queueType, tt.laneqAddr, "", "", "")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("buildQueue(%q, %q): got err=%v, want err=%v", tt.queueType, tt.laneqAddr, err, tt.wantErr)
 				return
