@@ -1,6 +1,9 @@
 package queue
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
@@ -12,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/agent-sandbox/incus-dispatcher/grantauth"
@@ -62,7 +66,18 @@ func TestLaneqAuthWire(t *testing.T) {
 	issuerPubKeyFile := filepath.Join(tempDir, "issuer-pub.pem")
 	clientPrivKeyFile := filepath.Join(tempDir, "client-priv.pem")
 	grantFile := filepath.Join(tempDir, "grant.paseto")
-	dbFile := filepath.Join(tempDir, "laneq.db")
+
+	// Create separate DB dirs per auth mode to avoid SQLite locking
+	enforceDbDir := filepath.Join(tempDir, "enforce")
+	logOnlyDbDir := filepath.Join(tempDir, "log-only")
+	if err := os.MkdirAll(enforceDbDir, 0755); err != nil {
+		t.Fatalf("mkdir enforce db dir: %v", err)
+	}
+	if err := os.MkdirAll(logOnlyDbDir, 0755); err != nil {
+		t.Fatalf("mkdir log-only db dir: %v", err)
+	}
+	enforceDbFile := filepath.Join(enforceDbDir, "laneq.db")
+	logOnlyDbFile := filepath.Join(logOnlyDbDir, "laneq.db")
 
 	// Generate issuer and client keypairs
 	issuerKey, err := grantauth.NewKey()
@@ -132,11 +147,11 @@ func TestLaneqAuthWire(t *testing.T) {
 
 	// Start laneq server in enforce mode
 	t.Logf("Starting laneq gRPC server in enforce mode at %s...", addr)
-	serverProc := startLaneqServer(t, laneqSrc, addr, dbFile, issuerPubKeyFile, aud, "enforce")
+	serverProc := startLaneqServer(t, laneqSrc, addr, enforceDbFile, issuerPubKeyFile, aud, "enforce")
 	defer killLaneqServer(t, serverProc)
 
-	// Wait for server to be reachable
-	waitForServer(t, addr, 30*time.Second)
+	// Wait for server to be reachable and ready (TCP + gRPC)
+	waitForServerReady(t, addr, clientKey, grantFile, aud, 30*time.Second)
 	t.Logf("✓ Server is ready at %s", addr)
 
 	// === SCENARIO-0117: ENFORCE ACCEPTS AUTHENTICATED CLIENT ===
@@ -202,41 +217,223 @@ func TestLaneqAuthWire(t *testing.T) {
 		conn.Close()
 	})
 
-	// === SCENARIO-0118: ENFORCE REJECTS UNAUTHENTICATED CLIENT ===
-	t.Run("SCENARIO-0118-enforce-reject-unauth", func(t *testing.T) {
-		t.Logf("Testing: enforce mode rejects unauthenticated client")
+	// === SCENARIO-0118: ENFORCE REJECTS INVALID/MISSING AUTH (POSITIVE NEGATIVES) ===
+	t.Run("SCENARIO-0118-enforce-reject-invalid-auth", func(t *testing.T) {
+		t.Logf("Testing: enforce mode rejects invalid auth (missing, wrong-aud, replayed-nonce, wrong-method)")
 
-		// Dial WITHOUT auth interceptor (plain insecure)
-		conn, err := grpc.NewClient(addr,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-		if err != nil {
-			t.Fatalf("dial without interceptor: %v", err)
-		}
-		defer conn.Close()
+		// Subtest 1: missing auth (no grant/proof metadata)
+		t.Run("missing-auth", func(t *testing.T) {
+			t.Logf("  1. missing auth: no grant/proof metadata")
+			conn, err := grpc.NewClient(addr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+			)
+			if err != nil {
+				t.Fatalf("dial without interceptor: %v", err)
+			}
+			defer conn.Close()
 
-		q := NewLaneqQueue(laneqpb.NewLaneqClient(conn), "scenario-0118")
+			q := NewLaneqQueue(laneqpb.NewLaneqClient(conn), "scenario-0118-missing")
+			_, err = q.Push(Directive{Intent: "test", Importance: ImportanceNormal})
+			if err == nil {
+				t.Fatalf("push without auth should fail, but succeeded")
+			}
+			st, ok := status.FromError(err)
+			if !ok {
+				t.Fatalf("error is not gRPC status: %v", err)
+			}
+			if st.Code() != codes.Unauthenticated {
+				t.Fatalf("code %v, want Unauthenticated", st.Code())
+			}
+			t.Logf("  ✓ missing auth rejected: %v", st.Message())
+		})
 
-		// Try to push without auth
-		dir := Directive{
-			Intent:      "scenario-0118-test",
-			Importance:  ImportanceNormal,
-		}
-		_, err = q.Push(dir)
-		if err == nil {
-			t.Fatalf("push without auth should fail, but succeeded")
-		}
+		// Subtest 2: wrong audience (grant aud ≠ server audience)
+		t.Run("wrong-aud", func(t *testing.T) {
+			t.Logf("  2. wrong-aud: grant/proof with laneq://wrong-aud:1 (server expects %s)", aud)
+			wrongAud := "laneq://wrong-aud:1"
 
-		// Verify the error is Unauthenticated
-		st, ok := status.FromError(err)
-		if !ok {
-			t.Fatalf("push error is not gRPC status: %v", err)
-		}
-		if st.Code() != codes.Unauthenticated {
-			t.Fatalf("push without auth returned code %v, want Unauthenticated", st.Code())
-		}
-		t.Logf("✓ Push without auth rejected with Unauthenticated: %v", st.Message())
-		t.Logf("✓✓ SCENARIO-0118 PASSED: enforce mode rejects unauthenticated client")
+			// Create an interceptor with WRONG audience (grant + proof will have wrong aud)
+			grantSrc, err := grantauth.NewFileGrantSource(grantFile)
+			if err != nil {
+				t.Fatalf("create grant source: %v", err)
+			}
+
+			conn, err := grpc.NewClient(addr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithChainUnaryInterceptor(
+					grantauth.NewClientInterceptor(grantSrc, clientKey, wrongAud),
+				),
+			)
+			if err != nil {
+				t.Fatalf("dial with wrong-aud interceptor: %v", err)
+			}
+			defer conn.Close()
+
+			q := NewLaneqQueue(laneqpb.NewLaneqClient(conn), "scenario-0118-wrong-aud")
+			_, err = q.Push(Directive{Intent: "test", Importance: ImportanceNormal})
+			if err == nil {
+				t.Fatalf("push with wrong-aud should fail, but succeeded")
+			}
+			st, ok := status.FromError(err)
+			if !ok {
+				t.Fatalf("error is not gRPC status: %v", err)
+			}
+			if st.Code() != codes.Unauthenticated {
+				t.Fatalf("code %v, want Unauthenticated (wrong audience)", st.Code())
+			}
+			t.Logf("  ✓ wrong-aud rejected: %v", st.Message())
+		})
+
+		// Subtest 3: replayed nonce (same proof sent twice)
+		t.Run("replayed-nonce", func(t *testing.T) {
+			t.Logf("  3. replayed-nonce: attach fixed proof twice, nonce dedup must reject 2nd")
+
+			// Build a fixed grant+proof (computed once, reused)
+			grantSrc, err := grantauth.NewFileGrantSource(grantFile)
+			if err != nil {
+				t.Fatalf("create grant source: %v", err)
+			}
+
+			// Pre-compute a fixed proof for Push, then reuse it
+			fixedNonce := make([]byte, 24)
+			if _, err := rand.Read(fixedNonce); err != nil {
+				t.Fatalf("generate nonce: %v", err)
+			}
+			fixedNonceStr := base64.RawURLEncoding.EncodeToString(fixedNonce)
+
+			// Sign proof for Push (we'll call Push twice with same nonce)
+			fixedProof, err := clientKey.SignProof(grantauth.ProofParams{
+				Aud:    aud,
+				Method: "/laneq.v1.Laneq/Push",
+				Nonce:  fixedNonceStr,
+				Now:    time.Now(),
+			})
+			if err != nil {
+				t.Fatalf("sign fixed proof for Push: %v", err)
+			}
+
+			// Create a test interceptor that attaches fixed grant+proof
+			fixedProofInterceptor := func(ctx context.Context, method string, req, reply interface{},
+				cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+
+				// Load the current grant
+				grant, err := grantSrc.Current()
+				if err != nil {
+					return fmt.Errorf("load grant: %w", err)
+				}
+
+				// Attach fixed grant + proof
+				ctx = metadata.AppendToOutgoingContext(ctx,
+					grantauth.GrantMetadataKey, grant,
+					grantauth.ProofMetadataKey, fixedProof,
+				)
+				return invoker(ctx, method, req, reply, cc, opts...)
+			}
+
+			conn, err := grpc.NewClient(addr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithChainUnaryInterceptor(fixedProofInterceptor),
+			)
+			if err != nil {
+				t.Fatalf("dial with fixed-proof interceptor: %v", err)
+			}
+			defer conn.Close()
+
+			q := NewLaneqQueue(laneqpb.NewLaneqClient(conn), "scenario-0118-replay")
+
+			// First Push with fixed nonce: should succeed (fresh nonce)
+			_, err = q.Push(Directive{Intent: "first", Importance: ImportanceNormal})
+			if err != nil {
+				t.Fatalf("first Push with fixed nonce should succeed: %v", err)
+			}
+			t.Logf("  ✓ first Push succeeded (nonce unseen)")
+
+			// Second Push with same fixed nonce: must be rejected (nonce seen before)
+			_, err = q.Push(Directive{Intent: "second", Importance: ImportanceNormal})
+			if err == nil {
+				t.Fatalf("second Push with replayed nonce should fail, but succeeded")
+			}
+			st, ok := status.FromError(err)
+			if !ok {
+				t.Fatalf("error is not gRPC status: %v", err)
+			}
+			if st.Code() != codes.Unauthenticated {
+				t.Fatalf("code %v, want Unauthenticated (replayed nonce)", st.Code())
+			}
+			t.Logf("  ✓ second Push rejected with replayed nonce: %v", st.Message())
+		})
+
+		// Subtest 4: wrong method (proof bound to Peek, call Push)
+		t.Run("wrong-method", func(t *testing.T) {
+			t.Logf("  4. wrong-method: proof signed for /laneq.v1.Laneq/Peek, attached to Push")
+
+			grantSrc, err := grantauth.NewFileGrantSource(grantFile)
+			if err != nil {
+				t.Fatalf("create grant source: %v", err)
+			}
+
+			// Pre-compute a proof bound to the WRONG method (Peek)
+			wrongMethodNonce := make([]byte, 24)
+			if _, err := rand.Read(wrongMethodNonce); err != nil {
+				t.Fatalf("generate nonce: %v", err)
+			}
+			wrongMethodNonceStr := base64.RawURLEncoding.EncodeToString(wrongMethodNonce)
+
+			// Sign proof for Peek method
+			proofForPeek, err := clientKey.SignProof(grantauth.ProofParams{
+				Aud:    aud,
+				Method: "/laneq.v1.Laneq/Peek", // wrong — we'll call Push
+				Nonce:  wrongMethodNonceStr,
+				Now:    time.Now(),
+			})
+			if err != nil {
+				t.Fatalf("sign proof for Peek: %v", err)
+			}
+
+			// Create interceptor that attaches Peek-proof to Push call
+			wrongMethodInterceptor := func(ctx context.Context, method string, req, reply interface{},
+				cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+
+				grant, err := grantSrc.Current()
+				if err != nil {
+					return fmt.Errorf("load grant: %w", err)
+				}
+
+				// Always attach the Peek-proof, even for Push call
+				ctx = metadata.AppendToOutgoingContext(ctx,
+					grantauth.GrantMetadataKey, grant,
+					grantauth.ProofMetadataKey, proofForPeek,
+				)
+				return invoker(ctx, method, req, reply, cc, opts...)
+			}
+
+			conn, err := grpc.NewClient(addr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithChainUnaryInterceptor(wrongMethodInterceptor),
+			)
+			if err != nil {
+				t.Fatalf("dial with wrong-method interceptor: %v", err)
+			}
+			defer conn.Close()
+
+			q := NewLaneqQueue(laneqpb.NewLaneqClient(conn), "scenario-0118-wrong-method")
+
+			// Push with Peek-proof must be rejected
+			_, err = q.Push(Directive{Intent: "test", Importance: ImportanceNormal})
+			if err == nil {
+				t.Fatalf("Push with Peek-proof should fail, but succeeded")
+			}
+			st, ok := status.FromError(err)
+			if !ok {
+				t.Fatalf("error is not gRPC status: %v", err)
+			}
+			if st.Code() != codes.Unauthenticated {
+				t.Fatalf("code %v, want Unauthenticated (wrong method)", st.Code())
+			}
+			t.Logf("  ✓ wrong-method rejected: %v", st.Message())
+		})
+
+		t.Logf("✓✓ SCENARIO-0118 PASSED: enforce rejects all invalid auth (missing/wrong-aud/replayed/wrong-method)")
 	})
 
 	// === SCENARIO-0119: LOG-ONLY ALLOWS UNAUTHENTICATED CLIENT ===
@@ -247,22 +444,18 @@ func TestLaneqAuthWire(t *testing.T) {
 		killLaneqServer(t, serverProc)
 		time.Sleep(500 * time.Millisecond) // brief delay for cleanup
 
-		// Create a fresh DB for log-only mode (don't reuse the enforce mode DB)
-		logOnlyDbFile := filepath.Join(tempDir, "laneq-log-only.db")
-		_ = os.Remove(logOnlyDbFile)
-		_ = os.Remove(logOnlyDbFile + "-shm")
-		_ = os.Remove(logOnlyDbFile + "-wal")
-
-
-		// Start laneq server in log-only mode
+		// Start laneq server in log-only mode (using separate DB dir created earlier)
 		t.Logf("Restarting laneq server in log-only mode...")
 		logOnlyLogFile := filepath.Join(tempDir, "laneq-log-only.log")
 		serverProc = startLaneqServerWithLogFile(t, laneqSrc, addr, logOnlyDbFile, issuerPubKeyFile, aud, "log-only", logOnlyLogFile)
 		defer killLaneqServer(t, serverProc)
 
-		// Wait for server to be ready
-		waitForServer(t, addr, 30*time.Second)
+		// Wait for server to be ready (TCP + gRPC)
+		waitForServerReady(t, addr, clientKey, grantFile, aud, 30*time.Second)
 		t.Logf("✓ Server is ready in log-only mode at %s", addr)
+
+		// Give server extra time to fully initialize in log-only mode
+		time.Sleep(2 * time.Second)
 
 		// Dial WITHOUT auth interceptor
 		conn, err := grpc.NewClient(addr,
@@ -276,8 +469,6 @@ func TestLaneqAuthWire(t *testing.T) {
 		q := NewLaneqQueue(laneqpb.NewLaneqClient(conn), "scenario-0119")
 
 		// Try to push without auth — should succeed in log-only mode
-		time.Sleep(1 * time.Second) // Give server more time to settle
-
 		dir := Directive{
 			Intent:      "scenario-0119-test",
 			Importance:  ImportanceNormal,
@@ -298,7 +489,6 @@ func TestLaneqAuthWire(t *testing.T) {
 		}
 		t.Logf("✓ Peek succeeded, verified ID: %s", id)
 		t.Logf("✓✓ SCENARIO-0119 PASSED: log-only mode allows unauthenticated client (safe rollout)")
-		conn.Close()
 	})
 }
 
@@ -362,8 +552,8 @@ func killLaneqServer(t *testing.T, cmd *exec.Cmd) {
 	t.Logf("Killed laneq server (PID %d)", cmd.Process.Pid)
 }
 
-// waitForServer waits for a gRPC server to be reachable at the given address.
-// Times out after the given duration.
+// waitForServer waits for TCP connectivity to the server address.
+// Times out after the given duration. Deprecated: use waitForServerReady instead.
 func waitForServer(t *testing.T, addr string, timeout time.Duration) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -375,4 +565,72 @@ func waitForServer(t *testing.T, addr string, timeout time.Duration) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	t.Fatalf("server at %s not reachable after %v", addr, timeout)
+}
+
+// waitForServerReady waits for a gRPC server to be ready (TCP + serving gRPC).
+// Uses an authenticated Peek call via the provided client key to verify the server
+// is fully initialized and responding to gRPC calls.
+// Times out after the given duration.
+func waitForServerReady(t *testing.T, addr string, clientKey *grantauth.Key, grantFile, aud string, timeout time.Duration) {
+	// First wait for TCP to be ready
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 1*time.Second)
+		if err == nil {
+			conn.Close()
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if time.Now().After(deadline) {
+		t.Fatalf("server at %s TCP not reachable after %v", addr, timeout)
+	}
+
+	// Then wait for gRPC to be serving (use authenticated Peek to verify)
+	grantSrc, err := grantauth.NewFileGrantSource(grantFile)
+	if err != nil {
+		t.Fatalf("create grant source for readiness probe: %v", err)
+	}
+
+	deadline = time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn, err := grpc.NewClient(addr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithChainUnaryInterceptor(
+				grantauth.NewClientInterceptor(grantSrc, clientKey, aud),
+			),
+		)
+		if err != nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		// Try a Peek call to verify gRPC is serving
+		q := NewLaneqQueue(laneqpb.NewLaneqClient(conn), "readiness-probe")
+		_, err = q.Peek()
+		conn.Close()
+
+		if err == nil || (status.Code(err) == codes.Unknown && !isTransientError(err)) {
+			// Success (ErrEmpty is fine, means queue is empty but server is ready)
+			return
+		}
+
+		// Transient errors: retry
+		if isTransientError(err) {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("server at %s gRPC not ready after %v", addr, timeout)
+}
+
+// isTransientError checks if a gRPC error is transient (should retry).
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	code := status.Code(err)
+	return code == codes.Unavailable || code == codes.ResourceExhausted || code == codes.Internal
 }
