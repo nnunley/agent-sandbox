@@ -1112,8 +1112,11 @@ microVM host-socket isolation → ITER-0005)
 - No run exceeds its budget without explicit approval
 - Hard budget guardrails remain protected from mutation
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (ITER-0008b, TG3): All acceptance criteria proven via unit tests (TestBudgetPolicy_Levels, TestBudgetPolicy_ProtectedFromAutoMutation, TestBudgetEnforce_ExceedRejectsOrEscalates) + integration test (TestScenario0022). Proves:
+- AC-1 (all 6 budget levels): `TestBudgetPolicy_Levels` constructs policy with all levels, asserts settable/readable
+- AC-2 (hard ceilings protected): `TestBudgetPolicy_ProtectedFromAutoMutation` shows AllowAutoMutation rejects hard-ceiling fields, operator-approved mutation succeeds
+- AC-3 (run escalates on budget exceed): `TestScenario0022` integration test dispatches d1 ($8 spend), d2 ($5 spend); prior-total=$8 + new=$5 = $13 > $10 limit → d2 escalated (OutcomeEscalated, parked in escalation lane); operator approves budget increase (explicit operator action via ApplyOperatorMutation); hard ceiling verified protected
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestBudgetPolicy_Levels -v && go test . -run TestBudgetPolicy_ProtectedFromAutoMutation -v && go test . -run TestBudgetEnforce_ExceedRejectsOrEscalates -v && go test . -run TestScenario0022 -v && go test -race ./... && go vet ./...`
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:387-416, 455-463`

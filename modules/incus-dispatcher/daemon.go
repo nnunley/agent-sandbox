@@ -40,6 +40,7 @@ type Daemon struct {
 	Log         DecisionLog                // D6 append-only decision log (optional)
 	Audit       AuditLog                   // STORY-0054 system audit log (optional); every processed run is auto-logged
 	Threads     *ThreadTracker             // thread-status tracking (optional)
+	ThreadStore *ThreadStore               // thread data store with BudgetPolicy (optional; STORY-0036 AC-3)
 	Escalations EscalationLane             // non-blocking human escalations lane (optional)
 	Now         func() time.Time           // clock for decision timestamps (optional; defaults to time.Now)
 	Context     ContextProvider            // soft-state provider (optional; defaults to NoopProvider). Best-effort: handoff loss never affects correctness (STORY-0018 AC-4).
@@ -119,6 +120,41 @@ func (dm *Daemon) setStatus(id string, s ThreadStatus) {
 	if dm.Threads != nil {
 		dm.Threads.Set(id, s)
 	}
+}
+
+// checkBudget enforces budget guardrails at the thread level (STORY-0036 AC-3).
+// It sums prior spend on the thread and checks whether the run would exceed the per-thread limit.
+// Returns true if the run may proceed; false if it should escalate or be rejected.
+// Also returns the BudgetEnforcement decision for auditing and logging.
+func (dm *Daemon) checkBudget(d queue.Directive, run *Run) (bool, *BudgetEnforcement) {
+	// If no thread store or budget policy, allow the run (no enforcement).
+	if dm.ThreadStore == nil {
+		return true, nil
+	}
+
+	threadRec, ok := dm.ThreadStore.Get(d.ID)
+	if !ok || threadRec.BudgetPolicy == nil {
+		return true, nil
+	}
+
+	// Compute current thread spend from prior runs (if the result store has them).
+	var currentSpend float64
+	if dm.Results != nil {
+		// Load all prior runs for this thread from the result store.
+		priorResults := dm.Results.ByThread(d.ID)
+		for _, priorRun := range priorResults {
+			if priorRun != nil && priorRun.RunID != run.RunID {
+				currentSpend += priorRun.SpendUSD
+			}
+		}
+	}
+
+	// Enforce the budget policy.
+	decision := threadRec.BudgetPolicy.EnforceRunBudget(run, currentSpend)
+	if decision == nil || !decision.Allowed {
+		return false, decision
+	}
+	return true, decision
 }
 
 // RunOnce claims one eligible directive and drives it through the D4 loop. Returns the
@@ -209,8 +245,35 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 	dm.record(d.ID, "", "teardown", "reap")
 
 	// Store the result for later inspection (artifacts, patch, output) — optional but enables AC-3.
+	// For budget enforcement (STORY-0036 AC-3), track the result under both the directive ID and thread ID.
 	if dm.Results != nil && result != nil {
-		dm.Results.Store(d.ID, result)
+		dm.Results.StoreWithThread(d.ID, d.ID, result)
+	}
+
+	// STORY-0036 AC-3: Budget enforcement is checked BEFORE grading, even on successful runs.
+	// A run that exceeds the budget is escalated to human review regardless of exit code.
+	if dm.Results != nil && result != nil {
+		// Create a minimal Run object from the Result for budget checking.
+		checkRun := &Run{
+			RunID:      d.ID,
+			ThreadID:   d.ID,
+			SpendUSD:   result.SpendUSD,
+			TokensIn:   result.TokensIn,
+			TokensOut:  result.TokensOut,
+			LatencyMs:  result.LatencyMs,
+		}
+		budgetOK, budgetDecision := dm.checkBudget(d, checkRun)
+		if !budgetOK && budgetDecision != nil {
+			// Budget exceeded: escalate to human rung without climbing the ladder.
+			_ = dm.Q.Park(lease)
+			if dm.Escalations != nil {
+				_ = dm.Escalations.Push(EscalationItem{DirectiveID: d.ID, Reason: "budget-exceeded", Origin: d.Origin})
+			}
+			dm.setStatus(d.ID, StatusBlocked)
+			dm.audit(AuditKindRun, d.ID, d.ID, "", originActor(d.Origin), "budget_exceeded: "+budgetDecision.Reason)
+			dm.record(d.ID, "fail", "budget-exceeded", "escalate-human", budgetDecision.Reason)
+			return OutcomeEscalated, d.ID, nil
+		}
 	}
 
 	if passed(result, runErr) {
