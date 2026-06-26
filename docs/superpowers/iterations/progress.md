@@ -1,22 +1,18 @@
 # Progress
 
-**Phase:** **ITER-0008b IMPLEMENTING (final iteration — operator UX/governance + Mac-off capstone) — 2026-06-25.**
-Sentinel baseline clean (514 → now 573 `-race`; JOURNEY-0001/0002/0003 green); citations OK (82). Task-0 done
-(genome pattern-detection note `docs/plans/2026-06-25-genome-pattern-detection.md` + JOURNEY-0004..0007 automation
-seams + STORY-0074 AC-citation/seam reconciliations). **PAR scope review: REVISE→APPROVE** (2 reviewers; resolved
-AC-5 durable-escalation-lane, budget-vs-genome guardrail semantics, JOURNEY citation map, AC-4 unit-seam, AC-3
-Temporal-decoupling) — commit cd8e151-range + the Task-0 commit. Decomposed into 7 TDD task-groups (sequential to
-avoid shared-file conflicts), each: implementer → 2-reviewer adversarial PAR (spec+correctness+quality) → fix loop →
-commit. **Done:** TG1 operator TUI + pause/block/resume (STORY-0028, STORY-0027 AC-3) — 3 commits, 2 fix loops
-closed a real Attempts-leak escalation bug + dispatch-gate + artifact/thread live-wiring (DeferDirective queue
-method added). TG2 provider instances + model resolution + per-run cost capture (STORY-0038, STORY-0035 AC-3/4) —
-2 commits, 1 fix loop added production EscalateRun + provider-taxonomy coherence + WorkerType signal; noted: Run/
-Dispatcher layer not in daemon loop (pre-existing boundary; cost capture proven at Dispatch/EscalateRun seam).
-TG3 budget guardrails (STORY-0036) — commit aa581d0, in PAR review now. **Remaining:** TG4 genome mutation
-(STORY-0032), TG5 thread aging + queue classes (STORY-0037), TG6 multi-repo (STORY-0039), TG7 FileEscalationLane
-+ Mac-off autonomy (STORY-0026) + capstone journeys JOURNEY-0004..0007 (STORY-0074). On completion: post-iteration
-sentinel runs, TODO(ITER-0008b) sweep, wrap-up (mark stories done, update corpus/roadmap/iteration-log), then the
-orchestrator's FINAL behavior-evidence audit (this is the last iteration of the project).
+**Phase:** **ITER-0008b DONE (FINAL iteration complete) — 2026-06-25. NEXT: project-wide final behavior-evidence audit.**
+All 7 TDD task-groups delivered via subagent-driven `implementing-tasks`, each through a two-stage adversarial PAR
+gate that caught + fixed a real defect on every group (TG1 Attempts-leak + live wiring; TG2 proof-by-injection cost
++ production EscalateRun + taxonomy; TG3 faked budget thread-mapping → real Directive.Thread + multi-level enforce +
+operator gate; TG4 promotion guard holes + genuine revert; TG5 frozen aging → live MarkServed; TG6 tautological
+starvation → real LRU-skew + MarkRepoServed wiring; TG7 missing fsync + vacuous autonomy/no-replay → falsifiable
+proofs). Stories done:ITER-0008b — STORY-0028, 0027(AC-3), 0026, 0032, 0031(AC-3/4), 0035(AC-3/4), 0036, 0037, 0038,
+0039, 0074. Epic counters: EPIC-003 3/3, EPIC-004 6/6, EPIC-005 13/13, EPIC-012 7/8 (0068 AC-2 carried). Suite 623
+green `-race`, vet clean; sentinels JOURNEY-0001/0002/0003 + new closing JOURNEY-0004..0007 green; zero
+`TODO(ITER-0008b)` (4 parked markers reclassified to backlog). Mac-off acceptance CLOSED (CI-modeled; live cluster
+run = honest enrichment). Roadmap ITER-0008b → done; iteration-log appended + validated; corpus rows updated (no TBD).
+**ALL 12 base iterations + 6 sub-iterations DONE. NEXT (orchestrator): the project-wide FINAL behavior-evidence
+audit over every user-facing surface from the original spec — completion = passing evidence, then project done.**
 
 ---
 
