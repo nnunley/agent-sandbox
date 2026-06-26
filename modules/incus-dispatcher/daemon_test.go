@@ -323,3 +323,41 @@ func TestRunOnce_FrameworkErrorIsFail(t *testing.T) {
 		t.Fatalf("framework error → %q, want requeued (run did not complete)", out)
 	}
 }
+
+// STORY-0039 AC-3: Daemon marks repo as served on directive completion.
+// Proves the fairness scheduler is live: a real directive completion calls MarkRepoServed.
+func TestDaemon_MarkRepoServed(t *testing.T) {
+	now := func() time.Time {
+		return time.Date(2026, 6, 25, 12, 0, 0, 0, time.UTC)
+	}
+
+	// Create a daemon with a real RepoScheduler.
+	r := &fakeRunner{result: &Result{ExitCode: 0}}
+	dm, q := newDaemon(r)
+	dm.RepoScheduler = NewRepoSchedulerState()
+	dm.Now = now
+
+	// Push a directive with a repo.
+	d := validDirective()
+	d.ID = "dir-repo-A"
+	d.Repo = "repo-A"
+	q.Push(d)
+
+	// Run once: should complete and mark repo-A as served.
+	out, _, err := dm.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if out != OutcomeDone {
+		t.Fatalf("outcome: got %q, want done", out)
+	}
+
+	// Verify repo-A was marked served (should not be considered "never served" anymore).
+	// NextRepo over [repo-A, repo-B] should pick repo-B (never served = epoch).
+	selected := dm.RepoScheduler.NextRepo([]string{"repo-A", "repo-B"}, now())
+	if selected != "repo-B" {
+		t.Fatalf("after marking repo-A served, NextRepo should pick repo-B (never served), got %q", selected)
+	}
+
+	t.Logf("AC-3 PRODUCTION: Daemon.MarkRepoServed called on directive completion; fairness scheduler is live")
+}

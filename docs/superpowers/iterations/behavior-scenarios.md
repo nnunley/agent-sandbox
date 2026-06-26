@@ -3775,9 +3775,15 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 **Evidence:**
 - Unit: `TestThread_RepoRefs` — Thread struct has `RepoRefs []string` with json-tag `repo_refs,omitempty`; round-trip preserves array; omitempty suppresses nil.
 - Unit: `TestMultiRepoClaims_Simultaneous` — real WorkspaceRegistry.Claim for two different repos under same threadID succeeds; both claims simultaneously active; no conflict.
-- Unit: `TestRepoFairness_NoStarvation` — real scheduler selected 6 repos across 2 rounds (3 repos × 2 rounds); each repo selected exactly twice; LRU+lexicographic determinism; no repo starved.
+- Unit: `TestMultiRepoClaims_ReleaseIndependence` — releasing one repo claim does not affect sibling claim (AC-2 coverage: independent lifecycle).
+- Unit: `TestRepoFairness_NoStarvation` — real scheduler selected 6 repos across 2 rounds (3 repos × 2 rounds); each repo selected exactly twice; LRU+lexicographic determinism; no repo starved. **Critical: selection driven by NextRepo return value, not loop iteration** — a broken scheduler that always returns repos[0] FAILS (repos[0]=6, others=0).
 - Unit: `TestRepoScheduler_Deterministic` — tie-break by lexicographic order (repo-A, repo-M, repo-Z) is stable and deterministic.
+- Unit: `TestRepoScheduler_LRUUnderSkew` — LRU under uneven load: repo-C (never served) selected before repo-A (stale at 3h); no repo starved even with skewed initial conditions.
+- Integration: `TestDaemon_MarkRepoServed` — daemon calls MarkRepoServed on directive completion (real call site in daemon.RunOnce → setStatus); RepoScheduler is LIVE (not frozen).
 - Integration: `TestScenario0126_MultiRepoThreadCoordination` — end-to-end: thread with RepoRefs; 2+ workspace claims; fairness scheduler over 2 rounds with injected clock; every repo served >= 2 times; fair distribution verified.
+
+**Boundary Notes (intentionally deferred):**
+- **Daemon claim-order repo fairness:** The queue.Next() claim order is driven by priority (STORY-0037), not repo fairness. The repo-fairness scheduler (AC-3) marks repos served to prevent starvation in OBSERVATION (which repos got work), but does NOT currently influence which repo the daemon SELECTS next from the queue. Making the daemon's directive-claim order itself repo-fair (e.g., "select among eligible directives by least-recently-served repo") is a separate integration task deferred to a follow-on boundary — documented here for honest scope: AC-3 proves the scheduler is correct and live (directives mark repos), but the orchestrator's claim strategy remains priority-only. **The boundary is tight:** the scheduler is ready for daemon integration of claim-ordering if needed; RepoScheduler + MarkRepoServed + Thread.RepoRefs are the three components; wiring the scheduler into queue.Next filtering is explicit future work.
 
 **Sources:**
 - requirements/EPIC-001.md STORY-0039

@@ -35,16 +35,17 @@ type Daemon struct {
 	Consumer string
 	LeaseDur time.Duration
 
-	MapToTask   func(queue.Directive) Task // converts a directive to a Task; defaults to DefaultMapToTask
-	Backend     BackendFactory             // tier→Runner selection (optional; nil → always use Runner)
-	Log         DecisionLog                // D6 append-only decision log (optional)
-	Audit       AuditLog                   // STORY-0054 system audit log (optional); every processed run is auto-logged
-	Threads     *ThreadTracker             // thread-status tracking (optional)
-	ThreadStore *ThreadStore               // thread data store with BudgetPolicy (optional; STORY-0036 AC-3)
-	Escalations EscalationLane             // non-blocking human escalations lane (optional)
-	Now         func() time.Time           // clock for decision timestamps (optional; defaults to time.Now)
-	Context     ContextProvider            // soft-state provider (optional; defaults to NoopProvider). Best-effort: handoff loss never affects correctness (STORY-0018 AC-4).
-	Results     *ResultStore               // result/artifact persistence (optional; stores run results for later inspection).
+	MapToTask      func(queue.Directive) Task // converts a directive to a Task; defaults to DefaultMapToTask
+	Backend        BackendFactory             // tier→Runner selection (optional; nil → always use Runner)
+	Log            DecisionLog                // D6 append-only decision log (optional)
+	Audit          AuditLog                   // STORY-0054 system audit log (optional); every processed run is auto-logged
+	Threads        *ThreadTracker             // thread-status tracking (optional)
+	ThreadStore    *ThreadStore               // thread data store with BudgetPolicy (optional; STORY-0036 AC-3)
+	Escalations    EscalationLane             // non-blocking human escalations lane (optional)
+	Now            func() time.Time           // clock for decision timestamps (optional; defaults to time.Now)
+	Context        ContextProvider            // soft-state provider (optional; defaults to NoopProvider). Best-effort: handoff loss never affects correctness (STORY-0018 AC-4).
+	Results        *ResultStore               // result/artifact persistence (optional; stores run results for later inspection).
+	RepoScheduler  *RepoSchedulerState        // repo fairness scheduler (optional; STORY-0039 AC-3); marks repos served to prevent starvation.
 }
 
 // ctx returns the configured ContextProvider, or a NoopProvider when none is set. The daemon claims
@@ -124,6 +125,15 @@ func (dm *Daemon) setStatus(id string, s ThreadStatus) {
 	// (STORY-0037 AC-4: MarkServed resets LastServed and AgingScore so a served thread becomes fresh).
 	if s == StatusDone && dm.ThreadStore != nil {
 		dm.ThreadStore.MarkServed(id, dm.clock())
+	}
+}
+
+// markRepoServed marks a repo as served in the fairness scheduler (STORY-0039 AC-3).
+// Called when a directive completes (pass or fail), to advance the repo's last-served time.
+// Nil-safe: if RepoScheduler is not configured, this is a no-op.
+func (dm *Daemon) markRepoServed(repo string) {
+	if dm.RepoScheduler != nil && repo != "" {
+		dm.RepoScheduler.MarkRepoServed(repo, dm.clock())
 	}
 }
 
@@ -296,6 +306,7 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 	if passed(result, runErr) {
 		_ = dm.Q.Done(lease)
 		dm.setStatus(d.ID, StatusDone)
+		dm.markRepoServed(d.Repo) // Mark repo as served on successful completion (STORY-0039 AC-3).
 		dm.record(d.ID, "pass", "grade-pass", "done")
 		return OutcomeDone, d.ID, nil
 	}
@@ -310,6 +321,7 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 		dm.emitRetryHandoff(d, result)
 		_ = dm.Q.Requeue(lease, time.Time{})
 		dm.setStatus(d.ID, StatusQueued)
+		dm.markRepoServed(d.Repo) // Mark repo as served even on autonomous requeue (STORY-0039 AC-3).
 		dm.record(d.ID, "fail", rung.String(), "requeue")
 		return OutcomeRequeued, d.ID, nil
 	}
@@ -324,6 +336,7 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 		_ = dm.Escalations.Push(EscalationItem{DirectiveID: d.ID, Reason: "authority-limit", Origin: d.Origin})
 	}
 	dm.setStatus(d.ID, StatusBlocked)
+	dm.markRepoServed(d.Repo) // Mark repo as served even on escalation (STORY-0039 AC-3).
 	dm.record(d.ID, "fail", rung.String(), "escalate-human")
 	return OutcomeEscalated, d.ID, nil
 }
