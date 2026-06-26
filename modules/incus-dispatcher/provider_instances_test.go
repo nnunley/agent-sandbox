@@ -221,3 +221,63 @@ func TestRecommendInstance(t *testing.T) {
 		t.Errorf("RecommendInstance() returned tier %q, want strong or stronger", resolved.Tier)
 	}
 }
+
+// TestModelSelector_WorkerTypeImpact verifies that WorkerType affects model selection (STORY-0038 AC-3).
+// A research worker should prefer local instances when available.
+func TestModelSelector_WorkerTypeImpact(t *testing.T) {
+	// Selector with research worker type should prefer local instances.
+	selectorResearch := &ModelSelector{
+		TaskType:    "implementation",
+		WorkerType:  "research",
+		PolicyType:  "balanced",
+		QualityTier: "cheap",
+		PreviousFails: 0,
+	}
+
+	instResearch, err := selectorResearch.Select()
+	if err != nil {
+		t.Fatalf("Select() failed: %v", err)
+	}
+
+	resolvedResearch := GetProviderInstance(instResearch)
+	if resolvedResearch == nil {
+		t.Fatalf("Selected instance %q not found", instResearch)
+	}
+
+	// Research worker should get a local instance.
+	if !resolvedResearch.IsLocal {
+		t.Errorf("research worker selected non-local instance %q", instResearch)
+	}
+}
+
+// TestModelSelector_StatelessSelection verifies that Select() doesn't mutate state and can be called multiple times.
+func TestModelSelector_StatelessSelection(t *testing.T) {
+	selector := &ModelSelector{
+		TaskType:    "code-review",
+		WorkerType:  "agent",
+		PolicyType:  "quality-first",
+		QualityTier: "standard",
+		PreviousFails: 1,
+	}
+
+	// Call Select() twice.
+	inst1, err1 := selector.Select()
+	if err1 != nil {
+		t.Fatalf("first Select() failed: %v", err1)
+	}
+
+	inst2, err2 := selector.Select()
+	if err2 != nil {
+		t.Fatalf("second Select() failed: %v", err2)
+	}
+
+	// Both calls should return the same result (no state mutation).
+	if inst1 != inst2 {
+		t.Errorf("Select() returned different results on consecutive calls: %q vs %q (state was mutated)", inst1, inst2)
+	}
+
+	// QualityTier should not be mutated.
+	if selector.QualityTier != "standard" {
+		t.Errorf("QualityTier mutated from standard to %q", selector.QualityTier)
+	}
+}

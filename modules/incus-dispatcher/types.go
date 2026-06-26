@@ -12,7 +12,10 @@ type Provider string
 const (
 	ProviderAnthropic   Provider = "anthropic"
 	ProviderOpenAI      Provider = "openai"
+	ProviderOpenRouter  Provider = "openrouter"
 	ProviderOllamaCloud Provider = "ollama-cloud"
+	ProviderOllamaLocal Provider = "ollama-local"  // Local Ollama instance
+	ProviderVLLMLocal   Provider = "vllm-local"     // Local vLLM instance
 )
 
 // Task describes a workload to run inside a container.
@@ -175,7 +178,7 @@ func (p *Provider) ValidateProvider() error {
 		return nil
 	}
 	switch *p {
-	case ProviderAnthropic, ProviderOpenAI, ProviderOllamaCloud:
+	case ProviderAnthropic, ProviderOpenAI, ProviderOpenRouter, ProviderOllamaCloud, ProviderOllamaLocal, ProviderVLLMLocal:
 		return nil
 	default:
 		return fmt.Errorf("invalid provider: %s", *p)

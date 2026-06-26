@@ -59,7 +59,7 @@ var providerInstanceRegistry = map[string]*ProviderInstance{
 	},
 	"openrouter-main": {
 		Name:                  "openrouter-main",
-		Provider:              Provider("openrouter"),
+		Provider:              ProviderOpenRouter,
 		Model:                 "meta-llama/llama-3-8b-instruct",
 		Tier:                  "standard",
 		TypicalCostPerMTok:    0.0001, // Llama 3 8B on OpenRouter: very cheap
@@ -77,7 +77,7 @@ var providerInstanceRegistry = map[string]*ProviderInstance{
 	},
 	"ollama-local": {
 		Name:                  "ollama-local",
-		Provider:              Provider("ollama-local"),
+		Provider:              ProviderOllamaLocal,
 		Model:                 "ollama",
 		Tier:                  "cheap",
 		TypicalCostPerMTok:    0.0, // Local compute, no API cost
@@ -86,7 +86,7 @@ var providerInstanceRegistry = map[string]*ProviderInstance{
 	},
 	"vllm-local": {
 		Name:                  "vllm-local",
-		Provider:              Provider("vllm-local"),
+		Provider:              ProviderVLLMLocal,
 		Model:                 "vllm",
 		Tier:                  "cheap",
 		TypicalCostPerMTok:    0.0, // Local compute, no API cost
@@ -207,15 +207,30 @@ type ModelSelector struct {
 
 // Select picks the best provider instance using the multi-signal heuristics (STORY-0038 AC-3).
 // Returns the instance name and error if the selection fails (e.g., no matching instance for quality tier).
+// Note: does NOT mutate the receiver; uses local copies of state.
 func (ms *ModelSelector) Select() (string, error) {
 	// 1. Validate quality tier first.
 	if tierRank(ms.QualityTier) == 0 {
 		return "", fmt.Errorf("no provider instance available for quality tier %q", ms.QualityTier)
 	}
 
-	// 2. Filter by quality tier constraint.
+	// Use a local copy of the quality tier so we don't mutate the receiver.
+	currentQualityTier := ms.QualityTier
+
+	// 2. Filter by quality tier constraint (with escalation on repeated failures).
+	// If there were previous failures, escalate the tier locally.
+	if ms.PreviousFails > 0 {
+		for i := 0; i < ms.PreviousFails; i++ {
+			nextTier := escalateTier(currentQualityTier)
+			if nextTier == currentQualityTier {
+				break // Already at top tier.
+			}
+			currentQualityTier = nextTier
+		}
+	}
+
 	var candidates []*ProviderInstance
-	minTierRank := tierRank(ms.QualityTier)
+	minTierRank := tierRank(currentQualityTier)
 	for _, inst := range AllProviderInstances() {
 		if tierRank(inst.Tier) >= minTierRank {
 			candidates = append(candidates, inst)
@@ -223,10 +238,10 @@ func (ms *ModelSelector) Select() (string, error) {
 	}
 
 	if len(candidates) == 0 {
-		return "", fmt.Errorf("no provider instance available for quality tier %q", ms.QualityTier)
+		return "", fmt.Errorf("no provider instance available for quality tier %q", currentQualityTier)
 	}
 
-	// 2. Apply policy type bias: cost-optimized favors cheap/local; quality-first favors strong.
+	// 3. Apply policy type bias: cost-optimized favors cheap/local; quality-first favors strong.
 	if ms.PolicyType == "cost-optimized" {
 		// Prefer local and cheap instances.
 		for _, inst := range candidates {
@@ -256,7 +271,7 @@ func (ms *ModelSelector) Select() (string, error) {
 		}
 	}
 
-	// 3. Apply task type bias: code-review and grading prefer strong models.
+	// 4. Apply task type bias: code-review and grading prefer strong models.
 	if ms.TaskType == "code-review" || ms.TaskType == "grading" {
 		for _, inst := range candidates {
 			if inst.Tier == "strong" || inst.Tier == "strongest" {
@@ -265,30 +280,17 @@ func (ms *ModelSelector) Select() (string, error) {
 		}
 	}
 
-	// 4. Escalation on repeated failures: jump to stronger tiers.
-	if ms.PreviousFails > 0 {
-		// Each failure escalates up one tier.
-		for i := 0; i < ms.PreviousFails; i++ {
-			nextTier := escalateTier(ms.QualityTier)
-			if nextTier == ms.QualityTier {
-				break // Already at top tier.
+	// 5. Apply worker type bias: research-capable workers can use local instances.
+	// (A research worker type is more isolated and can rely on local services.)
+	if ms.WorkerType == "research" {
+		for _, inst := range candidates {
+			if inst.IsLocal {
+				return inst.Name, nil
 			}
-			ms.QualityTier = nextTier
-		}
-		// Re-filter by new tier.
-		minTierRank = tierRank(ms.QualityTier)
-		candidates = nil
-		for _, inst := range AllProviderInstances() {
-			if tierRank(inst.Tier) >= minTierRank {
-				candidates = append(candidates, inst)
-			}
-		}
-		if len(candidates) == 0 {
-			return "", fmt.Errorf("no provider instance available after escalation to tier %q", ms.QualityTier)
 		}
 	}
 
-	// 5. Prefer high success rate within remaining candidates.
+	// 6. Prefer high success rate within remaining candidates.
 	var best *ProviderInstance
 	for _, inst := range candidates {
 		if best == nil || inst.HistoricalSuccessRate > best.HistoricalSuccessRate {
@@ -356,4 +358,83 @@ func RecommendInstance(ctx TaskTypeContext) (string, error) {
 		PreviousFails: 0,
 	}
 	return selector.Select()
+}
+
+// EscalateRun evaluates escalation rules for a failed run and returns a new escalated Run if applicable
+// (STORY-0038 AC-2, STORY-0035 AC-3). This is the production escalation logic (not test-only).
+//
+// Given a run with stumble signals indicating failure, EscalateRun:
+//  1. Extracts the run's current provider instance tier
+//  2. Reads the run's last/most-recent stumble signal
+//  3. Matches the (tier, signal) pair against EscalationRules
+//  4. If a rule matches, uses ModelSelector to pick a stronger instance (quality-first policy)
+//  5. Returns a NEW Run with ParentRunID set to the original run's RunID
+//
+// Returns (escalatedRun, true, nil) if a rule matched and an escalation was generated.
+// Returns (nil, false, nil) if no rule matched (no further escalation needed).
+// Returns (nil, false, err) if the lookup or selection fails.
+func EscalateRun(run *Run) (*Run, bool, error) {
+	if run == nil {
+		return nil, false, nil
+	}
+
+	// Extract the current instance's tier.
+	currentInst := GetProviderInstance(run.ProviderInstance)
+	if currentInst == nil {
+		// Unknown instance; can't escalate.
+		return nil, false, nil
+	}
+
+	// Get the most recent stumble signal.
+	var lastStumble *StumbleSignal
+	if len(run.StumbleSignals) > 0 {
+		lastStumble = &run.StumbleSignals[len(run.StumbleSignals)-1]
+	}
+	if lastStumble == nil {
+		// No stumble; nothing to escalate.
+		return nil, false, nil
+	}
+
+	// Match the escalation rule.
+	rule := GetEscalationRule(currentInst.Tier, lastStumble.Type)
+	if rule == nil {
+		// No rule matched.
+		return nil, false, nil
+	}
+
+	// Use the multi-signal selector to pick a stronger instance (quality-first).
+	selector := &ModelSelector{
+		TaskType:    "unknown", // Escalation is tier-based, not task-based.
+		WorkerType:  "",        // Escalation doesn't constrain worker type.
+		PolicyType:  "quality-first", // Escalation prefers stronger models.
+		QualityTier: rule.ToTier,
+		PreviousFails: 0,
+	}
+
+	escalatedInstName, err := selector.Select()
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Build the escalated run.
+	escalatedInst := GetProviderInstance(escalatedInstName)
+	if escalatedInst == nil {
+		// Selection failed somehow.
+		return nil, false, fmt.Errorf("escalate_run: selected instance %q not found", escalatedInstName)
+	}
+
+	escalatedRun := &Run{
+		RunID:            generateRunID(),
+		ThreadID:         run.ThreadID,
+		ParentRunID:      run.RunID,
+		WorkerID:         run.WorkerID,         // Keep the same worker.
+		WorkerKind:       run.WorkerKind,       // Keep the same worker kind.
+		PolicyID:         run.PolicyID,         // Keep the same policy.
+		ProviderInstance: escalatedInstName,
+		ModelID:          escalatedInst.Model,
+		BudgetSnapshot:   run.BudgetSnapshot,   // Carry forward the budget.
+		// Cost fields remain zero until execution (populated via CostFromResult later).
+	}
+
+	return escalatedRun, true, nil
 }
