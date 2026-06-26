@@ -203,10 +203,10 @@ sensitive, so AC-2's green must run on the nix-pinned cluster worker (its declar
 - task.state is running or completed
 - execution proceeded without Mac input
 
-**Automation seam (Task-0, ITER-0008b):** `journey_test.go` drives the real `Daemon.RunOnce` against the
+**Automation seam (Task-0, ITER-0008b):** `journey_test.go::TestJourney0004_AutonomousClaim` drives the real `Daemon.RunOnce` against the
 fake backend with NO operator/interactive handler wired — the daemon claims and runs autonomously. Asserts the
-claimed directive reaches a terminal run outcome with zero operator input consulted.
-**Automation status:** pending (ITER-0008b T5 — STORY-0074 AC-1)
+claimed directive reaches OutcomeDone with zero operator input consulted; backend.runs==1 (no replay); queue fully drained.
+**Automation status:** automated (ITER-0008b TG7 — STORY-0074 AC-1)
 **Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0004`
 
 **Sources:**
@@ -236,10 +236,10 @@ claimed directive reaches a terminal run outcome with zero operator input consul
 - grade was assigned autonomously
 - no human-in-loop delay occurred
 
-**Automation seam (Task-0, ITER-0008b):** the fake backend returns a `Result` carrying an
-`ExternalGradingResult`; the daemon's authoritative-grade path assigns pass/fail with no human-confirmation
-gate. Asserts the directive outcome is decided from the grade alone.
-**Automation status:** pending (ITER-0008b T5 — STORY-0074 AC-2)
+**Automation seam (Task-0, ITER-0008b):** `journey_test.go::TestJourney0005_AutonomousGrading` uses the fake backend returning a `Result` carrying an
+`ExternalGradingResult`; the daemon's `passed()` logic assigns pass/fail with no human-confirmation
+gate. Asserts the directive outcome is OutcomeDone (grade passes); external grading phase ran; Result carries authoritative passing grade.
+**Automation status:** automated (ITER-0008b TG7 — STORY-0074 AC-2)
 **Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0005`
 
 **Sources:**
@@ -272,13 +272,12 @@ gate. Asserts the directive outcome is decided from the grade alone.
 - privileged escalation is queued, not blocked
 - no human on Mac prevented either action
 
-**Automation seam (Task-0, ITER-0008b):** the fake backend forces repeated grade failures so the daemon
+**Automation seam (Task-0, ITER-0008b):** `journey_test.go::TestJourney0006_EscalationLadderAndDurability` uses a `failingBackend` that forces repeated grade failures so the daemon
 climbs the escalation ladder; pre-approved rungs (retry-same/stronger-worker/hard-tier) execute autonomously,
-and the privileged (human) rung is enqueued onto a **durable file-backed `EscalationLane`** rather than
+and the privileged (human) rung is enqueued onto a **durable file-backed `FileEscalationLane`** (mirrors `JSONLAuditLog`/`JSONLDecisionLog` JSONL pattern) rather than
 blocking. AC-5 return-phase: a SECOND `Daemon` instance constructed over the same file-backed lane reads the
-queued escalation (proving downtime durability) and processes it. Asserts: ≥1 autonomous rung ran, the human
-rung is present+durable in the lane, and nothing blocked.
-**Automation status:** pending (ITER-0008b T5 — STORY-0074 AC-3/AC-5)
+queued escalation (proving downtime durability). Asserts: final outcome OutcomeEscalated (human rung reached), ≥1 autonomous rung ran, escalation in lane with reason "authority-limit", second daemon reads same escalation (durability across restart).
+**Automation status:** automated (ITER-0008b TG7 — STORY-0074 AC-3/AC-5)
 **Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0006`
 
 **Sources:**
@@ -310,11 +309,10 @@ rung is present+durable in the lane, and nothing blocked.
 - handoff context was used
 - no replay of completed work observed
 
-**Automation seam (Task-0, ITER-0008b):** a predecessor run writes a handoff bundle via the
-`ContextProvider`; a successor directive (same repo/branch) is claimed and the daemon imports that handoff
+**Automation seam (Task-0, ITER-0008b):** `journey_test.go::TestJourney0007_HandoffNoReplay` has a predecessor run complete, then a successor directive (same repo/branch) is claimed and the daemon imports the predecessor's handoff
 (spy provider records the import path, à la `handoffSpy` in journey_test.go). Asserts the successor consumed
-the predecessor's handoff and did NOT re-run the predecessor's completed work (run count reflects no replay).
-**Automation status:** pending (ITER-0008b T5 — STORY-0074 AC-4)
+the predecessor's handoff (import spy records path with predecessor ID), did NOT re-run completed work (run count == 2: one per directive, no replay), both outcomes are OutcomeDone.
+**Automation status:** automated (ITER-0008b TG7 — STORY-0074 AC-4)
 **Execution command:** `cd modules/incus-dispatcher && go test . -run TestJourney0007`
 
 **Sources:**
@@ -663,8 +661,10 @@ task — boot is NOT the limiting factor; nspawn (76 ms) is the substrate-select
 - Handoff store contains all task results from the downtime period
 - Successor client reconnects and resumes from last known checkpoint
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (ITER-0008b TG7, CI-modeled via fake backend + durable FileEscalationLane)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0010` (CI-modeled proof: Daemon with no operator input claims→runs→grades→escalates autonomously; state persists to durable stores; second Daemon instance reads same stores, proving AC-1/2/3)
+
+**AC mapping (ITER-0008b TG7):** STORY-0026 **AC-1** (coordination plane on cluster, not Mac) is **AUTOMATED IN CI** by `TestJourney0004_AutonomousClaim` (proves real `Daemon.RunOnce` claims + runs without Mac/operator input; orchestrator-driven, cluster-native). STORY-0026 **AC-2** (provisioner/coordinator daemon on cluster) is **AUTOMATED IN CI** by the same test: the daemon loop (real `Daemon` with no operator handler) runs autonomously on fake backend (models cluster-resident worker). STORY-0026 **AC-3** (state-passthrough store persists on cluster) is **AUTOMATED IN CI** by `TestJourney0006_EscalationLadderAndDurability`: proves a **durable file-backed `FileEscalationLane`** persists escalations to a JSONL file; a **second `Daemon` instance** constructed over the same file reads the escalations the first instance wrote (durability across restart, proving AC-5 "Mac returns → escalations queued during downtime are still there"). Honest framing: this is a **CI-modeled proof** using a fake execution backend; a **live cluster Mac-off run** (queue+daemon+lean-ctx on `ndn-desktop` cluster, Mac physically powered off) is **enrichment** if/when executed (not required for ITER-0008b core close), noted explicitly in the result.
 
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:14-26`
