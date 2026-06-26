@@ -1,6 +1,26 @@
 # Progress
 
-**Phase:** **ITER-0008 core COMPLETE (13/13, two-stage PAR per task) — 2026-06-25. NEXT: per-sprint auditing-progress.**
+**Phase:** **ITER-0008b IMPLEMENTING (final iteration — operator UX/governance + Mac-off capstone) — 2026-06-25.**
+Sentinel baseline clean (514 → now 573 `-race`; JOURNEY-0001/0002/0003 green); citations OK (82). Task-0 done
+(genome pattern-detection note `docs/plans/2026-06-25-genome-pattern-detection.md` + JOURNEY-0004..0007 automation
+seams + STORY-0074 AC-citation/seam reconciliations). **PAR scope review: REVISE→APPROVE** (2 reviewers; resolved
+AC-5 durable-escalation-lane, budget-vs-genome guardrail semantics, JOURNEY citation map, AC-4 unit-seam, AC-3
+Temporal-decoupling) — commit cd8e151-range + the Task-0 commit. Decomposed into 7 TDD task-groups (sequential to
+avoid shared-file conflicts), each: implementer → 2-reviewer adversarial PAR (spec+correctness+quality) → fix loop →
+commit. **Done:** TG1 operator TUI + pause/block/resume (STORY-0028, STORY-0027 AC-3) — 3 commits, 2 fix loops
+closed a real Attempts-leak escalation bug + dispatch-gate + artifact/thread live-wiring (DeferDirective queue
+method added). TG2 provider instances + model resolution + per-run cost capture (STORY-0038, STORY-0035 AC-3/4) —
+2 commits, 1 fix loop added production EscalateRun + provider-taxonomy coherence + WorkerType signal; noted: Run/
+Dispatcher layer not in daemon loop (pre-existing boundary; cost capture proven at Dispatch/EscalateRun seam).
+TG3 budget guardrails (STORY-0036) — commit aa581d0, in PAR review now. **Remaining:** TG4 genome mutation
+(STORY-0032), TG5 thread aging + queue classes (STORY-0037), TG6 multi-repo (STORY-0039), TG7 FileEscalationLane
++ Mac-off autonomy (STORY-0026) + capstone journeys JOURNEY-0004..0007 (STORY-0074). On completion: post-iteration
+sentinel runs, TODO(ITER-0008b) sweep, wrap-up (mark stories done, update corpus/roadmap/iteration-log), then the
+orchestrator's FINAL behavior-evidence audit (this is the last iteration of the project).
+
+---
+
+**Phase (prior):** **ITER-0008 core COMPLETE (13/13, two-stage PAR per task) — 2026-06-25. NEXT: per-sprint auditing-progress.**
 All 13 TDD tasks delivered + wrapped (stories done:ITER-0008, roadmap done, iteration-log validated, commit 9db07a7).
 Sentinels JOURNEY-0001+0002 green; full -race 514; zero core TODO(ITER-0008). The two-stage adversarial gate caught
 + fixed a real defect on essentially every production task (T1c substrate-tautology, T2a immutability hole, T2b
