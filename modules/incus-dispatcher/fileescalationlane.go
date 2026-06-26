@@ -91,6 +91,15 @@ func (f *FileEscalationLane) Push(item EscalationItem) error {
 		return fmt.Errorf("write to file: %w", err)
 	}
 
+	// Sync the file to disk (fsync). This ensures the escalation is durable against
+	// power loss (AC-5: escalations survive Mac power-off). Write() alone leaves data in
+	// the kernel page cache; Sync() forces it to the filesystem.
+	if err := file.Sync(); err != nil {
+		// If Sync fails, roll back the in-memory append and return the error.
+		f.items = f.items[:len(f.items)-1]
+		return fmt.Errorf("sync to disk: %w", err)
+	}
+
 	return nil
 }
 
