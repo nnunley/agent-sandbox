@@ -161,8 +161,29 @@ func (mp *MutationProposal) Propose(audioLog AuditLog) error {
 
 // Promote transitions the proposal to status=active, source=promoted, assigning a new version
 // and retaining the prior version for revert capability (AC-4).
+// Enforces two critical guards: (1) re-check protected targets (AC-3 dual enforcement),
+// (2) validate the proposal is in candidate status (AC-4 state machine).
 func (mp *MutationProposal) Promote(version int, priorVersion int, audioLog AuditLog) (*GenomeEntry, error) {
-	mp.Status = GenomeStatusCandidate // Ensure we came from candidate
+	// Guard 1: Validate incoming status is candidate (AC-4 state machine protection).
+	if mp.Status != GenomeStatusCandidate {
+		audioLog.Append(AuditEntry{
+			Actor:  "genome_engine",
+			Kind:   AuditKindMutation,
+			Detail: fmt.Sprintf("rejected: invalid state for promotion id=%s from_status=%s", mp.ID, mp.Status),
+		})
+		return nil, fmt.Errorf("cannot promote from status %q; only candidate proposals may be promoted", mp.Status)
+	}
+
+	// Guard 2: Re-check protected targets (AC-3 dual enforcement: construction AND promotion).
+	if ProtectedTargets[string(mp.Target)] {
+		audioLog.Append(AuditEntry{
+			Actor:  "genome_engine",
+			Kind:   AuditKindMutation,
+			Detail: fmt.Sprintf("rejected: protected-invariant at promotion id=%s target=%q", mp.ID, mp.Target),
+		})
+		return nil, fmt.Errorf("mutation target %q is protected from automatic mutation; cannot promote", mp.Target)
+	}
+
 	mp.PriorVersion = priorVersion
 
 	entry := &GenomeEntry{
@@ -191,7 +212,18 @@ func (mp *MutationProposal) Promote(version int, priorVersion int, audioLog Audi
 }
 
 // Keep keeps the proposal as a candidate for another trial (AC-4).
+// Only acts on candidate proposals (AC-4 state machine protection).
 func (mp *MutationProposal) Keep(audioLog AuditLog) error {
+	// Guard: Only candidate proposals can be kept.
+	if mp.Status != GenomeStatusCandidate {
+		audioLog.Append(AuditEntry{
+			Actor:  "genome_engine",
+			Kind:   AuditKindMutation,
+			Detail: fmt.Sprintf("rejected: invalid state for keep id=%s from_status=%s", mp.ID, mp.Status),
+		})
+		return fmt.Errorf("cannot keep proposal from status %q; only candidate proposals may be kept", mp.Status)
+	}
+
 	_, err := audioLog.Append(AuditEntry{
 		Actor:  "genome_engine",
 		Kind:   AuditKindMutation,
@@ -201,7 +233,18 @@ func (mp *MutationProposal) Keep(audioLog AuditLog) error {
 }
 
 // Reject marks the proposal as rejected; the proposal key is freed for future detection (AC-4).
+// Only acts on candidate proposals (AC-4 state machine protection).
 func (mp *MutationProposal) Reject(audioLog AuditLog) error {
+	// Guard: Only candidate proposals can be rejected.
+	if mp.Status != GenomeStatusCandidate {
+		audioLog.Append(AuditEntry{
+			Actor:  "genome_engine",
+			Kind:   AuditKindMutation,
+			Detail: fmt.Sprintf("rejected: invalid state for reject id=%s from_status=%s", mp.ID, mp.Status),
+		})
+		return fmt.Errorf("cannot reject proposal from status %q; only candidate proposals may be rejected", mp.Status)
+	}
+
 	mp.Status = GenomeStatusRejected
 	_, err := audioLog.Append(AuditEntry{
 		Actor:  "genome_engine",
@@ -212,20 +255,22 @@ func (mp *MutationProposal) Reject(audioLog AuditLog) error {
 }
 
 // Revert restores a prior active version, marking the mutation as reverted (AC-4).
+// Restores the prior entry's content, version, AND source (preserves provenance).
 func (mp *MutationProposal) Revert(priorEntry *GenomeEntry, audioLog AuditLog) (*GenomeEntry, error) {
 	if priorEntry == nil {
 		return nil, fmt.Errorf("cannot revert without a prior entry")
 	}
 
-	// Create a new entry with the prior content but status=reverted.
+	// Create a new entry that restores the prior content, version, and source.
+	// The source is from the prior entry (e.g., bootstrap, learned, promoted).
 	newEntry := &GenomeEntry{
 		Version:      priorEntry.Version + 1,
 		ContentHash:  priorEntry.ContentHash,
-		Source:       GenomeSourcePromoted, // Still came from promotion, but reverted
+		Source:       priorEntry.Source, // Restore the prior entry's source (not mislabel as promoted)
 		Status:       GenomeStatusReverted,
 		Target:       priorEntry.Target,
 		Domain:       priorEntry.Domain,
-		Content:      priorEntry.Content,
+		Content:      priorEntry.Content, // Genuinely restore prior content
 		PriorVersion: priorEntry.Version,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -241,4 +286,10 @@ func (mp *MutationProposal) Revert(priorEntry *GenomeEntry, audioLog AuditLog) (
 	}
 
 	return newEntry, nil
+}
+
+// SetTrialRunID wires the trial run ID onto the proposal, linking the experiment to this proposal.
+// Called when a trial begins to establish the audit trail (AC-4 evidence trail).
+func (mp *MutationProposal) SetTrialRunID(runID string) {
+	mp.TrialRunID = runID
 }
