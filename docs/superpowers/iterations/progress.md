@@ -1,6 +1,17 @@
 # Progress
 
-**Phase:** **ITER-0008b DONE (FINAL iteration complete) — 2026-06-25. NEXT: project-wide final behavior-evidence audit.**
+**Phase:** **PROJECT COMPLETE — ITER-0008b (FINAL iteration) done + AUDIT CLEAN — 2026-06-25.**
+Final project-wide three-tier PAR audit (2 adversarial auditors) returned **zero findings**, high confidence: Tier 1
+all 11 ITER-0008b stories PASS at declared seam with the per-group fixes re-verified genuine; Tier 2 no regressions
+(queue 89, JOURNEY-0001/0002/0003 green, additive Directive.Thread didn't break the laneq wire); Tier 3 `go test
+-race ./...` = 623 (514→+109), vet clean, no flakiness, citations OK (82), zero TODO(ITER-0008b). The
+iterative-development roadmap is fully delivered — all base iterations + sub-iterations done, behavior-evidence corpus
+green end-to-end, user-facing surfaces from the original spec closed with falsifiable evidence. **No further pending
+iterations.**
+
+---
+
+**Phase (prior):** **ITER-0008b DONE (FINAL iteration complete) — 2026-06-25. NEXT: project-wide final behavior-evidence audit.**
 All 7 TDD task-groups delivered via subagent-driven `implementing-tasks`, each through a two-stage adversarial PAR
 gate that caught + fixed a real defect on every group (TG1 Attempts-leak + live wiring; TG2 proof-by-injection cost
 + production EscalateRun + taxonomy; TG3 faked budget thread-mapping → real Directive.Thread + multi-level enforce +

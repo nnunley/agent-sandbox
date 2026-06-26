@@ -920,3 +920,24 @@ multi-repo coordination, and the headline Mac-off acceptance (JOURNEY-0004..0007
 proof-rigor defect on every group (Attempts-leak, proof-by-injection cost/escalation, faked budget thread-mapping,
 promotion guard holes, frozen aging lifecycle, tautological starvation proof, missing fsync + vacuous autonomy
 assertions). 623 -race tests green, zero ITER-0008b TODOs, all stories done with falsifiable behavior evidence.
+
+### AUDIT — ITER-0008b three-tier (PROJECT FINAL behavior-evidence audit) (2026-06-25)
+**Method:** PAR (two parallel adversarial auditors, identical full-scope inputs, competitive framing). **Result:
+CLEAN** — both auditors returned ZERO findings (Critical/Serious/Minor), high confidence (full agreement).
+**Tier 1 (deep):** all 11 stories done:ITER-0008b PASS at the declared seam; both auditors independently re-verified
+each per-group PAR fix is GENUINE (not reverted/weakened) — TG1 paused-thread DeferDirective does not inflate
+Attempts; TG2 EscalateRun is production code SCENARIO-0016 drives + CostFromResult source honest; TG3 budget keyed by
+the real Directive.Thread (no injection) with 5/6 levels enforced + a real operator gate; TG4 Promote re-guards
+protected targets AND validates status + genuine revert; TG5 MarkServed wired into daemon StatusDone (aging not
+frozen); TG6 starvation proof non-tautological (fails for always-repos[0]) + markRepoServed wired; TG7
+FileEscalationLane fsync present + AC-5 multi-instance file read + JOURNEY-0004/0005 empty-escalation-lane autonomy +
+JOURNEY-0007 work-unit no-replay + JOURNEY-0006 OutcomeRequeued-before-escalation. **Tier 2 (impacted):** queue 89,
+JOURNEY-0001/0002/0003 + dispatch/child-directive/ParseDirective scenarios PASS — the additive Directive.Thread did
+NOT break the laneq wire/contract; no regression. **Tier 3 (sentinel):** full `go test -race ./...` = 623 (baseline
+514 → +109), vet clean, `-count=2` no flakiness; citations OK (82); zero `TODO(ITER-0008b)` (4 backlog
+reclassifications honestly non-AC); no unrequested work / debug artifacts / observable-behavior-without-corpus.
+Deferrals honestly recorded (STORY-0035 AC-4 Result-sourced; per-time-window budget; STORY-0068 AC-2 carried;
+daemon claim-order repo-fairness boundary; Mac-off CI-modeled vs live enrichment). **Disposition: ITER-0008b
+CONFIRMED done. No gap stories. This was the final pending iteration — the iterative-development roadmap is now
+fully delivered (all base iterations + sub-iterations done), the behavior-evidence corpus is green end-to-end, and
+the project's user-facing surfaces from the original spec are closed with falsifiable evidence. PROJECT COMPLETE.**
