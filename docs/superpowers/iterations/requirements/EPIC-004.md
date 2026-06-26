@@ -3,7 +3,7 @@
 **Summary:** State passthrough & continuity
 **Stories:** STORY-0029, STORY-0030, STORY-0031, STORY-0032, STORY-0033, STORY-0034
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 4/6 done (STORY-0034 spike:ITER-0000; STORY-0029/0030/0033 done:ITER-0004; STORY-0031 partial:ITER-0004 AC-1/2 — AC-3/4 → ITER-0008; STORY-0032 → ITER-0008)
+**Status:** 6/6 done (STORY-0034 spike:ITER-0000; STORY-0029/0030/0033 done:ITER-0004; STORY-0031 done:ITER-0008b — AC-1/2:ITER-0004, AC-3/4:ITER-0008b TG4; STORY-0032 done:ITER-0008b TG4)
 
 ## STORY-0029
 
@@ -64,10 +64,12 @@ from a daemon-local thread store) IN ITER-0004; **AC-4b** (operator/TUI visibili
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:184, 433-445, 447-453`
 
-**Status:** partial:done:ITER-0004 (AC-1/AC-2); AC-3/AC-4 → ITER-0008. AC-1 (Run.stumble_signals[] + StumbleSignal struct) + AC-2 (9-value signal-type enum) delivered via T2 (run.go). **SPLIT (PAR round-1/2):** **AC-1** (Run.stumble_signals[] + a defined `StumbleSignal` struct)
-+ **AC-2** (signal-type enum) IN ITER-0004 — capture only. **AC-3** (mutation proposal on repeated pattern) +
-**AC-4** (genome evidence_refs) **DEFERRED → ITER-0008** with STORY-0032 (genome): no genome object + no pattern-
-detection heuristic exists until then. AC-3 logically depends on AC-1/AC-2's locked struct shape.
+**Status:** done:ITER-0008b (AC-1/AC-2 done:ITER-0004; **AC-3/AC-4 done:ITER-0008b TG4** with STORY-0032 — the
+genome `DetectStumblePatterns` detector generates a `MutationProposal` on a repeated stumble pattern (AC-3) carrying
+`EvidenceRefs` = the firing run IDs (AC-4); SCENARIO-0018). AC-1 (Run.stumble_signals[] + StumbleSignal struct) +
+AC-2 (9-value signal-type enum) delivered via T2 (run.go). **SPLIT (PAR round-1/2):** AC-1/AC-2 IN ITER-0004 —
+capture only; AC-3 (mutation proposal on repeated pattern) + AC-4 (genome evidence_refs) deferred to the genome
+iteration because no genome object + no pattern-detection heuristic existed until ITER-0008b TG4.
 
 ## STORY-0032
 
@@ -87,7 +89,10 @@ detection heuristic exists until then. AC-3 logically depends on AC-1/AC-2's loc
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:256-277, 418-463`
 
-**Status:** pending
+**Status:** done:ITER-0008b (TG4 — genome entry schema version/content_hash(SHA256)/source/status (AC-1), 6-target
+mutation enum (AC-2), protected-invariant hard block enforced at construction AND promotion (AC-3), full
+detect→propose→trial→measure→promote/keep/reject/revert lifecycle with an immutable audit trail + genuine revert
+restoration (AC-4); pure clock-injected detector per docs/plans/2026-06-25-genome-pattern-detection.md; SCENARIO-0018)
 
 ## STORY-0033
 

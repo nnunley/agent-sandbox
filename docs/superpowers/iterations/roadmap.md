@@ -1079,10 +1079,24 @@ Aggregated findings (same-issue-both = high confidence; severity disagreement = 
   STORY-0028 TUI gates STORY-0027 AC-3; STORY-0036 AC-3 composes the existing escalation ladder; rest parallel.
 - **(MINOR, B) SCENARIO-0016 cited by 0035/0038/0031** → deliberate multi-surface (data/policy/signal planes),
   documented; non-blocking.
-**Status:** pending
+**Status:** done:ITER-0008b (2026-06-25) — FINAL iteration complete; all 7 TDD task-groups delivered via
+subagent-driven `implementing-tasks`, each through a two-stage adversarial PAR gate (the gate caught + fixed a real
+defect on essentially every group: TG1 Attempts-leak escalation bug + live artifact/thread wiring; TG2 proof-by-
+injection cost capture + production EscalateRun + provider-taxonomy coherence; TG3 directive↔thread budget mapping
++ generic multi-level enforcement + real operator gate; TG4 promotion protected-target re-guard + status-validation
++ genuine revert; TG5 frozen-LastServed → live MarkServed lifecycle; TG6 tautological starvation proof → real
+LRU-under-skew + production MarkRepoServed wiring; TG7 missing fsync durability + vacuous autonomy/no-replay
+assertions → falsifiable empty-escalation-lane + work-unit proofs). Stories done:ITER-0008b: STORY-0028, STORY-0027
+(AC-3), STORY-0026, STORY-0032, STORY-0031 (AC-3/4), STORY-0035 (AC-3/4), STORY-0036, STORY-0037, STORY-0038,
+STORY-0039, STORY-0074. Suite 623 green under `-race`, vet clean; sentinels JOURNEY-0001/0002/0003 + the new closing
+JOURNEY-0004..0007 green; zero `TODO(ITER-0008b)` (4 parked markers reclassified to backlog — none a committed-scope
+AC). **Mac-off acceptance closed (CI-modeled; live physical-Mac-off cluster run is honest enrichment).** This was the
+final pending iteration — the orchestrator's project-wide final behavior-evidence audit runs next.
+**PAR scope review (2026-06-25):** 2 adversarial reviewers → both REVISE → revisions applied (AC-5 durable-lane,
+budget↔genome guardrail semantics, JOURNEY citation map, AC-4 unit-seam, AC-3 Temporal-decoupling) → APPROVE.
 **Impacted scenarios:** operator-TUI (SCENARIO-0021); genome-mutation (SCENARIO-0018); budget-guardrails
 (SCENARIO-0022); thread-aging (SCENARIO-0017 + operator half of SCENARIO-0087); provider-routing (SCENARIO-0016);
-multi-repo; **JOURNEY-0004/0005/0006/0007 (closing, Mac-off)**; SCENARIO-0010 (Mac-off SPOF).
+multi-repo (SCENARIO-0126); **JOURNEY-0004/0005/0006/0007 (closing, Mac-off)**; SCENARIO-0010 (Mac-off SPOF).
 **Look-ahead check:** final iteration. On completion the orchestrator runs the final behavior-evidence audit over
 every user-facing surface from the original spec.
 

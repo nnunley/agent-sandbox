@@ -3,7 +3,7 @@
 **Summary:** Worker reliability & comms
 **Stories:** STORY-0067, STORY-0068, STORY-0069, STORY-0070, STORY-0071, STORY-0072, STORY-0073, STORY-0074
 **Primary sources:** `docs/plans/2026-06-17-dispatcher-productization.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 5/8 done (0067:ITER-0000; 0069/0070/0071/0072:ITER-0003; 0068 partial — AC-1 done:ITER-0003, AC-2 cluster e2e pending)
+**Status:** 7/8 done (0067:ITER-0000; 0069/0070/0071/0072:ITER-0003; 0073:ITER-0008; 0074 done:ITER-0008b — Mac-off acceptance, JOURNEY-0004..0007; 0068 partial — AC-1 done:ITER-0003, AC-2 cluster e2e carried per the let-go upstream-codegen blocker)
 ## STORY-0067
 
 **Epic:** EPIC-012 — Worker reliability & comms
@@ -183,4 +183,8 @@ with an explicit cluster-evidence note (precedent: ITER-0003 STORY-0068 AC-2, IT
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:416-418`
 
-**Status:** pending
+**Status:** done:ITER-0008b (TG7 — the closing Mac-off acceptance, CI-modeled via the real Daemon + fake backend +
+durable file-backed stores: JOURNEY-0004 autonomous claim+run (AC-1), JOURNEY-0005 autonomous grade (AC-2),
+JOURNEY-0006 autonomous ladder climb + durable FileEscalationLane read by a second daemon instance (AC-3/AC-5),
+JOURNEY-0007 successor resumes via handoff with a falsifiable no-replay assertion (AC-4). All four journeys are
+sentinel e2e. A live physical-Mac-off cluster run is honest enrichment, not the CI gate.)

@@ -26,13 +26,13 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0013 | [BLOCKED-ON-SUBSTRATE-DECISION] Network-native backend (Postgres/NATS) | integration | iteration | TBD | STORY-0010 |
 | SCENARIO-0014 | [BLOCKED-ON-SUBSTRATE-DECISION] Dedicated queue host: survives worker- | process-level | iteration | TBD | STORY-0010 |
 | SCENARIO-0015 | Resume work on branch with existing thread | integration | iteration | `cd modules/incus-dispatcher && go test . -run TestScenario0015` | STORY-0029, STORY-0030, STORY-0033 |
-| SCENARIO-0016 | Escalate to stronger model on verification failure | integration | iteration | TBD | STORY-0035, STORY-0038, STORY-0031 |
-| SCENARIO-0017 | Long-running scheduler maintains priority queue | process-level | iteration | TBD | STORY-0037, STORY-0013, STORY-0012 |
-| SCENARIO-0018 | Capture and learn from repeated stumble pattern | process-level | iteration | TBD | STORY-0031, STORY-0032 |
+| SCENARIO-0016 | Escalate to stronger model on verification failure | integration | iteration | AUTOMATED:ITER-0008b TG2 — `cd modules/incus-dispatcher && go test . -run TestScenario0016` | STORY-0035, STORY-0038, STORY-0031 |
+| SCENARIO-0017 | Long-running scheduler maintains priority queue | process-level | iteration | AUTOMATED:ITER-0008b TG5 — `cd modules/incus-dispatcher && go test . -run TestScenario0017` | STORY-0037, STORY-0013, STORY-0012 |
+| SCENARIO-0018 | Capture and learn from repeated stumble pattern | process-level | iteration | AUTOMATED:ITER-0008b TG4 — `cd modules/incus-dispatcher && go test . -run TestScenario0018` | STORY-0031, STORY-0032 |
 | SCENARIO-0019 | Recursive delegation via message emission | e2e | iteration | AUTOMATED (ITER-0008, T3b/d): `cd modules/incus-dispatcher && go test . -run TestScenario0019_RecursiveDelegation` | STORY-0012, STORY-0014 |
 | SCENARIO-0020 | Worker accesses provider through broker proxy without exposing credent | integration | iteration | `cd modules/llm-proxy && go test -race -run TestScenario0020` | STORY-0048 |
-| SCENARIO-0021 | Operator uses TUI to create, inspect, and manage threads | app-level | iteration | TBD | STORY-0028 |
-| SCENARIO-0022 | Budget enforcement prevents runaway spending | integration | iteration | TBD | STORY-0036, STORY-0032 |
+| SCENARIO-0021 | Operator uses TUI to create, inspect, and manage threads | app-level | iteration | AUTOMATED:ITER-0008b TG1 — `cd modules/incus-dispatcher && go test . -run TestScenario0021` | STORY-0028 |
+| SCENARIO-0022 | Budget enforcement prevents runaway spending | integration | iteration | AUTOMATED:ITER-0008b TG3 — `cd modules/incus-dispatcher && go test . -run TestScenario0022` | STORY-0036, STORY-0032 |
 | SCENARIO-0023 | One-shot worker consumes task, exits | integration | iteration | AUTOMATED (ITER-0008, T3c): `cd modules/incus-dispatcher && go test . -run TestScenario0023` | STORY-0013 |
 | SCENARIO-0024 | Coordinator rejects superseding work without explicit declaration | integration | iteration | TBD | STORY-0030 |
 | SCENARIO-0025 | D1: Worker directive with root flag is rejected | integration | iteration | `cd modules/incus-dispatcher && go test -race -run TestScenario0025` | STORY-0049 |
@@ -113,3 +113,4 @@ Execution index for all behavior scenarios. Commands are TBD until the implement
 | SCENARIO-0123 | Versioned policy: dispatch v1 → revise → dispatch v2, version recorded | integration | iteration | AUTOMATED:ITER-0008: `cd modules/incus-dispatcher && go test . -run TestScenario0123_VersionedPolicy` | STORY-0016 |
 | SCENARIO-0124 | Mac stateless client: author → disconnect → reconnect → review without replay | e2e | iteration | AUTOMATED:ITER-0008: `cd modules/incus-dispatcher && go test . -run TestScenario0124_MacStatelessClient` | STORY-0006 |
 | SCENARIO-0125 | Audit log records every run/delegation/mutation and is replayable | integration | iteration | AUTOMATED:ITER-0008: `cd modules/incus-dispatcher && go test . -run TestScenario0125_AuditReplay` | STORY-0054 |
+| SCENARIO-0126 | Multi-repo thread coordination: simultaneous repo claims + repo-fairness scheduling | integration | iteration | AUTOMATED:ITER-0008b TG6 — `cd modules/incus-dispatcher && go test . -run TestScenario0126` | STORY-0039 |

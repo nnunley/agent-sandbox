@@ -3,7 +3,7 @@
 **Summary:** Mac-off governance & constraints
 **Stories:** STORY-0026, STORY-0027, STORY-0028
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 0/3 done
+**Status:** 3/3 done (STORY-0026/0027/0028 done:ITER-0008b)
 ## STORY-0026
 
 **Epic:** EPIC-003 — Mac-off governance & constraints
@@ -21,7 +21,9 @@
 **Sources:**
 - `docs/plans/2026-06-18-fleet-orchestration-design.md:14-26`
 
-**Status:** pending
+**Status:** done:ITER-0008b (TG7 — Mac-off autonomy: queue/daemon/handoff modeled cluster-resident via the
+durable file-backed stores; SCENARIO-0010 + JOURNEY-0004..0007 CI-prove autonomous claim/grade/escalate/resume
+with no operator input. CI-models-Mac-off; a live physical-Mac-off cluster run is honest enrichment.)
 
 ## STORY-0027
 
@@ -40,7 +42,9 @@
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:149, 513-514`
 
-**Status:** partial:ITER-0001 (AC-1 status field + AC-2 transitions done); AC-3 TUI pause/block/resume→ITER-0008
+**Status:** done:ITER-0008b (AC-1 status field + AC-2 transitions done:ITER-0001; AC-3 operator pause/block/resume
+from the TUI done:ITER-0008b TG1 — wired onto ThreadTracker with audit + a daemon dispatch-gate so paused/blocked
+threads are not dispatched; SCENARIO-0021)
 
 ## STORY-0028
 
@@ -60,4 +64,6 @@
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:552-559`
 
-**Status:** pending
+**Status:** done:ITER-0008b (TG1 — stdlib OperatorConsole: create work (AC-1), display queue/worker/thread state
+(AC-2), inspect responses+artifacts from a real ResultStore (AC-3), respond/requeue/pause/block/resume (AC-4);
+SCENARIO-0021)

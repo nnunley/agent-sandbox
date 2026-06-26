@@ -3,7 +3,7 @@
 **Summary:** Prioritization & scheduling (Temporal)
 **Stories:** STORY-0035, STORY-0036, STORY-0037, STORY-0038, STORY-0039, STORY-0040, STORY-0041, STORY-0042, STORY-0043, STORY-0044, STORY-0045, STORY-0046, STORY-0047
 **Primary sources:** `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md`, `docs/plans/2026-06-18-fleet-orchestration-design.md`
-**Status:** 8/13 done (STORY-0040/0042/0045 done:ITER-0007; STORY-0041/0043/0044/0046/0047 done:ITER-0007b — live Temporal ACs proven (E1), 0043 AC-2 with documented wall-clock-aging limitation; STORY-0035/0036/0037/0038/0039 → ITER-0008)
+**Status:** 13/13 done (STORY-0040/0042/0045 done:ITER-0007; STORY-0041/0043/0044/0046/0047 done:ITER-0007b — live Temporal ACs proven (E1), 0043 AC-2 with documented wall-clock-aging limitation; STORY-0035/0036/0037/0038/0039 done:ITER-0008b — provider routing/cost, budget guardrails, thread aging, multi-repo)
 ## STORY-0035
 
 **Epic:** EPIC-005 — Prioritization & scheduling (Temporal)
@@ -27,7 +27,7 @@ them. A live-provider feed (llm-proxy usage headers) is future enrichment, out o
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:164-176, 309-314, 358-416`
 
-**Status:** done:ITER-0008 AC-1/2 (T2b — Run.provider_instance/model_id/budget_snapshot; SCENARIO-0121). AC-3/4 (model resolution + token/latency/spend) -> ITER-0008b
+**Status:** done:ITER-0008b (AC-1/2 done:ITER-0008 T2b — Run.provider_instance/model_id/budget_snapshot, SCENARIO-0121; AC-3 explicit model→instance resolution, no-guess + AC-4 tokens/latency/spend captured from the worker Result done:ITER-0008b TG2; SCENARIO-0016)
 
 ## STORY-0036
 
@@ -55,7 +55,9 @@ pressure) is a legitimate mutation target; the hard *ceiling* fields are not.
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:387-398, 455-463`
 
-**Status:** pending
+**Status:** done:ITER-0008b (TG3 — BudgetPolicy with 6 levels (AC-1; per-provider/worker-class/thread/run/message
+enforced, per-time-window documented-deferred), hard-ceiling protected from auto-mutation with an operator-only
+raise path via the TUI (AC-2), thread-keyed spend aggregation → escalate/reject on exceed (AC-3); SCENARIO-0022)
 
 ## STORY-0037
 
@@ -81,7 +83,9 @@ clock like the rest of the codebase; no Temporal workflow dependency. CI-provabl
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:150-151, 506-519`
 
-**Status:** pending
+**Status:** done:ITER-0008b (TG5 — Thread.priority/aging_score/queue_class + 4 queue classes (AC-1/AC-3),
+deterministic priority+aging ordering with injected clock (AC-2), stale-thread resurfacing with a live
+MarkServed lifecycle wired into daemon completion (AC-4); SCENARIO-0017)
 
 ## STORY-0038
 
@@ -100,7 +104,9 @@ clock like the rest of the codebase; no Temporal workflow dependency. CI-provabl
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:362-385`
 
-**Status:** pending
+**Status:** done:ITER-0008b (TG2 — 6 named provider instances (AC-1), cheap-local-first→stronger-cloud escalation
+rules + production EscalateRun (AC-2), deterministic multi-signal selector (AC-3); provider-taxonomy made coherent
+with worker-env routing; SCENARIO-0016)
 
 ## STORY-0039
 
@@ -119,7 +125,10 @@ clock like the rest of the codebase; no Temporal workflow dependency. CI-provabl
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:37-38, 141, 519`
 
-**Status:** pending
+**Status:** done:ITER-0008b (TG6 — Thread.repo_refs (AC-1), simultaneous multi-repo workspace claims via the real
+WorkspaceRegistry (AC-2), deterministic LRU repo-fairness scheduler proven under skew with a live MarkRepoServed
+wiring into daemon completion to prevent starvation (AC-3); SCENARIO-0126. Daemon claim-order repo-fairness is a
+documented follow-on boundary.)
 
 ## STORY-0040
 
