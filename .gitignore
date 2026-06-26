@@ -19,3 +19,6 @@ modules/incus-dispatcher/dispatcher
 !.claude/skills/
 !.claude/skills/**
 dogfood-out/
+
+# Go test binaries
+*.test
