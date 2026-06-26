@@ -106,6 +106,13 @@ Four small, independently testable units sharing one `UsageEvent` type.
    Source of truth for estimation and the readout; survives restarts.
 3. **Estimator** — pure function over `(ledger events, observed limit-events, now)` → per
    `(provider, window)` estimate. Logic:
+   - **Window model (Claude Code Max — anchored, not fixed-clock):** the 5-hour session window is **anchored
+     on first-use-after-idle**, so its start floats. The estimator derives the current window's `anchor` from
+     event timestamps: the first `UsageEvent` whose ts is after the prior window's expiry opens a new window;
+     `window_reset_at = anchor + 5h`. Continuous use rolls within that single anchored window; going idle past
+     the expiry re-anchors a fresh window at the next event. (There is also a separate, longer weekly window —
+     tracked the same way with its own anchor/length.) The "2pm reset" earlier was just where one day's anchor
+     happened to land, NOT a fixed boundary.
    - Sum reported usage in the current window.
    - **Effective-ceiling learner:** start from a weak published-limit **prior**; when an exhaustion/throttle
      signal is observed (HTTP 429 / provider "limit reached" / Claude Code rate-limit notice), record the
@@ -116,12 +123,17 @@ Four small, independently testable units sharing one `UsageEvent` type.
      If the window resets without an exhaustion, the highest usage reached that window is a *lower bound* on
      the ceiling (weakly raises the estimate), not a calibration point.
    - `remaining_est = max(0, ceiling_est − used)`; `confidence ∈ {uncalibrated, low, med, high}` by number of
-     calibration points; `window_reset_at` from the injected clock + window class (Max ≈ 5-hour rolling +
-     weekly; the "2pm reset" is a window boundary).
+     calibration points and `window_reset_at = anchor + window_length`.
    - **Clock injected** (codebase convention) for deterministic tests.
 4. **Readout / query API** — a CLI subcommand (e.g. `dispatcher budget`) printing the per-provider estimate,
    plus a Go method `Remaining(provider) Estimate` the future reserve cap (sub-project 2) and operator TUI
-   consume. Human line: `anthropic: ~123k used this window · est ~57k remaining (med) · resets 14:00`.
+   consume. **Visibility-sooner (explicit requirement):** the readout must be useful from the FIRST events,
+   before any ceiling calibration exists. Even at `confidence:"uncalibrated"` it surfaces the immediately-known
+   facts — `window_anchor`, `window_reset_at`, time-elapsed/remaining in the window, and cumulative `used` —
+   plus a best-effort `remaining_est` shown as a wide labeled range. The time/usage facts are valuable on day
+   one independent of the learned ceiling. Human line (calibrated):
+   `anthropic: ~123k used this window (anchored 09:00, resets 14:00, 2h12m left) · est ~57k remaining (med)`;
+   uncalibrated: `… · est remaining: uncalibrated (≥0; learns the ceiling after the first limit-hit)`.
 
 ### Data flow
 
@@ -136,15 +148,21 @@ appended on exhaustion) → estimator recomputes per provider on read → readou
   range, explicitly labeled — never a false-precise number.
 - Streaming vs transcript double-count → de-dup by turn/message id; if ids are missing, prefer transcript
   (durable) and log the gap.
-- Window boundary / reset → injected clock; an event's window is assigned at append time; reset zeroes the
-  window sum but **retains** the learned ceiling across windows.
+- Window detection / reset → the estimator derives the current window's `anchor` from event timestamps (first
+  event after the prior window's expiry re-anchors); the injected clock decides whether the anchored window is
+  still open. A new window zeroes the window-usage sum but **retains** the learned ceiling across windows. An
+  idle gap that crosses the expiry must produce a fresh anchor, not extend the old window.
 - Garbled/partial usage line in the ledger on reopen → skipped with a logged warning, not fatal.
 
 ### Testing
 
 - **Estimator (unit, pure):** replay synthetic `UsageEvent`s + a forced exhaustion event; assert the ceiling
-  estimate calibrates to the realized usage and `remaining_est`/`confidence` update correctly; assert window
-  reset zeroes usage but keeps the ceiling; boundary tests at the window edge (injected clock).
+  estimate calibrates to the realized usage and `remaining_est`/`confidence` update correctly; assert a new
+  window zeroes usage but keeps the ceiling. **Anchored-window tests:** continuous events stay in one window;
+  an idle gap crossing the 5h expiry re-anchors a fresh window at the next event (vs. a sub-expiry gap that
+  does not); assert `window_anchor`/`window_reset_at` are derived correctly (injected clock). **Visibility-
+  sooner test:** with zero calibration points, the readout still returns correct `window_anchor`,
+  `window_reset_at`, time-remaining, and cumulative `used`, with `confidence:"uncalibrated"`.
 - **Collectors (unit):** feed captured sample provider responses (Anthropic/OpenAI/ollama `usage` shapes) and
   a sample Claude Code streaming-JSON turn + a sample transcript JSONL; assert correct `UsageEvent`s and
   streaming↔transcript de-dup.
