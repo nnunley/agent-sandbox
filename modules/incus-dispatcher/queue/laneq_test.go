@@ -16,32 +16,32 @@ import (
 // mockLaneqClient is a hand-written fake client for testing contract mapping.
 type mockLaneqClient struct {
 	// Controllable behavior for each method.
-	pushResp     *laneqpb.PushResponse
-	pushErr      error
-	takeResp     *laneqpb.TakeResponse
-	takeErr      error
-	peekResp     *laneqpb.PeekResponse
-	peekErr      error
-	touchResp    *laneqpb.TouchResponse
-	touchErr     error
+	pushResp      *laneqpb.PushResponse
+	pushErr       error
+	takeResp      *laneqpb.TakeResponse
+	takeErr       error
+	peekResp      *laneqpb.PeekResponse
+	peekErr       error
+	touchResp     *laneqpb.TouchResponse
+	touchErr      error
 	setStatusResp *laneqpb.SetStatusResponse
 	setStatusErr  error
-	deferResp    *laneqpb.DeferResponse
-	deferErr     error
-	reapResp     *laneqpb.ReapResponse
-	reapErr      error
-	parkResp     *laneqpb.ParkResponse
-	parkErr      error
+	deferResp     *laneqpb.DeferResponse
+	deferErr      error
+	reapResp      *laneqpb.ReapResponse
+	reapErr       error
+	parkResp      *laneqpb.ParkResponse
+	parkErr       error
 
 	// Track calls for assertion.
-	pushCalls     []pushCall
-	takeCalls     []takeCall
-	peekCalls     []peekCall
-	touchCalls    []touchCall
+	pushCalls      []pushCall
+	takeCalls      []takeCall
+	peekCalls      []peekCall
+	touchCalls     []touchCall
 	setStatusCalls []setStatusCall
-	deferCalls    []deferCall
-	reapCalls     []reapCall
-	parkCalls     []parkCall
+	deferCalls     []deferCall
+	reapCalls      []reapCall
+	parkCalls      []parkCall
 }
 
 type pushCall struct {
@@ -155,14 +155,14 @@ func TestLaneqPush(t *testing.T) {
 	q := NewLaneqQueue(mock, "default")
 
 	d := Directive{
-		Intent:      "test",
-		Template:    "example",
-		Importance:  ImportanceNormal,
-		Origin:      "orchestrator",
-		Repo:        "repo",
-		Ref:         "main",
-		Task:        "task-1",
-		Attempts:    0,
+		Intent:     "test",
+		Template:   "example",
+		Importance: ImportanceNormal,
+		Origin:     "orchestrator",
+		Repo:       "repo",
+		Ref:        "main",
+		Task:       "task-1",
+		Attempts:   0,
 	}
 
 	id, err := q.Push(d)
@@ -233,15 +233,15 @@ func TestLaneqPushImportanceMapping(t *testing.T) {
 
 func TestLaneqClaimSuccess(t *testing.T) {
 	d := Directive{
-		Intent:      "test",
-		Template:    "example",
-		Importance:  ImportanceHigh,
-		Origin:      "orchestrator",
-		Repo:        "repo",
-		Ref:         "main",
-		Task:        "task-1",
-		Attempts:    2, // Should be updated from requeue_count.
-		Lane:        "default", // Body lane (will be overridden by proto).
+		Intent:     "test",
+		Template:   "example",
+		Importance: ImportanceHigh,
+		Origin:     "orchestrator",
+		Repo:       "repo",
+		Ref:        "main",
+		Task:       "task-1",
+		Attempts:   2,         // Should be updated from requeue_count.
+		Lane:       "default", // Body lane (will be overridden by proto).
 	}
 
 	body, _ := json.Marshal(d)
@@ -250,14 +250,14 @@ func TestLaneqClaimSuccess(t *testing.T) {
 	mock := &mockLaneqClient{
 		takeResp: &laneqpb.TakeResponse{
 			Directive: &laneqpb.Directive{
-				Id:              "d-456",
-				Priority:        laneqpb.Priority_PRIORITY_P0,
-				Body:            string(body),
-				Status:          laneqpb.Status_STATUS_TAKEN,
-				Lane:            "urgent", // Proto lane (authoritative column).
-				TakenBy:         "consumer-1",
-				LeaseUntilUnix:  &leaseUntil,
-				RequeueCount:    5,
+				Id:             "d-456",
+				Priority:       laneqpb.Priority_PRIORITY_P0,
+				Body:           string(body),
+				Status:         laneqpb.Status_STATUS_TAKEN,
+				Lane:           "urgent", // Proto lane (authoritative column).
+				TakenBy:        "consumer-1",
+				LeaseUntilUnix: &leaseUntil,
+				RequeueCount:   5,
 			},
 			Consumer: "consumer-1",
 			Lane:     "urgent",
@@ -754,12 +754,12 @@ func TestLaneqDirectiveBodyRoundTrip(t *testing.T) {
 	mock := &mockLaneqClient{
 		takeResp: &laneqpb.TakeResponse{
 			Directive: &laneqpb.Directive{
-				Id:           "d-complex",
-				Body:         string(body),
-				Priority:     laneqpb.Priority_PRIORITY_P0,
-				Status:       laneqpb.Status_STATUS_TAKEN,
-				RequeueCount: 3,
-				TakenBy:      "consumer-advanced",
+				Id:             "d-complex",
+				Body:           string(body),
+				Priority:       laneqpb.Priority_PRIORITY_P0,
+				Status:         laneqpb.Status_STATUS_TAKEN,
+				RequeueCount:   3,
+				TakenBy:        "consumer-advanced",
 				LeaseUntilUnix: ptrInt64(time.Now().Add(30 * time.Second).Unix()),
 			},
 		},
@@ -874,8 +874,8 @@ func TestReprioritize(t *testing.T) {
 
 // mockLaneqClientWithReprioritize extends mockLaneqClient with Reprioritize support.
 type mockLaneqClientWithReprioritize struct {
-	reprioritizeResp *laneqpb.ReprioritizeResponse
-	reprioritizeErr  error
+	reprioritizeResp  *laneqpb.ReprioritizeResponse
+	reprioritizeErr   error
 	reprioritizeCalls []reprioritizeCall
 }
 

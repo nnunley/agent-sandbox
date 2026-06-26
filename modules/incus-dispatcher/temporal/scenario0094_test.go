@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"go.temporal.io/sdk/testsuite"
 	"github.com/agent-sandbox/incus-dispatcher/queue"
+	"go.temporal.io/sdk/testsuite"
 )
 
 // TestScenario0094_HumanRescoreUnrestricted tests SCENARIO-0094 / STORY-0047 AC-1.
@@ -208,8 +208,8 @@ func TestScenario0094_AgentRescoreBounded(t *testing.T) {
 				call.Importance, queue.ImportanceLow)
 		}
 	}
-	t.Logf("✓ SCENARIO-0094 / SCENARIO-0057 (agent rescore bounded): out-of-bounds Low→Critical "+
-		"signal was delivered, validated, and rejected; currentImportance stayed Low; "+
+	t.Logf("✓ SCENARIO-0094 / SCENARIO-0057 (agent rescore bounded): out-of-bounds Low→Critical " +
+		"signal was delivered, validated, and rejected; currentImportance stayed Low; " +
 		"all Reprioritize calls use ImportanceLow (no illegal write occurred)")
 }
 

@@ -33,27 +33,27 @@ func TestScenario0078(t *testing.T) {
 		name       string
 	}{
 		"D1-Q1": {
-			importance: ImportanceCritical, // 3
+			importance: ImportanceCritical,             // 3
 			deadline:   ptrTime(day0.AddDate(0, 0, 2)), // June 25
 			name:       "D1-Q1: Critical + 2-day deadline",
 		},
 		"D2-Q2": {
-			importance: ImportanceHigh, // 2
+			importance: ImportanceHigh,                 // 2
 			deadline:   ptrTime(day0.AddDate(0, 0, 8)), // July 1
 			name:       "D2-Q2: High + 8-day deadline",
 		},
 		"D3-Q3": {
-			importance: ImportanceLow, // 0
+			importance: ImportanceLow,                  // 0
 			deadline:   ptrTime(day0.AddDate(0, 0, 2)), // June 25
 			name:       "D3-Q3: Low + 2-day deadline",
 		},
 		"D4-Q4": {
 			importance: ImportanceLow, // 0
-			deadline:   nil, // No deadline
+			deadline:   nil,           // No deadline
 			name:       "D4-Q4: Low + no deadline (MUST STAY Q4)",
 		},
 		"D5-Q2→Q1": {
-			importance: ImportanceHigh, // 2
+			importance: ImportanceHigh,                 // 2
 			deadline:   ptrTime(day0.AddDate(0, 0, 6)), // June 29
 			name:       "D5-Q2→Q1: High + 6-day deadline (Q2→Q1 transition)",
 		},
@@ -68,51 +68,51 @@ func TestScenario0078(t *testing.T) {
 		{
 			dayOffset: 0,
 			expectations: map[string]Quadrant{
-				"D1-Q1": QuadrantQ1,      // 2 days out: urgency ~0.646 (Q1)
-				"D2-Q2": QuadrantQ2,      // 8 days out: urgency ~0.354 (Q2)
-				"D3-Q3": QuadrantQ3,      // 2 days out: urgency ~0.646 (Q3)
-				"D4-Q4": QuadrantQ4,      // nil deadline, always Q4
-				"D5-Q2→Q1": QuadrantQ2,   // 6 days out: urgency ~0.450 (Q2)
+				"D1-Q1":    QuadrantQ1, // 2 days out: urgency ~0.646 (Q1)
+				"D2-Q2":    QuadrantQ2, // 8 days out: urgency ~0.354 (Q2)
+				"D3-Q3":    QuadrantQ3, // 2 days out: urgency ~0.646 (Q3)
+				"D4-Q4":    QuadrantQ4, // nil deadline, always Q4
+				"D5-Q2→Q1": QuadrantQ2, // 6 days out: urgency ~0.450 (Q2)
 			},
 		},
 		{
 			dayOffset: 2,
 			expectations: map[string]Quadrant{
-				"D1-Q1": QuadrantQ1,      // deadline TODAY: urgency = 1.0 (Q1)
-				"D2-Q2": QuadrantQ2,      // 6 days out: urgency ~0.45 (Q2)
-				"D3-Q3": QuadrantQ3,      // deadline TODAY: urgency = 1.0 (Q3)
-				"D4-Q4": QuadrantQ4,      // MUST REMAIN Q4
-				"D5-Q2→Q1": QuadrantQ1,   // 4 days out: urgency ~0.55 (Q1, crosses 0.5)
+				"D1-Q1":    QuadrantQ1, // deadline TODAY: urgency = 1.0 (Q1)
+				"D2-Q2":    QuadrantQ2, // 6 days out: urgency ~0.45 (Q2)
+				"D3-Q3":    QuadrantQ3, // deadline TODAY: urgency = 1.0 (Q3)
+				"D4-Q4":    QuadrantQ4, // MUST REMAIN Q4
+				"D5-Q2→Q1": QuadrantQ1, // 4 days out: urgency ~0.55 (Q1, crosses 0.5)
 			},
 		},
 		{
 			dayOffset: 5,
 			expectations: map[string]Quadrant{
-				"D1-Q1": QuadrantQ1,      // 3 days PAST: urgency ~1.1 (Q1)
-				"D2-Q2": QuadrantQ1,      // 3 days out: urgency ~0.599 (Q1, crosses 0.5)
-				"D3-Q3": QuadrantQ3,      // 3 days PAST: urgency ~1.1 (Q3)
-				"D4-Q4": QuadrantQ4,      // STILL IN Q4, NEVER MOVES
-				"D5-Q2→Q1": QuadrantQ1,   // 1 day out: urgency ~0.690 (Q1)
+				"D1-Q1":    QuadrantQ1, // 3 days PAST: urgency ~1.1 (Q1)
+				"D2-Q2":    QuadrantQ1, // 3 days out: urgency ~0.599 (Q1, crosses 0.5)
+				"D3-Q3":    QuadrantQ3, // 3 days PAST: urgency ~1.1 (Q3)
+				"D4-Q4":    QuadrantQ4, // STILL IN Q4, NEVER MOVES
+				"D5-Q2→Q1": QuadrantQ1, // 1 day out: urgency ~0.690 (Q1)
 			},
 		},
 		{
 			dayOffset: 7,
 			expectations: map[string]Quadrant{
-				"D1-Q1": QuadrantQ1,      // 5 days PAST: urgency ~1.167 (Q1)
-				"D2-Q2": QuadrantQ1,      // 1 day out: urgency ~0.690 (Q1)
-				"D3-Q3": QuadrantQ3,      // 5 days PAST: urgency ~1.167 (Q3)
-				"D4-Q4": QuadrantQ4,      // STILL Q4: NEVER PROMOTED
-				"D5-Q2→Q1": QuadrantQ1,   // deadline TODAY: urgency ~1.033 (Q1)
+				"D1-Q1":    QuadrantQ1, // 5 days PAST: urgency ~1.167 (Q1)
+				"D2-Q2":    QuadrantQ1, // 1 day out: urgency ~0.690 (Q1)
+				"D3-Q3":    QuadrantQ3, // 5 days PAST: urgency ~1.167 (Q3)
+				"D4-Q4":    QuadrantQ4, // STILL Q4: NEVER PROMOTED
+				"D5-Q2→Q1": QuadrantQ1, // deadline TODAY: urgency ~1.033 (Q1)
 			},
 		},
 		{
 			dayOffset: 8,
 			expectations: map[string]Quadrant{
-				"D1-Q1": QuadrantQ1,      // 6 days PAST: urgency ~1.2 (Q1)
-				"D2-Q2": QuadrantQ1,      // deadline PASSED: urgency = 1.0 (Q1)
-				"D3-Q3": QuadrantQ3,      // 6 days PAST: urgency ~1.2 (Q3)
-				"D4-Q4": QuadrantQ4,      // STILL Q4: NEVER PROMOTED, INDEFINITE STABILITY
-				"D5-Q2→Q1": QuadrantQ1,   // 1 day PAST: urgency ~1.067 (Q1)
+				"D1-Q1":    QuadrantQ1, // 6 days PAST: urgency ~1.2 (Q1)
+				"D2-Q2":    QuadrantQ1, // deadline PASSED: urgency = 1.0 (Q1)
+				"D3-Q3":    QuadrantQ3, // 6 days PAST: urgency ~1.2 (Q3)
+				"D4-Q4":    QuadrantQ4, // STILL Q4: NEVER PROMOTED, INDEFINITE STABILITY
+				"D5-Q2→Q1": QuadrantQ1, // 1 day PAST: urgency ~1.067 (Q1)
 			},
 		},
 	}

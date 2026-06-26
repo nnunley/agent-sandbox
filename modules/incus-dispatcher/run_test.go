@@ -167,17 +167,17 @@ func TestRunShape(t *testing.T) {
 		RunID:       "run-full-001",
 		ThreadID:    "thread-full-001",
 		ParentRunID: "run-parent-001",
-		WorkerID:    "worker-exec-01",       // STORY-0011
-		WorkerKind:  "temporal-worker",      // STORY-0011
-		PolicyID:    "policy-v2-enforce",    // STORY-0011
-		ArtifactRefs: []ArtifactRef{         // STORY-0015
+		WorkerID:    "worker-exec-01",    // STORY-0011
+		WorkerKind:  "temporal-worker",   // STORY-0011
+		PolicyID:    "policy-v2-enforce", // STORY-0011
+		ArtifactRefs: []ArtifactRef{ // STORY-0015
 			{Kind: ArtifactDiff, Ref: "s3://bucket/run-001/diff.patch"},
 			{Kind: ArtifactSynthesis, Ref: "file:///tmp/synthesis.txt"},
 		},
-		LogRefs: []string{"s3://bucket/run-001/log.txt", "file:///tmp/local.log"}, // STORY-0015
-		ProviderInstance: "anthropic-primary",           // STORY-0035 AC-1
-		ModelID:          "claude-3-5-haiku-20241022",   // STORY-0035 AC-1
-		BudgetSnapshot: &BudgetSnapshot{                 // STORY-0035 AC-2
+		LogRefs:          []string{"s3://bucket/run-001/log.txt", "file:///tmp/local.log"}, // STORY-0015
+		ProviderInstance: "anthropic-primary",                                              // STORY-0035 AC-1
+		ModelID:          "claude-3-5-haiku-20241022",                                      // STORY-0035 AC-1
+		BudgetSnapshot: &BudgetSnapshot{ // STORY-0035 AC-2
 			LimitTokens: 1000000,
 			SpentTokens: 45000,
 		},

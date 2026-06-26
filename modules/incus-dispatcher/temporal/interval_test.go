@@ -8,9 +8,9 @@ import (
 // TestNextCheckInterval validates the durable-timer interval clamping logic.
 func TestNextCheckInterval(t *testing.T) {
 	tests := []struct {
-		remaining    time.Duration
-		expected     time.Duration
-		description  string
+		remaining   time.Duration
+		expected    time.Duration
+		description string
 	}{
 		// Very long: clamped to 6 hours
 		{365 * 24 * time.Hour, 6 * time.Hour, "1 year: clamped to 6h"},

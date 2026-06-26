@@ -10,10 +10,10 @@ import (
 // Decision records the outcome of one directive through the coordinator.
 type Decision struct {
 	DirectiveID string
-	Grade       string    // short grade summary
-	Rule        string    // coordination rule that fired
-	Action      string    // action taken: done | requeue | park | escalate | reap | ...
-	Reason      string    // denial/explanation detail (empty for routine decisions)
+	Grade       string // short grade summary
+	Rule        string // coordination rule that fired
+	Action      string // action taken: done | requeue | park | escalate | reap | ...
+	Reason      string // denial/explanation detail (empty for routine decisions)
 	Ts          time.Time
 }
 

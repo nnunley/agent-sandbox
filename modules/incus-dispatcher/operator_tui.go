@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,12 +27,19 @@ type OperatorConsole struct {
 
 // NewOperatorConsole returns a new OperatorConsole wired with the given dependencies.
 func NewOperatorConsole(q queue.Queue, threads *ThreadTracker, workers map[string]*Worker, audit AuditLog, now func() time.Time) *OperatorConsole {
+	return NewOperatorConsoleWithStore(q, threads, NewThreadStore(), workers, audit, now)
+}
+
+// NewOperatorConsoleWithStore returns a new OperatorConsole with explicit threadStore.
+// Used when budget policy mutations are needed.
+func NewOperatorConsoleWithStore(q queue.Queue, threads *ThreadTracker, threadStore *ThreadStore, workers map[string]*Worker, audit AuditLog, now func() time.Time) *OperatorConsole {
 	if now == nil {
 		now = time.Now
 	}
 	return &OperatorConsole{
 		q:                 q,
 		threads:           threads,
+		threadStore:       threadStore,
 		workers:           workers,
 		audit:             audit,
 		threadToDirective: make(map[string]queue.Directive),
@@ -88,6 +96,8 @@ func (oc *OperatorConsole) executeCommand(line string) (string, error) {
 		return oc.cmdResume(args)
 	case "requeue":
 		return oc.cmdRequeue(args)
+	case "budget":
+		return oc.cmdBudget(args)
 	default:
 		return "", fmt.Errorf("unknown command: %s", cmd)
 	}
@@ -427,4 +437,62 @@ func (oc *OperatorConsole) cmdRequeue(args []string) (string, error) {
 	}
 
 	return fmt.Sprintf("ok: requeue thread %s (directive %s re-emitted)", threadID, newID), nil
+}
+
+// cmdBudget updates a thread's budget policy with explicit operator approval.
+// Syntax: budget <thread-id> <field> <value>
+// Example: budget thr-1 per_thread_hard_ceiling 20.0
+// Field names: per_message_hard_ceiling, per_run_hard_ceiling, per_thread_hard_ceiling, etc.
+func (oc *OperatorConsole) cmdBudget(args []string) (string, error) {
+	if len(args) != 3 {
+		return "", fmt.Errorf("budget: expected 3 arguments (thread-id, field, value), got %d", len(args))
+	}
+	threadID := args[0]
+	fieldName := args[1]
+	valueStr := args[2]
+
+	// Parse the value.
+	value, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		return "", fmt.Errorf("budget: invalid value %q: %v", valueStr, err)
+	}
+
+	// Retrieve the thread and its budget policy.
+	if oc.threadStore == nil {
+		return "", fmt.Errorf("budget: thread store not available")
+	}
+
+	thread, ok := oc.threadStore.Get(threadID)
+	if !ok {
+		return "", fmt.Errorf("budget: thread %q not found", threadID)
+	}
+
+	if thread.BudgetPolicy == nil {
+		return "", fmt.Errorf("budget: thread %q has no budget policy", threadID)
+	}
+
+	// Apply the operator-approved mutation.
+	oldValue, err := thread.BudgetPolicy.ApplyOperatorMutation(fieldName, value, "operator")
+	if err != nil {
+		return "", fmt.Errorf("budget: mutation failed: %v", err)
+	}
+
+	// Update the thread in the store.
+	oc.threadStore.Put(thread)
+
+	// Audit the budget change.
+	if oc.audit != nil {
+		_, _ = oc.audit.Append(AuditEntry{
+			Ts:       oc.now(),
+			Actor:    "operator",
+			Kind:     AuditKindMutation,
+			ThreadID: threadID,
+			Detail: fmt.Sprintf(
+				"budget_update: field=%s, old=%.3f, new=%.3f",
+				fieldName, oldValue, value,
+			),
+		})
+	}
+
+	return fmt.Sprintf("ok: updated thread %s budget %s from %.3f to %.3f", threadID, fieldName, oldValue, value), nil
 }

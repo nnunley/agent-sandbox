@@ -16,9 +16,9 @@ func tieredDaemon(t *testing.T, registry map[IsolationTier]Runner) (*Daemon, *qu
 	q := queue.NewMemoryQueue()
 	logmem := NewMemoryDecisionLog()
 	dm := &Daemon{
-		Q:        q,
-		Runner:   &fakeRunner{result: &Result{ExitCode: 0}}, // fallback; should NOT be used when Backend is set
-		Backend:  newStaticBackendFactory(registry),
+		Q:       q,
+		Runner:  &fakeRunner{result: &Result{ExitCode: 0}}, // fallback; should NOT be used when Backend is set
+		Backend: newStaticBackendFactory(registry),
 		Policy: &Policy{Templates: map[string]TemplateRule{
 			"fleet-fast": {AllowWorkerOrigin: true, Tier: TierFast},
 			"fleet-hard": {AllowWorkerOrigin: false, Tier: TierHard},

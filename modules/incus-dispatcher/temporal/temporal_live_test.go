@@ -20,14 +20,14 @@ import (
 
 // TemporalLiveEnv holds references to the live Temporal client, laneq gRPC client, and worker.
 type TemporalLiveEnv struct {
-	TemporalAddr  string
-	LaneqAddr     string
-	TemporalCli   client.Client
-	LaneqCli      laneqpb.LaneqClient
-	LaneqConn     interface{} // *grpc.ClientConn
-	TaskQueue     string
-	WorkerConfig  WorkerConfig
-	Worker        *Worker
+	TemporalAddr string
+	LaneqAddr    string
+	TemporalCli  client.Client
+	LaneqCli     laneqpb.LaneqClient
+	LaneqConn    interface{} // *grpc.ClientConn
+	TaskQueue    string
+	WorkerConfig WorkerConfig
+	Worker       *Worker
 }
 
 // SetupTemporalLive connects to live Temporal and laneq, starts a Worker, verifies reachability.
@@ -244,8 +244,10 @@ func retryDescribeWorkflowExecution(t *testing.T, cli client.Client, workflowID,
 // Phase 1: start DeferWorkflow, assert Running, save runID + state
 // [Driver: real systemctl restart temporal]
 // Phase 2: assert SAME runID still exists & is Running (durable timer persisted),
-//          wait for eligibility, assert workflow transitioned to Completed (timer fired post-restart),
-//          assert directive became claimable (not just natural laneq expiry).
+//
+//	wait for eligibility, assert workflow transitioned to Completed (timer fired post-restart),
+//	assert directive became claimable (not just natural laneq expiry).
+//
 // This proves Temporal's durable state + timer fired across the service restart.
 func TestScenario0001_LiveRestartSurvival(t *testing.T) {
 	phase := os.Getenv("RESTART_PHASE")
@@ -270,9 +272,9 @@ func TestScenario0001_LiveRestartSurvival(t *testing.T) {
 		notBefore := now.Add(90 * time.Second)
 
 		directive := queue.Directive{
-			Intent:      "scenario0001-live-restart",
-			Importance:  queue.ImportanceHigh,
-			NotBefore:   notBefore,
+			Intent:     "scenario0001-live-restart",
+			Importance: queue.ImportanceHigh,
+			NotBefore:  notBefore,
 		}
 
 		dirID, err := q.Push(directive)
@@ -422,10 +424,10 @@ func TestScenario0094_LiveHumanRescore(t *testing.T) {
 
 	t.Logf("Pushing directive with Normal importance...")
 	directive := queue.Directive{
-		Intent:      "scenario0094-live-rescore",
-		Importance:  queue.ImportanceNormal,
-		Deadline:    &deadline,
-		NotBefore:   now,
+		Intent:     "scenario0094-live-rescore",
+		Importance: queue.ImportanceNormal,
+		Deadline:   &deadline,
+		NotBefore:  now,
 	}
 
 	dirID, err := q.Push(directive)
@@ -551,10 +553,10 @@ func TestScenario0081_LiveConcurrentReads(t *testing.T) {
 	deadline := now.Add(7 * 24 * time.Hour)
 
 	directive := queue.Directive{
-		Intent:      "scenario0081-live-concurrent",
-		Importance:  queue.ImportanceHigh,
-		Deadline:    &deadline,
-		NotBefore:   now,
+		Intent:     "scenario0081-live-concurrent",
+		Importance: queue.ImportanceHigh,
+		Deadline:   &deadline,
+		NotBefore:  now,
 	}
 
 	dirID, err := q.Push(directive)
@@ -635,10 +637,10 @@ func TestScenario0093_LiveSoleCallerStructure(t *testing.T) {
 	deadline := now.Add(7 * 24 * time.Hour)
 
 	directive := queue.Directive{
-		Intent:      "scenario0093-live-sole-caller",
-		Importance:  queue.ImportanceHigh,
-		Deadline:    &deadline,
-		NotBefore:   now,
+		Intent:     "scenario0093-live-sole-caller",
+		Importance: queue.ImportanceHigh,
+		Deadline:   &deadline,
+		NotBefore:  now,
 	}
 
 	dirID, err := q.Push(directive)

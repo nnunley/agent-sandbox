@@ -84,11 +84,11 @@ func (a *Activities) ReprojectActivity(ctx context.Context, req ReprojectRequest
 // This is a lossy conversion because laneq's priority model has only three tiers
 // (High/P0, Normal/P1, Low/P2), while the temporal Importance scale has four (Critical, High, Medium, Low).
 // This is SAFE because:
-// - Critical and High directives both reach laneq's top priority level (P0).
-// - Finer urgency differentiation is preserved by the Eisenhower quadrant and not-before time.
-// - The quadrant/urgency axis determines "do now" (Q1), "schedule" (Q2), "delegate" (Q3), or
-//   "idle-only" (Q4), which is the meaningful scheduling signal for the daemon.
-// - This mirroring matches queue/laneq.go's importanceToProto, which also collapses Critical→High.
+//   - Critical and High directives both reach laneq's top priority level (P0).
+//   - Finer urgency differentiation is preserved by the Eisenhower quadrant and not-before time.
+//   - The quadrant/urgency axis determines "do now" (Q1), "schedule" (Q2), "delegate" (Q3), or
+//     "idle-only" (Q4), which is the meaningful scheduling signal for the daemon.
+//   - This mirroring matches queue/laneq.go's importanceToProto, which also collapses Critical→High.
 func tierToQueueImportance(tier Importance) queue.Importance {
 	switch tier {
 	case ImportanceCritical:

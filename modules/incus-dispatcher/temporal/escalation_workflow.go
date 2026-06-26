@@ -21,12 +21,12 @@ type EscalationWorkflowInput struct {
 // and re-raises its priority as urgency increases over time.
 //
 // The workflow:
-// 1. Takes a directive that has a deadline and a current importance tier.
-// 2. Periodically checks if the escalation threshold has been crossed (IsEscalationTriggered).
-// 3. When the threshold crosses, recomputes the quadrant (ReprojectOnEscalation),
-//    invokes the ReprojectActivity to persist the updated priority to laneq,
-//    and logs the transition using workflow.GetLogger (deterministic, auditable).
-// 4. Exits after re-raising OR when the deadline has passed.
+//  1. Takes a directive that has a deadline and a current importance tier.
+//  2. Periodically checks if the escalation threshold has been crossed (IsEscalationTriggered).
+//  3. When the threshold crosses, recomputes the quadrant (ReprojectOnEscalation),
+//     invokes the ReprojectActivity to persist the updated priority to laneq,
+//     and logs the transition using workflow.GetLogger (deterministic, auditable).
+//  4. Exits after re-raising OR when the deadline has passed.
 //
 // This workflow proves AC-B (STORY-0061 AC-3 / STORY-0055 AC-7):
 // - Stale escalations are re-raised as urgency rises (autonomous, durable).

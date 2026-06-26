@@ -78,15 +78,41 @@ func (bp *BudgetPolicy) AllowAutoMutation(fieldName string) bool {
 	return false
 }
 
-// ApplyAutoMutation attempts to mutate a field value. If the field is protected (AllowAutoMutation=false),
-// it returns an error. Otherwise, it updates the field and returns nil. This guards STORY-0032 AC-3
+// ApplyAutoMutation attempts to mutate a tunable field value (escalation threshold).
+// If the field is protected (hard ceiling), it returns an error.
+// Otherwise, it updates the field and returns nil. This guards STORY-0032 AC-3
 // (genome engine cannot raise hard ceilings without human approval).
 func (bp *BudgetPolicy) ApplyAutoMutation(fieldName string, value float64) error {
 	if !bp.AllowAutoMutation(fieldName) {
 		return fmt.Errorf("budget_policy: field %q is protected from automatic mutation; requires human approval", fieldName)
 	}
 	// Escalation heuristics: update the corresponding limit's escalation threshold.
-	// (In a real implementation, this would patch the BudgetLimit structures more granularly.)
+	switch fieldName {
+	case "per_message_escalation_threshold":
+		if bp.PerMessage != nil {
+			bp.PerMessage.EscalationThreshold = value
+		}
+	case "per_run_escalation_threshold":
+		if bp.PerRun != nil {
+			bp.PerRun.EscalationThreshold = value
+		}
+	case "per_thread_escalation_threshold":
+		if bp.PerThread != nil {
+			bp.PerThread.EscalationThreshold = value
+		}
+	case "per_worker_class_escalation_threshold":
+		if bp.PerWorkerClass != nil {
+			bp.PerWorkerClass.EscalationThreshold = value
+		}
+	case "per_provider_escalation_threshold":
+		if bp.PerProvider != nil {
+			bp.PerProvider.EscalationThreshold = value
+		}
+	case "per_time_window_escalation_threshold":
+		if bp.PerTimeWindow != nil {
+			bp.PerTimeWindow.EscalationThreshold = value
+		}
+	}
 	return nil
 }
 
@@ -146,8 +172,9 @@ type BudgetEnforcement struct {
 // EnforceRunBudget checks whether a run would exceed any budget threshold.
 // It returns an enforcement decision and the (current, hard ceiling) pair for the limiting level.
 // A run is allowed only if all levels are within their hard ceilings.
-func (bp *BudgetPolicy) EnforceRunBudget(run *Run, currentThreadSpend float64) *BudgetEnforcement {
-	// Check each level in order; return the first violation.
+// priorRuns is an optional list of prior runs for this thread (used to aggregate spend by provider/worker-class).
+func (bp *BudgetPolicy) EnforceRunBudget(run *Run, currentThreadSpend float64, priorRuns ...[]*Run) *BudgetEnforcement {
+	// Check per-thread level.
 	if bp.PerThread != nil {
 		nextSpend := currentThreadSpend + run.SpendUSD
 		if nextSpend > bp.PerThread.HardCeiling {
@@ -164,6 +191,7 @@ func (bp *BudgetPolicy) EnforceRunBudget(run *Run, currentThreadSpend float64) *
 		}
 	}
 
+	// Check per-run level.
 	if bp.PerRun != nil && run.SpendUSD > bp.PerRun.HardCeiling {
 		return &BudgetEnforcement{
 			Allowed:      false,
@@ -177,6 +205,7 @@ func (bp *BudgetPolicy) EnforceRunBudget(run *Run, currentThreadSpend float64) *
 		}
 	}
 
+	// Check per-message level (same as per-run since message granularity maps to individual runs).
 	if bp.PerMessage != nil && run.SpendUSD > bp.PerMessage.HardCeiling {
 		return &BudgetEnforcement{
 			Allowed:      false,
@@ -190,23 +219,61 @@ func (bp *BudgetPolicy) EnforceRunBudget(run *Run, currentThreadSpend float64) *
 		}
 	}
 
-	// Per-provider, per-worker-class, and per-time-window are checked similarly
-	// (in a full implementation, they would aggregate spend across multiple runs in their scope).
+	// Check per-provider level (requires prior runs for aggregation).
+	if bp.PerProvider != nil && len(priorRuns) > 0 && len(priorRuns[0]) > 0 {
+		priorList := priorRuns[0]
+		providerSpend := run.SpendUSD
+		for _, pr := range priorList {
+			if pr != nil && pr.ProviderInstance == run.ProviderInstance {
+				providerSpend += pr.SpendUSD
+			}
+		}
+		if providerSpend > bp.PerProvider.HardCeiling {
+			return &BudgetEnforcement{
+				Allowed:      false,
+				LimitLevel:   BudgetLevelPerProvider,
+				CurrentSpend: providerSpend - run.SpendUSD,
+				HardCeiling:  bp.PerProvider.HardCeiling,
+				Reason: fmt.Sprintf(
+					"per-provider (%s) budget exceeded: current=%.3f, run=%.3f, limit=%.3f",
+					run.ProviderInstance, providerSpend-run.SpendUSD, run.SpendUSD, bp.PerProvider.HardCeiling,
+				),
+			}
+		}
+	}
+
+	// Check per-worker-class level (requires prior runs for aggregation).
+	if bp.PerWorkerClass != nil && len(priorRuns) > 0 && len(priorRuns[0]) > 0 {
+		priorList := priorRuns[0]
+		workerSpend := run.SpendUSD
+		for _, pr := range priorList {
+			if pr != nil && pr.WorkerKind == run.WorkerKind {
+				workerSpend += pr.SpendUSD
+			}
+		}
+		if workerSpend > bp.PerWorkerClass.HardCeiling {
+			return &BudgetEnforcement{
+				Allowed:      false,
+				LimitLevel:   BudgetLevelPerWorkerClass,
+				CurrentSpend: workerSpend - run.SpendUSD,
+				HardCeiling:  bp.PerWorkerClass.HardCeiling,
+				Reason: fmt.Sprintf(
+					"per-worker-class (%s) budget exceeded: current=%.3f, run=%.3f, limit=%.3f",
+					run.WorkerKind, workerSpend-run.SpendUSD, run.SpendUSD, bp.PerWorkerClass.HardCeiling,
+				),
+			}
+		}
+	}
+
+	// Per-time-window is not enforced in this implementation.
+	// REASON: The enforcement function does not have access to timestamps at the point of checking.
+	// A full implementation would require passing the entire run history with timestamps,
+	// or materializing a time-windowed aggregate at the dashboard/monitoring layer.
+	// This is deferred to a future enhancement that layers on real-time usage tracking.
 
 	// All levels passed: allow the run.
 	return &BudgetEnforcement{
 		Allowed: true,
 		Reason:  "within all budget limits",
 	}
-}
-
-// ComputeThreadSpend sums the SpendUSD of all runs in a thread (helper for budget enforcement).
-func ComputeThreadSpend(runs []*Run) float64 {
-	var total float64
-	for _, r := range runs {
-		if r != nil {
-			total += r.SpendUSD
-		}
-	}
-	return total
 }

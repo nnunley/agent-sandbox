@@ -323,4 +323,3 @@ func TestRunOnce_FrameworkErrorIsFail(t *testing.T) {
 		t.Fatalf("framework error → %q, want requeued (run did not complete)", out)
 	}
 }
-

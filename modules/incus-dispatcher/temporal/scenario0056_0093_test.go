@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"go.temporal.io/sdk/testsuite"
 	"github.com/agent-sandbox/incus-dispatcher/queue"
+	"go.temporal.io/sdk/testsuite"
 )
 
 // ReprioritizeCall records a call to Reprioritize with its arguments.
@@ -55,22 +55,22 @@ func (f *FakeReprojector) Defer(id string, notBefore time.Time) error {
 // SCENARIO-0056: Q2 item promoted to Q1 as deadline nears, with no human intervention.
 //
 // Setup:
-// - Create a directive with importance=high and a deadline 7 days in the future.
-//   (7 days out with ImportanceHigh: urgency ~0.40 < 0.5 → starts in Q2).
-// - Register the workflow and a fake Reprojector.
-// - The testsuite environment's clock starts at env.Now().
+//   - Create a directive with importance=high and a deadline 7 days in the future.
+//     (7 days out with ImportanceHigh: urgency ~0.40 < 0.5 → starts in Q2).
+//   - Register the workflow and a fake Reprojector.
+//   - The testsuite environment's clock starts at env.Now().
 //
 // Action:
-// - Start the workflow with deadline relative to env.Now() (7 days out).
-// - The workflow enters its loop: first check at t=0 finds Q2, computes nextCheck = 7*24*60*60 / 4 ≈ 42 hours,
-//   calls workflow.Sleep(42h).
-// - The testsuite auto-skips: env.Now() advances to t+42h, workflow.Now(ctx) returns advanced time,
-//   loop resumes.
-// - At t+42h: timeRemaining = 7 - 1.75 = 5.25 days, urgency ~0.50, quadrant still Q2 or crossing.
-// - Loop continues, next sleep is 5.25*24*60*60 / 4 ≈ 31.5 hours.
-// - At t+74h: timeRemaining = 7 - 3 = 4 days, urgency ~0.55 > 0.5 → Q1.
-// - Workflow detects Q2→Q1 change, invokes ReprojectActivity, records Reprioritize + Defer.
-// - At Q1, workflow exits.
+//   - Start the workflow with deadline relative to env.Now() (7 days out).
+//   - The workflow enters its loop: first check at t=0 finds Q2, computes nextCheck = 7*24*60*60 / 4 ≈ 42 hours,
+//     calls workflow.Sleep(42h).
+//   - The testsuite auto-skips: env.Now() advances to t+42h, workflow.Now(ctx) returns advanced time,
+//     loop resumes.
+//   - At t+42h: timeRemaining = 7 - 1.75 = 5.25 days, urgency ~0.50, quadrant still Q2 or crossing.
+//   - Loop continues, next sleep is 5.25*24*60*60 / 4 ≈ 31.5 hours.
+//   - At t+74h: timeRemaining = 7 - 3 = 4 days, urgency ~0.55 > 0.5 → Q1.
+//   - Workflow detects Q2→Q1 change, invokes ReprojectActivity, records Reprioritize + Defer.
+//   - At Q1, workflow exits.
 //
 // Expected observables (SCENARIO-0056):
 // - Workflow completes without error.
@@ -210,10 +210,10 @@ func TestScenario0056_Q2ToQ1Promotion(t *testing.T) {
 // - Let the workflow run to completion (Q4 items with no deadline exit immediately).
 //
 // Expected observables:
-// - The fake Reprojector records ZERO calls to Reprioritize and Defer.
-// - The workflow completes without error.
-// - This verifies the sole-writer seam: the ONLY way writes happen is via the activity;
-//   when no activity is invoked (because no quadrant change), no writes occur.
+//   - The fake Reprojector records ZERO calls to Reprioritize and Defer.
+//   - The workflow completes without error.
+//   - This verifies the sole-writer seam: the ONLY way writes happen is via the activity;
+//     when no activity is invoked (because no quadrant change), no writes occur.
 //
 // Automation status: ITER-0007b C2 (CI/testsuite logic basis).
 func TestScenario0093_SoleWriterSeam_NoDeadline(t *testing.T) {
@@ -267,19 +267,19 @@ func TestScenario0093_SoleWriterSeam_NoDeadline(t *testing.T) {
 // and ONLY invokes the activity (and thus only writes to laneq) when a real change is detected.
 //
 // Setup:
-// - Create a directive with critical importance and a 1-day deadline (deadline soon).
-//   At 1 day out, urgency ~0.69 >= 0.5, so quadrant is Q1 (important + urgent).
-//   The workflow will detect Q1 on first check and exit (Q1 items are ready to run).
+//   - Create a directive with critical importance and a 1-day deadline (deadline soon).
+//     At 1 day out, urgency ~0.69 >= 0.5, so quadrant is Q1 (important + urgent).
+//     The workflow will detect Q1 on first check and exit (Q1 items are ready to run).
 //
 // Action:
 // - Start the workflow.
 // - The workflow computes Q1 on the first iteration and immediately exits (Q1 exit condition).
 //
 // Expected observables:
-// - The fake Reprojector records ZERO calls to Reprioritize and Defer (Q1 exit prevents activity).
-// - The workflow completes without error.
-// - This verifies: items already in their final quadrant (Q1) don't trigger activity writes
-//   because the loop exits before any change is detected.
+//   - The fake Reprojector records ZERO calls to Reprioritize and Defer (Q1 exit prevents activity).
+//   - The workflow completes without error.
+//   - This verifies: items already in their final quadrant (Q1) don't trigger activity writes
+//     because the loop exits before any change is detected.
 //
 // Automation status: ITER-0007b C2 (CI/testsuite logic basis).
 func TestScenario0093_SoleWriterSeam_NoWriteWhenNoChange(t *testing.T) {

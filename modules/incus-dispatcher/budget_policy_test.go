@@ -179,25 +179,74 @@ func TestBudgetEnforce_ExceedRejectsOrEscalates(t *testing.T) {
 	}
 }
 
-// TestBudgetPolicy_ComputeThreadSpend verifies the helper that sums per-thread spending.
-func TestBudgetPolicy_ComputeThreadSpend(t *testing.T) {
-	runs := []*Run{
-		{RunID: "run-1", SpendUSD: 2.5},
-		{RunID: "run-2", SpendUSD: 3.0},
-		{RunID: "run-3", SpendUSD: 1.5},
-	}
-
-	total := ComputeThreadSpend(runs)
-	const epsilon = 0.0001
-	if absDiff(total, 7.0) > epsilon {
-		t.Errorf("ComputeThreadSpend = %v, want 7.0", total)
-	}
-}
-
 // absDiff returns the absolute difference between x and y.
 func absDiff(x, y float64) float64 {
 	if x < y {
 		return y - x
 	}
 	return x - y
+}
+
+// TestBudgetEnforce_BoundaryAtLimit tests the boundary condition exactly at the limit
+func TestBudgetEnforce_BoundaryAtLimit(t *testing.T) {
+	bp := NewBudgetPolicy("policy-boundary")
+	bp.PerThread = &BudgetLimit{
+		Level:       BudgetLevelPerThread,
+		HardCeiling: 10.0,
+	}
+
+	// Case 1: current = 8, run = 2, total = 10 (AT limit, should PASS)
+	run1 := &Run{
+		RunID:    "run-1",
+		ThreadID: "thread-1",
+		SpendUSD: 2.0,
+	}
+	decision1 := bp.EnforceRunBudget(run1, 8.0)
+	if !decision1.Allowed {
+		t.Errorf("Case 1 (at limit): Allowed = false, want true (run fits exactly at limit)")
+	}
+
+	// Case 2: current = 8, run = 2.0001, total = 10.0001 (OVER limit, should FAIL)
+	run2 := &Run{
+		RunID:    "run-2",
+		ThreadID: "thread-1",
+		SpendUSD: 2.0001,
+	}
+	decision2 := bp.EnforceRunBudget(run2, 8.0)
+	if decision2.Allowed {
+		t.Errorf("Case 2 (over limit): Allowed = true, want false (run exceeds limit)")
+	}
+
+	// Case 3: current = 10, run = 0.0001, total = 10.0001 (OVER limit even for tiny run, should FAIL)
+	run3 := &Run{
+		RunID:    "run-3",
+		ThreadID: "thread-1",
+		SpendUSD: 0.0001,
+	}
+	decision3 := bp.EnforceRunBudget(run3, 10.0)
+	if decision3.Allowed {
+		t.Errorf("Case 3 (already at limit): Allowed = true, want false (any additional spend exceeds limit)")
+	}
+
+	// Case 4: current = 0, run = 10, total = 10 (AT limit, should PASS)
+	run4 := &Run{
+		RunID:    "run-4",
+		ThreadID: "thread-1",
+		SpendUSD: 10.0,
+	}
+	decision4 := bp.EnforceRunBudget(run4, 0.0)
+	if !decision4.Allowed {
+		t.Errorf("Case 4 (first run at limit): Allowed = false, want true (run fits exactly at limit)")
+	}
+
+	// Case 5: current = 0, run = 10.0001, total = 10.0001 (OVER limit, should FAIL)
+	run5 := &Run{
+		RunID:    "run-5",
+		ThreadID: "thread-1",
+		SpendUSD: 10.0001,
+	}
+	decision5 := bp.EnforceRunBudget(run5, 0.0)
+	if decision5.Allowed {
+		t.Errorf("Case 5 (first run over limit): Allowed = true, want false (run exceeds limit)")
+	}
 }

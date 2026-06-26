@@ -82,6 +82,11 @@ type Directive struct {
 
 	// Attempts counts how many times this directive has been claimed+requeued.
 	Attempts int `json:"attempts"`
+
+	// Thread is the thread ID this directive belongs to (STORY-0036: budget enforcement).
+	// When set, budget accounting aggregates runs across all directives in the thread.
+	// When empty, the directive's own ID is used as the thread ID (single-directive behavior).
+	Thread string `json:"thread,omitempty"`
 }
 
 // Lease is a claim token with an expiry. Renew with Touch; release with Done or

@@ -18,36 +18,36 @@ type fakeLaneqServer struct {
 	laneqpb.UnimplementedLaneqServer
 
 	mu         sync.Mutex
-	now        func() time.Time              // Controllable clock for testing
-	directives map[string]*fakeDirective    // by ID
-	seq        int                           // for auto-ID generation
-	parked     map[string]bool               // parked directives (excluded from claim/peek/reap)
+	now        func() time.Time          // Controllable clock for testing
+	directives map[string]*fakeDirective // by ID
+	seq        int                       // for auto-ID generation
+	parked     map[string]bool           // parked directives (excluded from claim/peek/reap)
 }
 
 // fakeDirective models the laneq directive state machine.
 type fakeDirective struct {
-	Id              string
-	Priority        laneqpb.Priority
-	Body            string
-	Status          laneqpb.Status
-	Lane            string
-	CreatedAtUnix   int64
-	TakenAtUnix     *int64 // optional
-	DoneAtUnix      *int64 // optional
-	TakenBy         string
-	LeaseUntilUnix  *int64 // optional; presence indicates active lease
-	RequeueCount    int32
-	ParentId        string
-	NotBeforeUnix   *int64    // optional; nil = always eligible
-	BlockedBy       []string  // dependency IDs; empty = no blocking
+	Id             string
+	Priority       laneqpb.Priority
+	Body           string
+	Status         laneqpb.Status
+	Lane           string
+	CreatedAtUnix  int64
+	TakenAtUnix    *int64 // optional
+	DoneAtUnix     *int64 // optional
+	TakenBy        string
+	LeaseUntilUnix *int64 // optional; presence indicates active lease
+	RequeueCount   int32
+	ParentId       string
+	NotBeforeUnix  *int64   // optional; nil = always eligible
+	BlockedBy      []string // dependency IDs; empty = no blocking
 }
 
 // newFakeLaneqServer creates a fake server with the given clock.
 func newFakeLaneqServer(now func() time.Time) *fakeLaneqServer {
 	return &fakeLaneqServer{
-		now:         now,
-		directives:  make(map[string]*fakeDirective),
-		parked:      make(map[string]bool),
+		now:        now,
+		directives: make(map[string]*fakeDirective),
+		parked:     make(map[string]bool),
 	}
 }
 
@@ -316,10 +316,10 @@ func (s *fakeLaneqServer) Defer(ctx context.Context, req *laneqpb.DeferRequest) 
 	fd.BlockedBy = req.BlockedBy
 
 	return &laneqpb.DeferResponse{
-		Id:              req.Id,
-		Status:          laneqpb.Status_STATUS_DEFERRED,
-		NotBeforeUnix:   fd.NotBeforeUnix,
-		BlockedBy:       fd.BlockedBy,
+		Id:            req.Id,
+		Status:        laneqpb.Status_STATUS_DEFERRED,
+		NotBeforeUnix: fd.NotBeforeUnix,
+		BlockedBy:     fd.BlockedBy,
 	}, nil
 }
 
@@ -479,9 +479,9 @@ func (s *fakeLaneqServer) ThreadStatus(ctx context.Context, req *laneqpb.ThreadS
 		if fd.Status != laneqpb.Status_STATUS_DONE && fd.Status != laneqpb.Status_STATUS_DROPPED {
 			openCount++
 			openItems = append(openItems, &laneqpb.ThreadItem{
-				Id:             id,
-				Status:         fd.Status,
-				CreatedAtUnix:  fd.CreatedAtUnix,
+				Id:            id,
+				Status:        fd.Status,
+				CreatedAtUnix: fd.CreatedAtUnix,
 			})
 		}
 	}

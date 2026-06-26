@@ -264,10 +264,10 @@ func TestMultipleDeadlines(t *testing.T) {
 	now := time.Date(2026, 6, 23, 0, 0, 0, 0, time.UTC)
 
 	items := []struct {
-		name   string
-		imprt  Importance
-		ddl    *time.Time
-		wantQ  Quadrant
+		name  string
+		imprt Importance
+		ddl   *time.Time
+		wantQ Quadrant
 	}{
 		{"Item A", ImportanceCritical, ptrTime(now.AddDate(0, 0, 1)), QuadrantQ1},
 		{"Item B", ImportanceHigh, ptrTime(now.AddDate(0, 0, 7)), QuadrantQ2},

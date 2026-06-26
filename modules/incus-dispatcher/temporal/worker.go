@@ -102,4 +102,3 @@ func (w *Worker) Stop(ctx context.Context) error {
 func (w *Worker) Client() client.Client {
 	return w.client
 }
-

@@ -290,8 +290,8 @@ func (cr *ClientContainerRunner) configureNixCache(ctx context.Context, task Tas
 
 	// Start nix-daemon in the worker
 	daemonReq := api.InstanceExecPost{
-		Command: []string{"systemctl", "start", "nix-daemon.socket", "nix-daemon.service"},
-		WaitForWS: true,
+		Command:     []string{"systemctl", "start", "nix-daemon.socket", "nix-daemon.service"},
+		WaitForWS:   true,
 		Interactive: false,
 	}
 	op, err := cr.client.ExecInstance(cr.containerName, daemonReq, nil)
@@ -310,8 +310,8 @@ EOFCONF
 `, cachePath)
 
 	confReq := api.InstanceExecPost{
-		Command: []string{"sh", "-c", confCmd},
-		WaitForWS: true,
+		Command:     []string{"sh", "-c", confCmd},
+		WaitForWS:   true,
 		Interactive: false,
 	}
 	op, err = cr.client.ExecInstance(cr.containerName, confReq, nil)

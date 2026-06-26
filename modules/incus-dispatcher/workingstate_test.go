@@ -123,9 +123,9 @@ func TestProjectWorkingState_AliveAndSinceLast(t *testing.T) {
 
 func TestProjectWorkingState_PhaseGuess(t *testing.T) {
 	cases := []struct {
-		name    string
-		cmd     string
-		want    string
+		name string
+		cmd  string
+		want string
 	}{
 		{"go build", "go build ./...", "compile"},
 		{"go test with pkg/ir", "go test ./pkg/ir/... -v", "oracle"},

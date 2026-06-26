@@ -76,13 +76,14 @@ type ReprojectRequest struct {
 // 3. Uses the pure-Go projection functions (ComputeUrgency, ComputeQuadrant, ComputeEffectivePriority).
 // 4. Maintains a mutable currentImportance (initialized from input.Importance; updated on successful rescore).
 // 5. Loops: compute the current quadrant using currentImportance; use a Selector to wait on BOTH:
-//    - an aging timer (next re-projection point), or
-//    - an incoming rescore signal.
-//    On timer: recompute urgency→quadrant→effective-priority; if the projection changed,
-//    invoke ReprojectActivity to persist it.
-//    On signal: validate the rescore with ValidateRescoreRequest. If allowed (human or agent within bounds),
-//    update currentImportance, recompute projection, and invoke ReprojectActivity (same sole-writer seam).
-//    If NOT allowed (agent out of bounds): reject silently (no write); escalation routing is deferred to C4.
+//   - an aging timer (next re-projection point), or
+//   - an incoming rescore signal.
+//     On timer: recompute urgency→quadrant→effective-priority; if the projection changed,
+//     invoke ReprojectActivity to persist it.
+//     On signal: validate the rescore with ValidateRescoreRequest. If allowed (human or agent within bounds),
+//     update currentImportance, recompute projection, and invoke ReprojectActivity (same sole-writer seam).
+//     If NOT allowed (agent out of bounds): reject silently (no write); escalation routing is deferred to C4.
+//
 // 6. Terminate the loop once the item reaches Q1 or the deadline has passed.
 //
 // Linked to STORY-0043 (urgency + quadrant aging), STORY-0044 (sole-writer seam),

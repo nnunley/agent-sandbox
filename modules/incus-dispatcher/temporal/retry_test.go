@@ -10,7 +10,7 @@ import (
 // TestRetryBackoff validates exponential backoff schedule with a cap.
 func TestRetryBackoff(t *testing.T) {
 	tests := []struct {
-		attempt        int
+		attempt         int
 		expectedBackoff time.Duration
 		description     string
 	}{
@@ -89,6 +89,7 @@ func TestRetryBackoffCapped(t *testing.T) {
 //   - Defer(2): notBefore = start + 3s (1s + RetryBackoff(1)=2s)
 //   - Defer(3): notBefore = start + 7s (3s + RetryBackoff(2)=4s)
 //   - Defer(4): notBefore = start + 15s (7s + RetryBackoff(3)=8s)
+//
 // - Each re-push is logged via workflow.GetLogger (deterministic, D6-auditable)
 // - Retries are durable-timer driven (workflow.Now only); sole-writer seam (no direct queue)
 func TestRetryWorkflow_BackoffRePush(t *testing.T) {

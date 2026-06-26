@@ -115,7 +115,7 @@ func TestBuildQueueAuthPartialConfig(t *testing.T) {
 			grantFile:     "/tmp/nonexistent_grant",
 			clientKeyPath: "/tmp/nonexistent_key",
 			aud:           "laneq://agent-host:9999",
-			wantErr:       true, // Fails on file load, but not on partial-config
+			wantErr:       true,   // Fails on file load, but not on partial-config
 			errContains:   "load", // Expected error path: file load (grant or key), not config validation
 		},
 		{

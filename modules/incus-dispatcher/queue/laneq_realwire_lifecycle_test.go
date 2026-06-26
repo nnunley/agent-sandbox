@@ -388,7 +388,7 @@ func TestLaneqRealWireLifecycle(t *testing.T) {
 		// Now create a stale lease with a WRONG token (not who claimed it).
 		wrongTokenLease := Lease{
 			DirectiveID: lease.DirectiveID,
-			Token:       "w2",  // Different from "w1" who claimed it
+			Token:       "w2", // Different from "w1" who claimed it
 			Expiry:      time.Now().Add(time.Minute),
 		}
 

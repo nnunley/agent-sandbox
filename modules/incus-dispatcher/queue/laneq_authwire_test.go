@@ -27,17 +27,17 @@ import (
 // against a REAL laneq server running in different auth modes.
 //
 // This test:
-// 1. Generates issuer and client Ed25519 keypairs
-// 2. Writes the issuer public key to a temp file (for LANEQ_AUTH_PUBKEY_PATHS)
-// 3. Writes the client private key to a temp file
-// 4. Mints a PASETO grant (issuer signing, cnf binding client key)
-// 5. Writes the grant to a temp file
-// 6. Starts the laneq gRPC server in enforce mode with the issuer pubkey
-// 7. Tests:
-//    a. Positive (SCENARIO-0117): Client WITH auth interceptor → enforce accepts
-//    b. Negative (SCENARIO-0118): Client WITHOUT auth interceptor → enforce rejects (Unauthenticated)
-//    c. Log-only (SCENARIO-0119): Restarts server in log-only mode, client without auth → accepts
-// 8. Cleans up temp files and kills the server subprocess
+//  1. Generates issuer and client Ed25519 keypairs
+//  2. Writes the issuer public key to a temp file (for LANEQ_AUTH_PUBKEY_PATHS)
+//  3. Writes the client private key to a temp file
+//  4. Mints a PASETO grant (issuer signing, cnf binding client key)
+//  5. Writes the grant to a temp file
+//  6. Starts the laneq gRPC server in enforce mode with the issuer pubkey
+//  7. Tests:
+//     a. Positive (SCENARIO-0117): Client WITH auth interceptor → enforce accepts
+//     b. Negative (SCENARIO-0118): Client WITHOUT auth interceptor → enforce rejects (Unauthenticated)
+//     c. Log-only (SCENARIO-0119): Restarts server in log-only mode, client without auth → accepts
+//  8. Cleans up temp files and kills the server subprocess
 //
 // Gated: if LANEQ_AUTH_WIRE != "1", the test is skipped (so default `go test ./...` stays green).
 // If LANEQ_SRC is unset, defaults to /Users/ndn/development/laneq.
@@ -180,8 +180,8 @@ func TestLaneqAuthWire(t *testing.T) {
 
 		// Push a directive
 		dir := Directive{
-			Intent:      "scenario-0117-test",
-			Importance:  ImportanceNormal,
+			Intent:     "scenario-0117-test",
+			Importance: ImportanceNormal,
 		}
 		id, err := q.Push(dir)
 		if err != nil {
@@ -212,7 +212,6 @@ func TestLaneqAuthWire(t *testing.T) {
 		}
 		t.Logf("✓ Claim succeeded, directive claimed: %s", claimed.ID)
 		t.Logf("✓✓ SCENARIO-0117 PASSED: enforce mode accepts authenticated client")
-
 
 		conn.Close()
 	})
@@ -470,8 +469,8 @@ func TestLaneqAuthWire(t *testing.T) {
 
 		// Try to push without auth — should succeed in log-only mode
 		dir := Directive{
-			Intent:      "scenario-0119-test",
-			Importance:  ImportanceNormal,
+			Intent:     "scenario-0119-test",
+			Importance: ImportanceNormal,
 		}
 		id, err := q.Push(dir)
 		if err != nil {
@@ -524,7 +523,6 @@ func startLaneqServerWithLogFile(t *testing.T, laneqSrc, addr, dbFile, pubKeyFil
 		"LANEQ_AUTH_PUBKEY_PATHS="+pubKeyFile,
 		"LANEQ_AUTH_SKEW_SECONDS=30",
 	)
-
 
 	// Capture output for debugging
 	outFile, err := os.Create(logFile)

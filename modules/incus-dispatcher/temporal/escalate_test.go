@@ -36,10 +36,10 @@ func TestIsEscalationTriggered(t *testing.T) {
 	baseTime := time.Date(2026, 6, 23, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name                  string
-		importance            Importance
-		daysUntilDeadline     float64
-		wantTriggered         bool
+		name              string
+		importance        Importance
+		daysUntilDeadline float64
+		wantTriggered     bool
 	}{
 		// Critical (7-day threshold)
 		{"Critical, 8 days out (no trigger)", ImportanceCritical, 8, false},
@@ -178,12 +178,12 @@ func TestEscalationChain(t *testing.T) {
 		expectEsc      bool
 		expectQuadrant Quadrant
 	}{
-		{0, true, QuadrantQ1},    // 5 days out, timeRemaining==threshold, escalated to Q1
-		{1, true, QuadrantQ1},    // 4 days out, timeRemaining < threshold, escalated to Q1
-		{2, true, QuadrantQ1},    // 3 days out, escalated to Q1
-		{3, true, QuadrantQ1},    // 2 days out, stays Q1
-		{4, true, QuadrantQ1},    // 1 day out, stays Q1
-		{5, true, QuadrantQ1},    // deadline passed, stays Q1
+		{0, true, QuadrantQ1}, // 5 days out, timeRemaining==threshold, escalated to Q1
+		{1, true, QuadrantQ1}, // 4 days out, timeRemaining < threshold, escalated to Q1
+		{2, true, QuadrantQ1}, // 3 days out, escalated to Q1
+		{3, true, QuadrantQ1}, // 2 days out, stays Q1
+		{4, true, QuadrantQ1}, // 1 day out, stays Q1
+		{5, true, QuadrantQ1}, // deadline passed, stays Q1
 	}
 
 	for _, cp := range checkpoints {
@@ -212,14 +212,14 @@ func TestEscalationByImportance(t *testing.T) {
 
 	tests := []struct {
 		importance   Importance
-		threshold    int // days
+		threshold    int  // days
 		willEscalate bool // at 10 days out
 	}{
 		// At day 0 (10 days remaining): all are > threshold, so none escalated
-		{ImportanceCritical, 7, false},  // 10 > 7: NOT escalated
-		{ImportanceHigh, 5, false},      // 10 > 5: NOT escalated
-		{ImportanceMedium, 3, false},    // 10 > 3: NOT escalated
-		{ImportanceLow, 1, false},       // 10 > 1: NOT escalated
+		{ImportanceCritical, 7, false}, // 10 > 7: NOT escalated
+		{ImportanceHigh, 5, false},     // 10 > 5: NOT escalated
+		{ImportanceMedium, 3, false},   // 10 > 3: NOT escalated
+		{ImportanceLow, 1, false},      // 10 > 1: NOT escalated
 	}
 
 	for _, tt := range tests {

@@ -9,7 +9,7 @@ import (
 // fakeClock is a controllable time source for lease / not-before tests.
 type fakeClock struct{ t time.Time }
 
-func (c *fakeClock) now() time.Time      { return c.t }
+func (c *fakeClock) now() time.Time          { return c.t }
 func (c *fakeClock) advance(d time.Duration) { c.t = c.t.Add(d) }
 
 func newTestQueue() (*MemoryQueue, *fakeClock) {

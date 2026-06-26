@@ -31,14 +31,14 @@ func ProjectWorkingState(events []byte, lastModified, now time.Time, aliveWindow
 
 	// Track preferred (ctx_*) and fallback per tool category separately.
 	var (
-		ctxShellCmd  string
-		bashCmd      string
-		hasCtxShell  bool
-		hasBash      bool
-		ctxReadPath  string
-		readPath     string
-		hasCtxRead   bool
-		hasRead      bool
+		ctxShellCmd string
+		bashCmd     string
+		hasCtxShell bool
+		hasBash     bool
+		ctxReadPath string
+		readPath    string
+		hasCtxRead  bool
+		hasRead     bool
 	)
 
 	scanner := bufio.NewScanner(bytes.NewReader(events))

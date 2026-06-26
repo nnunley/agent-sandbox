@@ -13,20 +13,20 @@ func TestRoundTripDirective(t *testing.T) {
 	now := time.Now().Unix()
 	notBefore := now + 3600
 	original := &Directive{
-		Id:               "dir-123",
-		Priority:         Priority_PRIORITY_P0,
-		Body:             `{"intent":"test","template":"foo","origin":"orchestrator"}`,
-		Status:           Status_STATUS_PENDING,
-		Lane:             "default",
-		CreatedAtUnix:    now,
-		TakenAtUnix:      nil, // Optional; not yet taken
-		DoneAtUnix:       nil, // Optional; not yet done
-		TakenBy:          "",
-		LeaseUntilUnix:   nil, // Optional; no active lease
-		RequeueCount:     0,
-		ParentId:         "",
-		NotBeforeUnix:    &notBefore, // Optional; eligible after this time
-		BlockedBy:        []string{"dir-456", "dir-789"},
+		Id:             "dir-123",
+		Priority:       Priority_PRIORITY_P0,
+		Body:           `{"intent":"test","template":"foo","origin":"orchestrator"}`,
+		Status:         Status_STATUS_PENDING,
+		Lane:           "default",
+		CreatedAtUnix:  now,
+		TakenAtUnix:    nil, // Optional; not yet taken
+		DoneAtUnix:     nil, // Optional; not yet done
+		TakenBy:        "",
+		LeaseUntilUnix: nil, // Optional; no active lease
+		RequeueCount:   0,
+		ParentId:       "",
+		NotBeforeUnix:  &notBefore, // Optional; eligible after this time
+		BlockedBy:      []string{"dir-456", "dir-789"},
 	}
 
 	// Marshal to bytes
@@ -224,20 +224,20 @@ func TestServiceInterfaceExists(t *testing.T) {
 
 	// Verify key RPCs exist
 	expectedRPCs := map[string]bool{
-		"Push":           false,
-		"Take":           false,
-		"Peek":           false,
-		"Show":           false,
-		"Listing":        false,
-		"Reprioritize":   false,
-		"SetStatus":      false,
-		"Defer":          false,
-		"Touch":          false,
-		"Reap":           false,
-		"Stats":          false,
-		"ThreadStatus":   false,
-		"Park":           false,
-		"Unpark":         false,
+		"Push":         false,
+		"Take":         false,
+		"Peek":         false,
+		"Show":         false,
+		"Listing":      false,
+		"Reprioritize": false,
+		"SetStatus":    false,
+		"Defer":        false,
+		"Touch":        false,
+		"Reap":         false,
+		"Stats":        false,
+		"ThreadStatus": false,
+		"Park":         false,
+		"Unpark":       false,
 	}
 
 	methods := laneqService.Methods()
@@ -369,16 +369,16 @@ func TestDirectiveHasAllSchedulingColumns(t *testing.T) {
 	notBefore := int64(1234567890)
 	leaseUntil := int64(1234567999)
 	directive := &Directive{
-		Id:              "test",
-		Priority:        Priority_PRIORITY_P0,
-		Status:          Status_STATUS_DEFERRED,
-		Lane:            "custom-lane",
-		NotBeforeUnix:   &notBefore,  // Optional: set
-		BlockedBy:       []string{"dep-1"},
-		RequeueCount:    3,
-		ParentId:        "parent-id",
-		TakenBy:         "consumer-1",
-		LeaseUntilUnix:  &leaseUntil,  // Optional: set
+		Id:             "test",
+		Priority:       Priority_PRIORITY_P0,
+		Status:         Status_STATUS_DEFERRED,
+		Lane:           "custom-lane",
+		NotBeforeUnix:  &notBefore, // Optional: set
+		BlockedBy:      []string{"dep-1"},
+		RequeueCount:   3,
+		ParentId:       "parent-id",
+		TakenBy:        "consumer-1",
+		LeaseUntilUnix: &leaseUntil, // Optional: set
 	}
 
 	// Verify all fields are accessible
@@ -487,20 +487,20 @@ func TestProtoFieldNumbersPinned(t *testing.T) {
 
 	// Map of field names to their expected field numbers
 	expectedFieldNumbers := map[string]int32{
-		"id":                1,
-		"priority":          2,
-		"status":            4,
-		"body":              3,
-		"lane":              5,
-		"not_before_unix":   13,
-		"lease_until_unix":  10,
-		"taken_by":          9,
-		"requeue_count":     11,
-		"parent_id":         12,
-		"blocked_by":        14,
-		"created_at_unix":   6,
-		"taken_at_unix":     7,
-		"done_at_unix":      8,
+		"id":               1,
+		"priority":         2,
+		"status":           4,
+		"body":             3,
+		"lane":             5,
+		"not_before_unix":  13,
+		"lease_until_unix": 10,
+		"taken_by":         9,
+		"requeue_count":    11,
+		"parent_id":        12,
+		"blocked_by":       14,
+		"created_at_unix":  6,
+		"taken_at_unix":    7,
+		"done_at_unix":     8,
 	}
 
 	for fieldName, expectedNumber := range expectedFieldNumbers {

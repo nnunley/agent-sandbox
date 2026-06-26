@@ -19,11 +19,11 @@ type DeferWorkflowInput struct {
 // until a specified time arrives.
 //
 // The workflow:
-// 1. Takes a directive ID and a not-before time.
-// 2. Uses a durable Temporal timer to wait until that time (or until the timer fires).
-// 3. When the timer fires (and notBefore <= now), invokes ReprojectActivity with Defer
-//    to mark the directive as eligible (notBefore <= current time).
-// 4. Exits, allowing the directive to be claimed once eligible.
+//  1. Takes a directive ID and a not-before time.
+//  2. Uses a durable Temporal timer to wait until that time (or until the timer fires).
+//  3. When the timer fires (and notBefore <= now), invokes ReprojectActivity with Defer
+//     to mark the directive as eligible (notBefore <= current time).
+//  4. Exits, allowing the directive to be claimed once eligible.
 //
 // This workflow proves AC-C (STORY-0002 AC-2): deferred work is held in Temporal until eligible,
 // not prematurely eligible in laneq.

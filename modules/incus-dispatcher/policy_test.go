@@ -10,8 +10,8 @@ import (
 
 func testPolicy() *Policy {
 	return &Policy{Templates: map[string]TemplateRule{
-		"fleet-go":        {AllowWorkerOrigin: true},  // ordinary worker template
-		"fleet-go-root":   {AllowWorkerOrigin: false}, // privileged: orchestrator-only
+		"fleet-go":      {AllowWorkerOrigin: true},  // ordinary worker template
+		"fleet-go-root": {AllowWorkerOrigin: false}, // privileged: orchestrator-only
 	}}
 }
 
@@ -93,8 +93,8 @@ func TestValidateTemplate_ConcurrentDeterministic(t *testing.T) {
 	}
 	cases := []testCase{
 		{queue.Directive{ID: "a", Template: "fleet-go-root", Origin: OriginOrchestrator}, false}, // orchestrator + privileged → always nil
-		{queue.Directive{ID: "b", Template: "fleet-go-root", Origin: "worker:x"}, true},           // worker + privileged → always error
-		{queue.Directive{ID: "c", Template: "fleet-go", Origin: "worker:x"}, false},               // worker + ordinary → always nil
+		{queue.Directive{ID: "b", Template: "fleet-go-root", Origin: "worker:x"}, true},          // worker + privileged → always error
+		{queue.Directive{ID: "c", Template: "fleet-go", Origin: "worker:x"}, false},              // worker + ordinary → always nil
 	}
 
 	const goroutines = 50

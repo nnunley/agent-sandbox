@@ -712,4 +712,3 @@ func (f *fakeGrantSource) Current() (string, error) {
 	}
 	return f.grant, nil
 }
-

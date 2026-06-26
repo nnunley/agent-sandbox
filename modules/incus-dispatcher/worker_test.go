@@ -52,10 +52,10 @@ func TestWorker_IsPolicyAllowed(t *testing.T) {
 // TestWorker_Fields proves Worker struct contains required fields (STORY-0011 AC-1/2/3).
 func TestWorker_Fields(t *testing.T) {
 	w := Worker{
-		WorkerID:         "test-worker",
-		WorkerKind:       WorkerKindMicroVM,
-		Capabilities:     []string{"code-review"},
-		AllowedPolicies:  []string{"policy-1@v1"},
+		WorkerID:        "test-worker",
+		WorkerKind:      WorkerKindMicroVM,
+		Capabilities:    []string{"code-review"},
+		AllowedPolicies: []string{"policy-1@v1"},
 	}
 
 	if w.WorkerID != "test-worker" {
@@ -93,16 +93,16 @@ func TestWorkerKind_Constants(t *testing.T) {
 func TestDispatcher_SelectionOrder(t *testing.T) {
 	// Two workers with the same capability; first should be selected.
 	w1 := Worker{
-		WorkerID:         "first",
-		WorkerKind:       WorkerKindLocal,
-		Capabilities:     []string{"code-review"},
-		AllowedPolicies:  []string{"policy@v1"},
+		WorkerID:        "first",
+		WorkerKind:      WorkerKindLocal,
+		Capabilities:    []string{"code-review"},
+		AllowedPolicies: []string{"policy@v1"},
 	}
 	w2 := Worker{
-		WorkerID:         "second",
-		WorkerKind:       WorkerKindLocal,
-		Capabilities:     []string{"code-review"},
-		AllowedPolicies:  []string{"policy@v1"},
+		WorkerID:        "second",
+		WorkerKind:      WorkerKindLocal,
+		Capabilities:    []string{"code-review"},
+		AllowedPolicies: []string{"policy@v1"},
 	}
 
 	d := NewDispatcher([]Worker{w1, w2})

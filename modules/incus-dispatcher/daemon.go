@@ -132,25 +132,32 @@ func (dm *Daemon) checkBudget(d queue.Directive, run *Run) (bool, *BudgetEnforce
 		return true, nil
 	}
 
-	threadRec, ok := dm.ThreadStore.Get(d.ID)
+	// Resolve the thread ID: use the directive's Thread field if set, else fall back to the directive ID.
+	threadID := d.Thread
+	if threadID == "" {
+		threadID = d.ID
+	}
+
+	threadRec, ok := dm.ThreadStore.Get(threadID)
 	if !ok || threadRec.BudgetPolicy == nil {
 		return true, nil
 	}
 
 	// Compute current thread spend from prior runs (if the result store has them).
 	var currentSpend float64
+	var priorRuns []*Run
 	if dm.Results != nil {
 		// Load all prior runs for this thread from the result store.
-		priorResults := dm.Results.ByThread(d.ID)
-		for _, priorRun := range priorResults {
+		priorRuns = dm.Results.ByThread(threadID)
+		for _, priorRun := range priorRuns {
 			if priorRun != nil && priorRun.RunID != run.RunID {
 				currentSpend += priorRun.SpendUSD
 			}
 		}
 	}
 
-	// Enforce the budget policy.
-	decision := threadRec.BudgetPolicy.EnforceRunBudget(run, currentSpend)
+	// Enforce the budget policy, passing prior runs for provider/worker-class aggregation.
+	decision := threadRec.BudgetPolicy.EnforceRunBudget(run, currentSpend, priorRuns)
 	if decision == nil || !decision.Allowed {
 		return false, decision
 	}
@@ -245,9 +252,14 @@ func (dm *Daemon) RunOnce(ctx context.Context) (DirectiveOutcome, string, error)
 	dm.record(d.ID, "", "teardown", "reap")
 
 	// Store the result for later inspection (artifacts, patch, output) — optional but enables AC-3.
-	// For budget enforcement (STORY-0036 AC-3), track the result under both the directive ID and thread ID.
+	// For budget enforcement (STORY-0036 AC-3), track the result under the directive's thread.
+	// If Thread is empty, fall back to directive ID (single-directive behavior).
 	if dm.Results != nil && result != nil {
-		dm.Results.StoreWithThread(d.ID, d.ID, result)
+		threadID := d.Thread
+		if threadID == "" {
+			threadID = d.ID
+		}
+		dm.Results.StoreWithThread(d.ID, threadID, result)
 	}
 
 	// STORY-0036 AC-3: Budget enforcement is checked BEFORE grading, even on successful runs.

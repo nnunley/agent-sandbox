@@ -103,9 +103,9 @@ func TestSanitizeWorkerEnv_patternNet(t *testing.T) {
 	// Vars not in the explicit list but matching credential-like patterns must be stripped.
 	input := map[string]string{
 		"GEMINI_API_KEY": "gemini-secret", // _API_KEY suffix, not in explicit list
-		"SOME_TOKEN":     "tok123",         // _TOKEN suffix
-		"DB_PASSWORD":    "hunter2",        // contains PASSWORD
-		"X_SECRET":       "shh",            // _SECRET suffix
+		"SOME_TOKEN":     "tok123",        // _TOKEN suffix
+		"DB_PASSWORD":    "hunter2",       // contains PASSWORD
+		"X_SECRET":       "shh",           // _SECRET suffix
 		"DEBUG":          "1",
 		"PATH":           "/usr/bin",
 		"HOME":           "/root",

@@ -1,10 +1,12 @@
 // incus-dispatcher: CLI tool for launching ephemeral Incus containers to run tasks.
 //
 // Usage:
-//   incus-dispatcher --name <task-name> --cmd "go test ./..." [--repo <path|url>] [--ref main] [--image <image>] [--timeout 1h] [--keep-on-failure]
+//
+//	incus-dispatcher --name <task-name> --cmd "go test ./..." [--repo <path|url>] [--ref main] [--image <image>] [--timeout 1h] [--keep-on-failure]
 //
 // Example:
-//   incus-dispatcher --name my-test --repo ~/myrepo --ref main --cmd "make test" --timeout 30m
+//
+//	incus-dispatcher --name my-test --repo ~/myrepo --ref main --cmd "make test" --timeout 30m
 //
 // The dispatcher:
 // 1. Launches an ephemeral Incus container from the specified image.

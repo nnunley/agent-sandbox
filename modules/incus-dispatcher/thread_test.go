@@ -43,8 +43,8 @@ func TestResumeSummaryJSONRoundTrip(t *testing.T) {
 func TestThreadJSONRoundTrip(t *testing.T) {
 	deadline := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	th := Thread{
-		ID:           "thread-abc",
-		Status:       StatusActive,
+		ID:               "thread-abc",
+		Status:           StatusActive,
 		CurrentBranch:    "feat/auth",
 		CurrentWorkspace: "ws-1",
 		ResumeSummary: ResumeSummary{
@@ -52,9 +52,9 @@ func TestThreadJSONRoundTrip(t *testing.T) {
 			NextStep:  "add tests",
 		},
 		LastVerifiedState: "commit:abc123",
-		Supersedes:    "thread-old",
-		SupersededBy:  "thread-new",
-		Deadline:      &deadline,
+		Supersedes:        "thread-old",
+		SupersededBy:      "thread-new",
+		Deadline:          &deadline,
 	}
 
 	b, err := json.Marshal(th)

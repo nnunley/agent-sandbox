@@ -15,8 +15,8 @@ type hostExec func(ctx context.Context, name string, args ...string) ([]byte, in
 
 // Fast-tier coord-VM defaults (match guests/coordinator-vm.nix + fleet-worker/unit/fleet-unit.sh).
 const (
-	defaultCoordGuest   = "agent-host"        // LXC container hosting the micro-VM(s)
-	defaultCoordIP      = "10.88.0.2"         // durable coord VM static IP on br-microvm
+	defaultCoordGuest   = "agent-host" // LXC container hosting the micro-VM(s)
+	defaultCoordIP      = "10.88.0.2"  // durable coord VM static IP on br-microvm
 	defaultUnitLauncher = "/root/fleet-unit.sh"
 )
 
