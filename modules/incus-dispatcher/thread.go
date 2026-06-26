@@ -31,6 +31,7 @@ type Thread struct {
 	AgingScore        float64       `json:"aging_score"`               // STORY-0037 AC-1: computed from elapsed time since last served
 	LastServed        time.Time     `json:"last_served"`               // STORY-0037 AC-1: timestamp of last service (used for stale resurfacing)
 	QueueClass        string        `json:"queue_class"`               // STORY-0037 AC-3: semantic label (urgent|active|incubating|maintenance) reflecting Priority intent; OrderThreads uses Priority, not QueueClass
+	RepoRefs          []string      `json:"repo_refs,omitempty"`       // STORY-0039 AC-1: repositories this thread spans
 }
 
 // ThreadStore is a daemon-local, concurrency-safe registry of Threads keyed by Thread.ID.
@@ -117,6 +118,68 @@ func ComputeEffectiveAgingScore(now, lastServed time.Time, staleThreshold time.D
 		score = 1.0
 	}
 	return score
+}
+
+// RepoSchedulerState holds the last-served time for each repo in a fairness scheduler.
+// Used by NextRepo to distribute work fairly across a set of repositories (STORY-0039 AC-3).
+type RepoSchedulerState struct {
+	lastServed map[string]time.Time // repo name → last time it was served
+	mu         sync.Mutex
+}
+
+// NewRepoSchedulerState returns an empty scheduler state.
+func NewRepoSchedulerState() *RepoSchedulerState {
+	return &RepoSchedulerState{
+		lastServed: make(map[string]time.Time),
+	}
+}
+
+// NextRepo selects the least-recently-served repo from the set.
+// If multiple repos have the same lastServed time, tie-breaks lexicographically (stable, deterministic).
+// STORY-0039 AC-3: prevents repo starvation by round-robin / LRU scheduling.
+func (s *RepoSchedulerState) NextRepo(repos []string, now time.Time) string {
+	if len(repos) == 0 {
+		return ""
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Find the repo with the earliest last-served time.
+	// If a repo has never been served (not in lastServed), treat as time.Time{} (earliest).
+	var leastRecentlyServed string
+	var leastRecentTime time.Time
+
+	for i, repo := range repos {
+		served, ok := s.lastServed[repo]
+		if !ok {
+			served = time.Time{} // Never served: treat as epoch
+		}
+
+		if i == 0 {
+			leastRecentlyServed = repo
+			leastRecentTime = served
+		} else {
+			// Compare times: if served is earlier, or same time but lexicographically smaller, update.
+			if served.Before(leastRecentTime) {
+				leastRecentlyServed = repo
+				leastRecentTime = served
+			} else if served.Equal(leastRecentTime) && repo < leastRecentlyServed {
+				// Tie-break lexicographically for determinism.
+				leastRecentlyServed = repo
+			}
+		}
+	}
+
+	return leastRecentlyServed
+}
+
+// MarkRepoServed updates the last-served time for a repo to now.
+// STORY-0039 AC-3: advances the fairness scheduler so the served repo goes to the back.
+func (s *RepoSchedulerState) MarkRepoServed(repo string, now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastServed[repo] = now
 }
 
 // OrderThreads orders threads by effective priority (base priority + aging contribution)

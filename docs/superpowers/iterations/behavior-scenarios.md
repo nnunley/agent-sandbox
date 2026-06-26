@@ -3738,3 +3738,46 @@ Dev Mac / Python toolchain; not CI-native (CI sentinel stays SCENARIO-0091).
 
 **Sources:**
 - requirements/EPIC-007.md STORY-0054
+
+## SCENARIO-0126 — Multi-repo thread coordination: RepoRefs, simultaneous claims, fairness scheduling
+
+**Kind:** scenario
+**Proof seam:** integration
+**Owning stories:** STORY-0039 (coordinate work across multiple repositories)
+
+**Preconditions:**
+- Thread struct includes RepoRefs field for multi-repo tracking
+- WorkspaceRegistry supports concurrent claims per (repo, branch)
+- Fairness scheduler state is available with deterministic LRU + lexicographic tie-break
+
+**Steps:**
+1. Create a thread spanning 3 repositories (repo-A, repo-B, repo-C) with RepoRefs populated
+   → Thread.RepoRefs is set and JSON-serializable
+2. Use WorkspaceRegistry to claim active workspaces in 2+ repositories simultaneously under the same thread
+   → Both claims are active without conflict (both exist in registry, both return ThreadID match)
+3. Run a real fairness scheduler over N rounds with injected clock
+   → Advance clock after each round
+   → Mark each served repo before selection in next round
+   → Assert EVERY repo in the set is served at least once per round
+4. Verify no repo is starved and distribution is fair (no repo over-served)
+   → Each repo should appear roughly N times per N rounds (no starvation, no skew)
+
+**Final observables:**
+- Thread.RepoRefs array recorded and survives JSON round-trip (AC-1)
+- Same thread holds 2+ simultaneous workspace claims without conflict (AC-2)
+- Fairness scheduler distributes work across all repos: EVERY repo served at least once per round (AC-3)
+- No repo is starved (not dropped from scheduling)
+- Distribution is fair: no repo over-served relative to others
+
+**Automation status:** automated (ITER-0008b TG6)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0126`
+
+**Evidence:**
+- Unit: `TestThread_RepoRefs` — Thread struct has `RepoRefs []string` with json-tag `repo_refs,omitempty`; round-trip preserves array; omitempty suppresses nil.
+- Unit: `TestMultiRepoClaims_Simultaneous` — real WorkspaceRegistry.Claim for two different repos under same threadID succeeds; both claims simultaneously active; no conflict.
+- Unit: `TestRepoFairness_NoStarvation` — real scheduler selected 6 repos across 2 rounds (3 repos × 2 rounds); each repo selected exactly twice; LRU+lexicographic determinism; no repo starved.
+- Unit: `TestRepoScheduler_Deterministic` — tie-break by lexicographic order (repo-A, repo-M, repo-Z) is stable and deterministic.
+- Integration: `TestScenario0126_MultiRepoThreadCoordination` — end-to-end: thread with RepoRefs; 2+ workspace claims; fairness scheduler over 2 rounds with injected clock; every repo served >= 2 times; fair distribution verified.
+
+**Sources:**
+- requirements/EPIC-001.md STORY-0039

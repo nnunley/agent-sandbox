@@ -747,3 +747,63 @@ func TestFullCycleResurfacing_StaleToFreshLifecycle(t *testing.T) {
 
 	t.Logf("FULL-CYCLE RESURFACING: Thread lifecycle verified: fresh (3d) → stale (11d, surfaced) → marked served → fresh (1d, no longer surfaces)")
 }
+
+// STORY-0039 AC-1: Thread includes repo_refs array with JSON tag repo_refs, omitempty.
+func TestThread_RepoRefs(t *testing.T) {
+	th := Thread{
+		ID:        "thread-multi-repo",
+		Status:    StatusActive,
+		RepoRefs:  []string{"repo-A", "repo-B", "repo-C"},
+	}
+
+	// Marshal to JSON and verify repo_refs is present.
+	b, err := json.Marshal(th)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatalf("Unmarshal to map: %v", err)
+	}
+
+	if _, ok := raw["repo_refs"]; !ok {
+		t.Error("JSON missing key repo_refs")
+	}
+
+	// Unmarshal and verify RepoRefs round-trip.
+	var got Thread
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	if len(got.RepoRefs) != 3 {
+		t.Fatalf("RepoRefs length: got %d, want 3", len(got.RepoRefs))
+	}
+	for i, expected := range []string{"repo-A", "repo-B", "repo-C"} {
+		if got.RepoRefs[i] != expected {
+			t.Errorf("RepoRefs[%d]: got %q, want %q", i, got.RepoRefs[i], expected)
+		}
+	}
+
+	// Verify omitempty: empty RepoRefs should be omitted.
+	thEmpty := Thread{
+		ID:       "thread-empty",
+		Status:   StatusActive,
+		RepoRefs: nil,
+	}
+
+	b2, err := json.Marshal(thEmpty)
+	if err != nil {
+		t.Fatalf("Marshal empty: %v", err)
+	}
+
+	var raw2 map[string]json.RawMessage
+	if err := json.Unmarshal(b2, &raw2); err != nil {
+		t.Fatalf("Unmarshal empty to map: %v", err)
+	}
+
+	if _, ok := raw2["repo_refs"]; ok {
+		t.Error("repo_refs should be omitted when nil (omitempty)")
+	}
+}
