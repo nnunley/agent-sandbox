@@ -417,10 +417,10 @@ func (q *LaneqQueue) Reap() (int, error) {
 // This stub implementation always returns (0, 0) as laneq doesn't expose
 // a direct count endpoint. A full implementation would use Stats or similar.
 //
-// TODO(ITER-0008b): Implement via Stats() RPC when needed for observability.
-// laneq Stats()/Len() observability is not required by ITER-0007b's gate (the live time-plane
-// proofs in E1 don't depend on it); it belongs with the ITER-0008 operator/coordinator
-// observability surface. Re-tagged ITER-0007 → ITER-0007b → ITER-0008 as scope clarified.
+// TODO(backlog): Implement via Stats() RPC when needed for observability. NOT a committed
+// ITER-0008b-scope AC and not required by any iteration gate (the live time-plane proofs in
+// ITER-0007b E1 don't depend on it); a non-blocking observability enhancement deferred beyond
+// ITER-0008b. Current Len() is a documented stub, not load-bearing.
 func (q *LaneqQueue) Len() (pending, claimed int) {
 	return 0, 0
 }

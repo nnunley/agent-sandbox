@@ -723,7 +723,7 @@ func TestLaneqLenStub(t *testing.T) {
 
 	pending, claimed := q.Len()
 	if pending != 0 || claimed != 0 {
-		t.Errorf("Len()=(%d, %d), want (0, 0); stub unimplemented per TODO(ITER-0008b)", pending, claimed)
+		t.Errorf("Len()=(%d, %d), want (0, 0); Len is a documented stub (see TODO(backlog) on LaneqQueue.Len)", pending, claimed)
 	}
 }
 

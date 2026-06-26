@@ -211,10 +211,12 @@ func PriorityWorkflow(ctx workflow.Context, input PriorityWorkflowInput) error {
 				workflow.GetLogger(ctx).Warn("rescore rejected: escalation required",
 					"directiveID", input.DirectiveID, "actor", signal.Actor.ID,
 					"current", currentImportance, "proposed", signal.ProposedImportance, "reason", err)
-				// TODO(ITER-0008b): route the rejected agent rescore to the operator approval
-				// queue / escalation lane (STORY-0047 AC-3) — operator/TUI scope. ITER-0007b's
-				// time-plane escalation (stale re-raise + retry backoff) is the EscalationWorkflow
-				// / RetryWorkflow; this approval-routing belongs to the ITER-0008 coordinator.
+				// TODO(backlog): route the rejected agent rescore to the operator approval
+				// queue / escalation lane (STORY-0047 AC-3) — operator/TUI scope, NOT a committed
+				// ITER-0008b-scope AC. Deferred beyond ITER-0008b as a non-blocking enhancement:
+				// the rejection is logged for operators (current behavior is honest, not a stub).
+				// The durable EscalationLane (FileEscalationLane, ITER-0008b TG7) is the available
+				// sink should this routing be wired later.
 			} else {
 				// Other validation errors; treat as rejection (no write).
 			}

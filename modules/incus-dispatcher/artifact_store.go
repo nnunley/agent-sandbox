@@ -17,7 +17,9 @@ var artifactSeq atomic.Uint64
 // map lookup; a separate index links each run_id to the references stored under it (STORY-0015 AC-2
 // "linked to run_id"). This is the honest seam for ITER-0008 CI. A production system would back this
 // with a durable object store (S3, GCS, or disk-based); artifacts here live only for the process
-// lifetime. TODO(ITER-0008b): wire durable backing.
+// lifetime. TODO(backlog): wire durable backing — NOT a committed ITER-0008b-scope AC (no committed
+// story requires durable artifact persistence; the Mac-off AC-5 durability proof rides the durable
+// FileEscalationLane, ITER-0008b TG7). Deferred beyond ITER-0008b as a production enhancement.
 type ArtifactStore struct {
 	mu    sync.RWMutex
 	blobs map[string][]byte   // opaque ref → data (resolution is a direct lookup; refs are never parsed)
