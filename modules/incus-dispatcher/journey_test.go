@@ -32,12 +32,13 @@ import (
 // audit trail (STORY-0063 AC-28 → ITER-0001) and shared-volume cleanliness
 // (real-backend property → ITER-0005). The scenario card flags both as deferred.
 type journeyBackend struct {
-	phases       []string // ordered record of lifecycle phases the backend performed
+	phases       []string   // ordered record of lifecycle phases the backend performed
 	runs         int
 	cleanups     int
 	lastTask     Task
 	lastResult   *Result // the harvested Result returned to the daemon
 	phasesPerRun [][]string // phases executed in each run (to detect replay)
+	taskNames   []string   // task names from each run (to verify no replay of completed work)
 }
 
 func (b *journeyBackend) Run(_ context.Context, task Task) (*Result, error) {
@@ -84,6 +85,10 @@ func (b *journeyBackend) Run(_ context.Context, task Task) (*Result, error) {
 
 	// Record phases for this run (used by JOURNEY-0007 to verify no replay).
 	b.phasesPerRun = append(b.phasesPerRun, runPhases)
+
+	// Record task name per run (used by JOURNEY-0007 to verify no replay of completed work).
+	// The task name is a unique identifier of the work unit being executed.
+	b.taskNames = append(b.taskNames, task.Name)
 
 	b.lastResult = res
 	return res, nil
@@ -401,20 +406,6 @@ func (h *handoffSpy) ImportHandoff(bundlePath string) (HandoffManifest, error) {
 	return HandoffManifest{}, nil
 }
 
-// operatorSpy is a test double that records if the daemon ever consults human/operator input.
-// It embeds NoopProvider (fulfills ContextProvider) and records calls to methods that would
-// block on human interaction. A daemon that uses this spy and completes without triggering
-// its operators proves "no human input".
-type operatorSpy struct {
-	NoopProvider
-	operatorConsulted bool // set to true if any operator/human input method is called
-}
-
-// The operatorSpy fulfills ContextProvider via embedded NoopProvider but doesn't add
-// tracking yet. For autonomy tests, we just verify the daemon completes without consulting
-// human gates — which is proven by outcome != OutcomeEscalated and no human-confirmation gates.
-// The operatorSpy is prepared for future extension where we might track specific method calls.
-
 // TestJourney0004_AutonomousClaim proves JOURNEY-0004 (AC-1, STORY-0074):
 // daemon claims and runs a task to completion with NO operator/interactive input consulted.
 // The key falsifiable observable is that the daemon achieves OutcomeDone autonomously
@@ -425,15 +416,15 @@ type operatorSpy struct {
 func TestJourney0004_AutonomousClaim(t *testing.T) {
 	backend := &journeyBackend{}
 	q := queue.NewMemoryQueue()
-	opSpy := &operatorSpy{}
+	escLane := NewMemoryEscalationLane() // Real escalation lane to detect human gates
 
 	dm := &Daemon{
-		Q:        q,
-		Runner:   backend,
-		Policy:   testPolicy(),
-		Consumer: "journey",
-		LeaseDur: time.Minute,
-		Context:  opSpy, // Spy on any operator input calls
+		Q:           q,
+		Runner:      backend,
+		Policy:      testPolicy(),
+		Consumer:    "journey",
+		LeaseDur:    time.Minute,
+		Escalations: escLane, // Wire escalation lane; autonomous daemon leaves it empty
 		// NOTE: Daemon.Threads, Daemon.Consumer, NO human-decision handler.
 		// This models Mac-disconnection: the daemon claims and runs autonomously.
 	}
@@ -454,8 +445,8 @@ func TestJourney0004_AutonomousClaim(t *testing.T) {
 	// Run the daemon loop: claim → run → grade autonomously.
 	outcome := drain(t, dm)
 
-	// JOURNEY-0004 FALSIFIABLE observable: the directive reaches done without operator consultation.
-	// A daemon that consulted a human gate would either block or escalate (not OutcomeDone).
+	// JOURNEY-0004 FALSIFIABLE observable: the directive reaches done with empty escalation lane.
+	// A daemon that consulted a human gate would escalate the directive (push to lane), leaving it non-empty.
 	if outcome != OutcomeDone {
 		t.Fatalf("outcome = %q, want done (autonomous completion)", outcome)
 	}
@@ -465,10 +456,12 @@ func TestJourney0004_AutonomousClaim(t *testing.T) {
 		t.Fatalf("backend.runs = %d, want 1 (autonomous execution)", backend.runs)
 	}
 
-	// AC-1 FALSIFIABLE: the operator-spy was NOT consulted (no human input).
-	// If the daemon added a human-input gate, opSpy.operatorConsulted would be true.
-	if opSpy.operatorConsulted {
-		t.Fatal("operator-spy was consulted, but claim is 'no human input' — autonomy violated")
+	// AC-1 FALSIFIABLE: the escalation lane is EMPTY after autonomous run.
+	// If the daemon consulted a human gate, it would push to the lane (non-empty).
+	// A broken daemon that required human approval would fail here.
+	escalations := escLane.List()
+	if len(escalations) != 0 {
+		t.Fatalf("escalation lane has %d items, want 0 (daemon did not escalate; autonomy proven). Items: %v", len(escalations), escalations)
 	}
 
 	// Verify queue is drained (the directive is done, not parked).
@@ -487,15 +480,15 @@ func TestJourney0004_AutonomousClaim(t *testing.T) {
 func TestJourney0005_AutonomousGrading(t *testing.T) {
 	backend := &journeyBackend{}
 	q := queue.NewMemoryQueue()
-	opSpy := &operatorSpy{}
+	escLane := NewMemoryEscalationLane() // Real escalation lane to detect human-confirmation gates
 
 	dm := &Daemon{
-		Q:        q,
-		Runner:   backend,
-		Policy:   testPolicy(),
-		Consumer: "journey",
-		LeaseDur: time.Minute,
-		Context:  opSpy, // Spy on any operator input calls
+		Q:           q,
+		Runner:      backend,
+		Policy:      testPolicy(),
+		Consumer:    "journey",
+		LeaseDur:    time.Minute,
+		Escalations: escLane, // Wire escalation lane; autonomous grading leaves it empty
 	}
 
 	// Push a directive with an oracle reference (will route through external grading).
@@ -514,8 +507,9 @@ func TestJourney0005_AutonomousGrading(t *testing.T) {
 	// Run the daemon loop.
 	outcome := drain(t, dm)
 
-	// JOURNEY-0005 FALSIFIABLE observable: the outcome is determined by the external grade alone (no human confirmation).
-	// A daemon that required human-confirmation on the grade would block or escalate instead of finalizing the outcome.
+	// JOURNEY-0005 FALSIFIABLE observable: the outcome is determined by the external grade alone with empty escalation lane.
+	// A daemon that required human-confirmation on the grade would escalate the directive (push to lane),
+	// leaving it non-empty. This assertion catches that broken behavior.
 	if outcome != OutcomeDone {
 		t.Fatalf("outcome = %q, want done (grade passes)", outcome)
 	}
@@ -535,10 +529,12 @@ func TestJourney0005_AutonomousGrading(t *testing.T) {
 		t.Fatalf("external grade not passing: %+v", backend.lastResult.ExternalGradingResult)
 	}
 
-	// AC-2 FALSIFIABLE: the operator-spy was NOT consulted for human confirmation.
-	// If the daemon added a human-confirmation gate on grading, opSpy.operatorConsulted would be true.
-	if opSpy.operatorConsulted {
-		t.Fatal("operator-spy was consulted, but claim is 'autonomous grading without human feedback' — human gate detected")
+	// AC-2 FALSIFIABLE: the escalation lane is EMPTY after autonomous grading.
+	// If the daemon required human-confirmation on the grade, it would escalate (push to lane, non-empty).
+	// A broken daemon that required human approval would fail here.
+	escalations := escLane.List()
+	if len(escalations) != 0 {
+		t.Fatalf("escalation lane has %d items, want 0 (daemon did not escalate on grade; autonomous grading proven). Items: %v", len(escalations), escalations)
 	}
 }
 
@@ -912,27 +908,34 @@ func TestJourney0007_HandoffNoReplay(t *testing.T) {
 		t.Fatalf("backend.runs = %d, want 2 (no replay; one per directive)", backend.runs)
 	}
 
-	// AC-4 FALSIFIABLE observable: verify phases are distinct (successor's phases != predecessor's).
-	// This proves the successor did not replay the predecessor's work unit.
-	// If phases were identical, it would indicate the same work was executed again (replay).
+	// AC-4 FALSIFIABLE: verify work units are DIFFERENT (no replay of predecessor's completed work).
+	// Task name is the work-unit identifier: predecessor executes "initial implementation",
+	// successor executes "extend implementation". If successor replayed predecessor, we'd see
+	// the same task name run twice.
+	if len(backend.taskNames) < 2 {
+		t.Fatalf("taskNames has %d entries, want ≥2 (one per run)", len(backend.taskNames))
+	}
+
+	predecessorTask := backend.taskNames[0]
+	successorTask := backend.taskNames[1]
+
+	if predecessorTask == "" || successorTask == "" {
+		t.Fatal("task name is empty (work unit not recorded)")
+	}
+
+	// AC-4 FALSIFIABLE: predecessor and successor execute DIFFERENT work units.
+	// A successor that replayed the predecessor's work would have the SAME task name (replay detected).
+	if predecessorTask == successorTask {
+		t.Fatalf("successor re-executed predecessor's work: both have task name %q (no-replay violated)", predecessorTask)
+	}
+
+	// Verify phases are recorded for both runs.
 	if len(backend.phasesPerRun) < 2 {
 		t.Fatalf("phasesPerRun has %d entries, want ≥2 (one per run)", len(backend.phasesPerRun))
 	}
 
-	predecessorPhases := backend.phasesPerRun[0]
-	successorPhases := backend.phasesPerRun[1]
-
-	// Both should have completed (both have "harvest" phase), but may differ in repo delivery:
-	// predecessor: [launch, deliver, run, harvest, grade]
-	// successor: [launch, deliver, run, harvest, grade] (same repo, same work)
-	// This is OK — what we're checking is that the successor doesn't include predecessor's artifacts.
-	// A real no-replay check would track work-item IDs from the handoff and verify the successor
-	// did not re-execute those specific items. For now, assert the phases are as expected.
-	if len(predecessorPhases) == 0 {
-		t.Fatal("predecessor run has no phases recorded (data loss)")
-	}
-	if len(successorPhases) == 0 {
-		t.Fatal("successor run has no phases recorded (data loss)")
+	if len(backend.phasesPerRun[0]) == 0 || len(backend.phasesPerRun[1]) == 0 {
+		t.Fatal("a run has no phases recorded (data loss)")
 	}
 
 	// Verify the queue is fully drained (both directives completed).
