@@ -957,10 +957,11 @@ WorkspaceRegistry + ReconstructResumeAudit + ContinueRun)
 - Evidence trail links mutation to stumble signals
 - Protected invariants (budget guardrails, secret handling) were not mutated
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (ITER-0008b TG4: STORY-0032 safe auditable genome mutation)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0018 -v`
 
 **Sources:**
+- `docs/plans/2026-06-25-genome-pattern-detection.md` (design specification)
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:433-463`
 
 ## SCENARIO-0019 — Recursive delegation via message emission
