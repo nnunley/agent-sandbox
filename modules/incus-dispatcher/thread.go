@@ -27,10 +27,10 @@ type Thread struct {
 	SupersededBy      string        `json:"superseded_by,omitempty"`  // STORY-0030 AC-1
 	Deadline          *time.Time    `json:"deadline,omitempty"`       // preemptive ITER-0007; nil = none
 	BudgetPolicy      *BudgetPolicy `json:"budget_policy,omitempty"`  // STORY-0036: multi-level budget enforcement
-	Priority          int           `json:"priority"`                  // STORY-0037 AC-1: base priority for queue ordering
+	Priority          int           `json:"priority"`                  // STORY-0037 AC-1: base priority for queue ordering (source of truth for sort order)
 	AgingScore        float64       `json:"aging_score"`               // STORY-0037 AC-1: computed from elapsed time since last served
 	LastServed        time.Time     `json:"last_served"`               // STORY-0037 AC-1: timestamp of last service (used for stale resurfacing)
-	QueueClass        string        `json:"queue_class"`               // STORY-0037 AC-3: urgent|active|incubating|maintenance
+	QueueClass        string        `json:"queue_class"`               // STORY-0037 AC-3: semantic label (urgent|active|incubating|maintenance) reflecting Priority intent; OrderThreads uses Priority, not QueueClass
 }
 
 // ThreadStore is a daemon-local, concurrency-safe registry of Threads keyed by Thread.ID.
@@ -69,6 +69,22 @@ func (s *ThreadStore) ListAll() []Thread {
 		out = append(out, t)
 	}
 	return out
+}
+
+// MarkServed updates a thread's LastServed timestamp and resets its AgingScore to 0.
+// Called when a thread is actually served (work completed). Uses an injected clock (now),
+// not time.Now(), for deterministic testing. If the thread does not exist, this is a no-op.
+// (STORY-0037 AC-4: ensures served threads become "fresh" and stop resurfacing).
+func (s *ThreadStore) MarkServed(id string, now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.threads[id]
+	if !ok {
+		return // Thread does not exist; no-op.
+	}
+	t.LastServed = now
+	t.AgingScore = 0 // Reset aging to mark thread as fresh.
+	s.threads[id] = t
 }
 
 // AgingConfig encodes the stale-thread resurfacing policy (STORY-0037 AC-4).
@@ -118,9 +134,9 @@ func OrderThreads(threads []Thread, now time.Time, cfg *AgingConfig) []Thread {
 
 	// Compute effective priority for each thread.
 	type threadWithEffectivePriority struct {
-		thread             Thread
-		effectivePriority  float64
-		isStaleResurfaced  bool
+		thread            Thread
+		effectivePriority float64
+		agingScore        float64
 	}
 
 	decorated := make([]threadWithEffectivePriority, len(out))
@@ -140,9 +156,9 @@ func OrderThreads(threads []Thread, now time.Time, cfg *AgingConfig) []Thread {
 		}
 
 		decorated[i] = threadWithEffectivePriority{
-			thread:             th,
-			effectivePriority:  effectivePriority,
-			isStaleResurfaced:  isStale,
+			thread:            th,
+			effectivePriority: effectivePriority,
+			agingScore:        agingScore,
 		}
 	}
 
@@ -154,9 +170,9 @@ func OrderThreads(threads []Thread, now time.Time, cfg *AgingConfig) []Thread {
 		return decorated[i].thread.ID < decorated[j].thread.ID // Tie-break by ID
 	})
 
-	// Update AgingScore in the result threads (computed from elapsed time).
+	// Populate AgingScore in the result threads (computed from elapsed time).
 	for i := range decorated {
-		decorated[i].thread.AgingScore = ComputeEffectiveAgingScore(now, decorated[i].thread.LastServed, cfg.StaleThreshold)
+		decorated[i].thread.AgingScore = decorated[i].agingScore
 		out[i] = decorated[i].thread
 	}
 

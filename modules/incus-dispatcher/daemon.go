@@ -120,6 +120,11 @@ func (dm *Daemon) setStatus(id string, s ThreadStatus) {
 	if dm.Threads != nil {
 		dm.Threads.Set(id, s)
 	}
+	// If the thread is marked done (completed), mark it as freshly served so it doesn't starve.
+	// (STORY-0037 AC-4: MarkServed resets LastServed and AgingScore so a served thread becomes fresh).
+	if s == StatusDone && dm.ThreadStore != nil {
+		dm.ThreadStore.MarkServed(id, dm.clock())
+	}
 }
 
 // checkBudget enforces budget guardrails at the thread level (STORY-0036 AC-3).

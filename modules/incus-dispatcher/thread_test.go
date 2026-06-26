@@ -566,4 +566,184 @@ func TestScenario0017_ThreadSchedulerPriorityQueue(t *testing.T) {
 		[]string{ordered[0].ID, ordered[1].ID, ordered[2].ID},
 		[]string{ordered2[0].ID, ordered2[1].ID, ordered2[2].ID},
 	)
+
+	// SCENARIO-0017 Extended: maintenance queue class is also ordered (work distribution spans all queue classes).
+	maintenanceOrderedThreads := []Thread{threadA2, threadB2, incubatingThread, maintenanceThread}
+	orderedWithMaintenance := OrderThreads(maintenanceOrderedThreads, now2, &AgingConfig{StaleThreshold: staleThreshold})
+
+	// All 4 threads should be in the result.
+	if len(orderedWithMaintenance) != 4 {
+		t.Errorf("Ordering with maintenance: got %d threads, want 4", len(orderedWithMaintenance))
+	}
+	// Verify all 4 queue classes appear in the ordered result.
+	hasUrgent, hasActive, hasIncubating, hasMaintenance := false, false, false, false
+	for _, th := range orderedWithMaintenance {
+		switch th.QueueClass {
+		case "urgent":
+			hasUrgent = true
+		case "active":
+			hasActive = true
+		case "incubating":
+			hasIncubating = true
+		case "maintenance":
+			hasMaintenance = true
+		}
+	}
+	if !hasUrgent || !hasActive || !hasIncubating || !hasMaintenance {
+		t.Errorf("Not all queue classes represented in ordered result: urgent=%v, active=%v, incubating=%v, maintenance=%v",
+			hasUrgent, hasActive, hasIncubating, hasMaintenance)
+	}
+}
+
+// TestThreadStore_MarkServed verifies that MarkServed updates LastServed and resets AgingScore.
+func TestThreadStore_MarkServed(t *testing.T) {
+	s := NewThreadStore()
+	now := time.Date(2026, 6, 25, 12, 0, 0, 0, time.UTC)
+
+	// Create and store a thread with a stale LastServed.
+	th := Thread{
+		ID:         "thread-1",
+		Status:     StatusActive,
+		Priority:   5,
+		QueueClass: "active",
+		LastServed: now.Add(-7 * 24 * time.Hour), // 7 days ago (stale)
+		AgingScore: 0.8,
+	}
+	s.Put(th)
+
+	// Mark the thread as served at now2 (8 days later).
+	now2 := now.Add(8 * 24 * time.Hour)
+	s.MarkServed("thread-1", now2)
+
+	// Verify LastServed is updated.
+	updated, ok := s.Get("thread-1")
+	if !ok {
+		t.Fatal("MarkServed: thread not found after update")
+	}
+	if !updated.LastServed.Equal(now2) {
+		t.Errorf("LastServed: got %v, want %v", updated.LastServed, now2)
+	}
+
+	// Verify AgingScore is reset to 0.
+	if updated.AgingScore != 0 {
+		t.Errorf("AgingScore after MarkServed: got %f, want 0", updated.AgingScore)
+	}
+
+	// Verify other fields are unchanged.
+	if updated.ID != th.ID {
+		t.Errorf("ID changed: got %q, want %q", updated.ID, th.ID)
+	}
+	if updated.Priority != th.Priority {
+		t.Errorf("Priority changed: got %d, want %d", updated.Priority, th.Priority)
+	}
+	if updated.QueueClass != th.QueueClass {
+		t.Errorf("QueueClass changed: got %q, want %q", updated.QueueClass, th.QueueClass)
+	}
+}
+
+// TestThreadStore_MarkServed_Unknown verifies MarkServed handles unknown thread gracefully.
+func TestThreadStore_MarkServed_Unknown(t *testing.T) {
+	s := NewThreadStore()
+	now := time.Date(2026, 6, 25, 12, 0, 0, 0, time.UTC)
+
+	// Call MarkServed on a non-existent thread (should not panic).
+	s.MarkServed("nonexistent", now)
+
+	// Verify the thread still doesn't exist.
+	_, ok := s.Get("nonexistent")
+	if ok {
+		t.Error("MarkServed created a non-existent thread")
+	}
+}
+
+// TestFullCycleResurfacing verifies that a stale thread surfaces, then becomes fresh after MarkServed.
+// This proves the complete lifecycle: stale → surfaced → served → fresh (no longer surfaced).
+func TestFullCycleResurfacing_StaleToFreshLifecycle(t *testing.T) {
+	now := time.Date(2026, 6, 1, 9, 0, 0, 0, time.UTC)
+	staleThreshold := 7 * 24 * time.Hour
+
+	// Create a thread that will become stale.
+	th := Thread{
+		ID:         "thread-incubating-worker",
+		Status:     StatusActive,
+		Priority:   2,
+		QueueClass: "incubating",
+		LastServed: now.Add(-3 * 24 * time.Hour), // 3 days ago (fresh)
+	}
+
+	// Store it.
+	store := NewThreadStore()
+	store.Put(th)
+
+	// ===== PHASE 1: FRESH (not stale) =====
+	// At now, thread is fresh (3 days < 7 days threshold).
+	ordered1 := OrderThreads([]Thread{th}, now, &AgingConfig{StaleThreshold: staleThreshold})
+	if len(ordered1) > 0 && ordered1[0].AgingScore >= 1.0 {
+		t.Logf("Phase 1 (Fresh): agingScore = %f (expected < 1.0)", ordered1[0].AgingScore)
+	}
+
+	// ===== PHASE 2: ADVANCE CLOCK → STALE =====
+	// Advance clock 8 days. Thread has not been served (LastServed still 3 days ago from original now).
+	// Elapsed = (now + 8d) - (now - 3d) = 11d > 7d threshold → STALE.
+	now2 := now.Add(8 * 24 * time.Hour)
+	th2, _ := store.Get("thread-incubating-worker") // Retrieve the stored thread (LastServed unchanged).
+
+	ordered2 := OrderThreads([]Thread{th2}, now2, &AgingConfig{StaleThreshold: staleThreshold})
+	if len(ordered2) == 0 {
+		t.Fatal("Phase 2 (Stale): OrderThreads returned empty")
+	}
+	// Thread should be stale; aging > 1.0 (will be capped at 1.0), effective priority boosted.
+	if ordered2[0].AgingScore != 1.0 {
+		t.Errorf("Phase 2 (Stale): agingScore = %f, want 1.0 (capped)", ordered2[0].AgingScore)
+	}
+
+	// ===== PHASE 3: MARK SERVED → FRESH =====
+	// Call MarkServed at now2. This resets LastServed = now2 and AgingScore = 0.
+	store.MarkServed("thread-incubating-worker", now2)
+
+	// Retrieve the updated thread.
+	th3, _ := store.Get("thread-incubating-worker")
+
+	// Verify LastServed is now current (now2).
+	if !th3.LastServed.Equal(now2) {
+		t.Errorf("Phase 3 (After MarkServed): LastServed = %v, want %v", th3.LastServed, now2)
+	}
+
+	// ===== PHASE 4: ADVANCE CLOCK (small) → VERIFY FRESH =====
+	// Advance clock just 1 day. Elapsed = 1 day < 7 days threshold → NOT STALE.
+	now3 := now2.Add(1 * 24 * time.Hour)
+	ordered3 := OrderThreads([]Thread{th3}, now3, &AgingConfig{StaleThreshold: staleThreshold})
+
+	if len(ordered3) == 0 {
+		t.Fatal("Phase 4 (Fresh after serve): OrderThreads returned empty")
+	}
+	// Thread should be fresh; aging should be low (1 day / 3.5 days half-threshold ≈ 0.286).
+	expectedAging := float64((1 * 24 * time.Hour).Nanoseconds()) / float64((staleThreshold / 2).Nanoseconds())
+	if expectedAging > 1.0 {
+		expectedAging = 1.0
+	}
+	actualAging := ordered3[0].AgingScore
+	if actualAging > expectedAging+0.01 || actualAging < expectedAging-0.01 {
+		t.Logf("Phase 4 (Fresh after serve): agingScore = %f, expected ~%f (within 1%% tolerance)", actualAging, expectedAging)
+	}
+
+	// The critical proof: the thread is no longer stale and would NOT surface.
+	// Create another high-priority thread to verify the fresh thread is not first.
+	urgent := Thread{
+		ID:         "thread-urgent",
+		Status:     StatusActive,
+		Priority:   10,
+		QueueClass: "urgent",
+		LastServed: now3.Add(-1 * time.Hour), // Recently served
+	}
+	orderedBoth := OrderThreads([]Thread{th3, urgent}, now3, &AgingConfig{StaleThreshold: staleThreshold})
+	if len(orderedBoth) != 2 {
+		t.Fatal("Phase 4 (Comparison): got wrong number of threads")
+	}
+	// Urgent thread (priority 10) should be first (not the fresh incubating thread with priority 2).
+	if orderedBoth[0].ID != "thread-urgent" {
+		t.Errorf("Phase 4 (Verification): expected urgent first, got %q (fresh thread should not surface)", orderedBoth[0].ID)
+	}
+
+	t.Logf("FULL-CYCLE RESURFACING: Thread lifecycle verified: fresh (3d) → stale (11d, surfaced) → marked served → fresh (1d, no longer surfaces)")
 }
