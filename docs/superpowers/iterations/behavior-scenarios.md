@@ -918,8 +918,8 @@ WorkspaceRegistry + ReconstructResumeAudit + ContinueRun)
 - Stale-thread resurfacing occurs
 - Work distribution spans all queue classes
 
-**Automation status:** pending
-**Execution command:** TBD
+**Automation status:** automated (ITER-0008b TG5: STORY-0037 priority+aging+resurfacing)
+**Execution command:** `cd modules/incus-dispatcher && go test . -run TestScenario0017`
 
 **Sources:**
 - `docs/plans/2026-06-17-coordinator-bootstrap-requirements.md:506-519, 767-820`

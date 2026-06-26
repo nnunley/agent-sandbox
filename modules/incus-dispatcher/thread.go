@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"sync"
 	"time"
 )
@@ -26,6 +27,10 @@ type Thread struct {
 	SupersededBy      string        `json:"superseded_by,omitempty"`  // STORY-0030 AC-1
 	Deadline          *time.Time    `json:"deadline,omitempty"`       // preemptive ITER-0007; nil = none
 	BudgetPolicy      *BudgetPolicy `json:"budget_policy,omitempty"`  // STORY-0036: multi-level budget enforcement
+	Priority          int           `json:"priority"`                  // STORY-0037 AC-1: base priority for queue ordering
+	AgingScore        float64       `json:"aging_score"`               // STORY-0037 AC-1: computed from elapsed time since last served
+	LastServed        time.Time     `json:"last_served"`               // STORY-0037 AC-1: timestamp of last service (used for stale resurfacing)
+	QueueClass        string        `json:"queue_class"`               // STORY-0037 AC-3: urgent|active|incubating|maintenance
 }
 
 // ThreadStore is a daemon-local, concurrency-safe registry of Threads keyed by Thread.ID.
@@ -63,5 +68,97 @@ func (s *ThreadStore) ListAll() []Thread {
 	for _, t := range s.threads {
 		out = append(out, t)
 	}
+	return out
+}
+
+// AgingConfig encodes the stale-thread resurfacing policy (STORY-0037 AC-4).
+// StaleThreshold is the duration after which a thread is considered stale and eligible for resurfacing.
+type AgingConfig struct {
+	StaleThreshold time.Duration
+}
+
+// ComputeEffectiveAgingScore computes the aging contribution to effective priority.
+// Elapsed time is now - lastServed. Returns a non-negative score that increases with elapsed time.
+// Formula: aging_score = min(1.0, elapsed_seconds / (staleThreshold_seconds / 2))
+// This allows aging to boost priority up to 1.0 as the stale threshold approaches.
+func ComputeEffectiveAgingScore(now, lastServed time.Time, staleThreshold time.Duration) float64 {
+	if lastServed.IsZero() {
+		// No prior service: treat as very old (maximum aging).
+		return 1.0
+	}
+	elapsed := now.Sub(lastServed)
+	if elapsed < 0 {
+		// lastServed is in the future (clock skew); treat as not aged.
+		return 0.0
+	}
+	// Aging increases proportionally to elapsed time, capped at 1.0 when half the stale threshold is reached.
+	halfThreshold := staleThreshold / 2
+	if halfThreshold <= 0 {
+		return 0.0
+	}
+	score := float64(elapsed.Nanoseconds()) / float64(halfThreshold.Nanoseconds())
+	if score > 1.0 {
+		score = 1.0
+	}
+	return score
+}
+
+// OrderThreads orders threads by effective priority (base priority + aging contribution)
+// and applies stale-thread resurfacing to prevent starvation (STORY-0037 AC-2/AC-4).
+// Returns a new slice ordered deterministically: higher effective priority first.
+// Tie-breaks are stable by Thread ID (lexicographic).
+func OrderThreads(threads []Thread, now time.Time, cfg *AgingConfig) []Thread {
+	if cfg == nil {
+		cfg = &AgingConfig{StaleThreshold: 7 * 24 * time.Hour}
+	}
+
+	// Create a copy for sorting.
+	out := make([]Thread, len(threads))
+	copy(out, threads)
+
+	// Compute effective priority for each thread.
+	type threadWithEffectivePriority struct {
+		thread             Thread
+		effectivePriority  float64
+		isStaleResurfaced  bool
+	}
+
+	decorated := make([]threadWithEffectivePriority, len(out))
+	for i, th := range out {
+		agingScore := ComputeEffectiveAgingScore(now, th.LastServed, cfg.StaleThreshold)
+		elapsed := now.Sub(th.LastServed)
+		isStale := elapsed > cfg.StaleThreshold
+
+		// Base priority as a float for mixed comparison.
+		basePriority := float64(th.Priority)
+
+		// Effective priority = base + aging contribution.
+		// If stale, boost priority dramatically (e.g., add 100 so stale threads surface).
+		effectivePriority := basePriority + agingScore
+		if isStale {
+			effectivePriority += 100.0 // Stale threads get a massive boost.
+		}
+
+		decorated[i] = threadWithEffectivePriority{
+			thread:             th,
+			effectivePriority:  effectivePriority,
+			isStaleResurfaced:  isStale,
+		}
+	}
+
+	// Sort by effective priority (descending), then by ID (ascending) for stable tie-break.
+	sort.SliceStable(decorated, func(i, j int) bool {
+		if decorated[i].effectivePriority != decorated[j].effectivePriority {
+			return decorated[i].effectivePriority > decorated[j].effectivePriority // Higher priority first
+		}
+		return decorated[i].thread.ID < decorated[j].thread.ID // Tie-break by ID
+	})
+
+	// Update AgingScore in the result threads (computed from elapsed time).
+	for i := range decorated {
+		decorated[i].thread.AgingScore = ComputeEffectiveAgingScore(now, decorated[i].thread.LastServed, cfg.StaleThreshold)
+		out[i] = decorated[i].thread
+	}
+
 	return out
 }
