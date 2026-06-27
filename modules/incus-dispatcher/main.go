@@ -48,6 +48,12 @@ func main() {
 		os.Exit(runTUICommand(os.Args[2:]))
 	}
 
+	// `usage` prints the cross-provider usage meter readout (and `usage ingest
+	// <transcript>` records interactive Claude Code usage into the ledger).
+	if len(os.Args) > 1 && os.Args[1] == "usage" {
+		os.Exit(runUsageCommand(os.Args[2:]))
+	}
+
 	// CLI flags
 	name := flag.String("name", "", "Task name (required)")
 	repo := flag.String("repo", "", "Git repository path (local) or URL to deliver (optional)")
