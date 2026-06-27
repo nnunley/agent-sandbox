@@ -1,6 +1,9 @@
 package usage
 
-import "time"
+import (
+	"sort"
+	"time"
+)
 
 // Confidence labels how trustworthy a remaining estimate is.
 type Confidence string
@@ -51,13 +54,58 @@ func (e Estimator) Estimate(events []UsageEvent, limits []LimitEvent, provider s
 		}
 	}
 
+	// Ceiling learning: gather calibration points for this provider + window class,
+	// newest last (append order is roughly chronological; sort by Ts to be safe).
+	var points []LimitEvent
+	for _, le := range limits {
+		if le.Provider == provider && le.WindowClass == wc.Name {
+			points = append(points, le)
+		}
+	}
+	sortLimitsByTs(points)
+
+	var ceiling int64
+	conf := ConfUncalibrated
+	switch {
+	case len(points) == 0:
+		if e.PublishedPrior != nil {
+			if p := e.PublishedPrior[provider]; p > 0 {
+				ceiling = p
+				conf = ConfLow // weak prior, not observed
+			}
+		}
+	case len(points) <= 2:
+		ceiling = points[len(points)-1].UsedAt // most recent (rolling)
+		conf = ConfLow
+	case len(points) <= 5:
+		ceiling = points[len(points)-1].UsedAt
+		conf = ConfMed
+	default:
+		ceiling = points[len(points)-1].UsedAt
+		conf = ConfHigh
+	}
+
+	var remaining int64
+	if ceiling > 0 {
+		remaining = ceiling - used
+		if remaining < 0 {
+			remaining = 0
+		}
+	}
+
 	return Estimate{
 		Provider:     provider,
 		WindowClass:  wc.Name,
 		Used:         used,
-		Confidence:   ConfUncalibrated,
+		CeilingEst:   ceiling,
+		RemainingEst: remaining,
+		Confidence:   conf,
 		WindowAnchor: anchor,
 		WindowReset:  reset,
 		WindowActive: active,
 	}
+}
+
+func sortLimitsByTs(ls []LimitEvent) {
+	sort.Slice(ls, func(i, j int) bool { return ls[i].Ts.Before(ls[j].Ts) })
 }
