@@ -334,17 +334,44 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, rt route) {
 	defer resp.Body.Close()
 
 	copyHeaders(w.Header(), resp.Header)
+	w.Header().Del("Content-Length")
 	w.WriteHeader(resp.StatusCode)
 
-	// io.Copy + flusher: if the response writer supports flushing (it does for
-	// HTTP/1.1 and HTTP/2), flush after each chunk so streaming completions
-	// reach the client promptly instead of being buffered.
-	bytesOut := streamCopy(w, resp.Body)
+	// Meter the response into the ledger as it streams to the client. The scanner
+	// is fed via TeeReader, so it never buffers the whole body, reorders, or
+	// delays client bytes.
+	scanner := newUsageScanner(rt.provider)
+	bytesOut := streamCopy(w, io.TeeReader(resp.Body, scanner))
 
 	var bytesIn int64
 	if counter != nil {
 		bytesIn = counter.bytes()
 	}
+
+	// Metering is best-effort and only when a ledger is configured (empty path =>
+	// disabled, e.g. hermetic non-budget tests). A failure never affects brokering.
+	if s.ledgerPath != "" {
+		if ev, ok := scanner.result(s.now()); ok {
+			ev.Source = sourceForClass(rt.class)
+			if l, err := usage.OpenLedger(s.ledgerPath); err == nil {
+				_ = l.Append(ev)
+			}
+		}
+		// Calibration: an upstream rate-limit reveals the realized ceiling - record
+		// a LimitEvent at the window usage observed just before this call.
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if l, err := usage.OpenLedger(s.ledgerPath); err == nil {
+				est := usage.Estimator{PublishedPrior: s.priors}.Estimate(l.Events(), l.Limits(), rt.provider, usage.Window5h, s.now())
+				_ = l.AppendLimit(usage.LimitEvent{
+					Provider:    rt.provider,
+					WindowClass: usage.Window5h.Name,
+					UsedAt:      est.Used,
+					Ts:          s.now(),
+				})
+			}
+		}
+	}
+
 	finish(resp.StatusCode, "", bytesIn, bytesOut)
 }
 
