@@ -351,6 +351,14 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, rt route) {
 	// Metering is best-effort and only when a ledger is configured (empty path =>
 	// disabled, e.g. hermetic non-budget tests). A failure never affects brokering.
 	if s.ledgerPath != "" {
+		var usedBeforeCall int64
+		var haveUsedBeforeCall bool
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if l, err := usage.OpenLedger(s.ledgerPath); err == nil {
+				usedBeforeCall = usage.Estimator{PublishedPrior: s.priors}.Estimate(l.Events(), l.Limits(), rt.provider, usage.Window5h, s.now()).Used
+				haveUsedBeforeCall = true
+			}
+		}
 		if ev, ok := scanner.result(s.now()); ok {
 			ev.Source = sourceForClass(rt.class)
 			if l, err := usage.OpenLedger(s.ledgerPath); err == nil {
@@ -359,13 +367,12 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, rt route) {
 		}
 		// Calibration: an upstream rate-limit reveals the realized ceiling - record
 		// a LimitEvent at the window usage observed just before this call.
-		if resp.StatusCode == http.StatusTooManyRequests {
+		if resp.StatusCode == http.StatusTooManyRequests && haveUsedBeforeCall {
 			if l, err := usage.OpenLedger(s.ledgerPath); err == nil {
-				est := usage.Estimator{PublishedPrior: s.priors}.Estimate(l.Events(), l.Limits(), rt.provider, usage.Window5h, s.now())
 				_ = l.AppendLimit(usage.LimitEvent{
 					Provider:    rt.provider,
 					WindowClass: usage.Window5h.Name,
-					UsedAt:      est.Used,
+					UsedAt:      usedBeforeCall,
 					Ts:          s.now(),
 				})
 			}

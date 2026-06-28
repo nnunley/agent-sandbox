@@ -13,7 +13,7 @@ func usageSourceInteractive() usage.Source { return usage.SourceInteractive }
 func usageSourceFleet() usage.Source       { return usage.SourceFleet }
 
 func TestUsageScanner_NonStreaming(t *testing.T) {
-	body := `{"model":"claude-opus-4-8","usage":{"input_tokens":120,"cache_creation_input_tokens":5,"cache_read_input_tokens":7,"output_tokens":33}}`
+	body := `{"id":"msg_x","model":"claude-opus-4-8","usage":{"input_tokens":120,"cache_creation_input_tokens":5,"cache_read_input_tokens":7,"output_tokens":33}}`
 	sc := newUsageScanner("anthropic")
 	// Drive it the way the proxy does: copy through a TeeReader.
 	var sink strings.Builder
@@ -33,6 +33,9 @@ func TestUsageScanner_NonStreaming(t *testing.T) {
 	}
 	if ev.InputTokens != 120 || ev.CacheCreationTokens != 5 || ev.CacheReadTokens != 7 || ev.OutputTokens != 33 {
 		t.Fatalf("tokens wrong: %+v", ev)
+	}
+	if ev.TurnID != "msg_x" {
+		t.Fatalf("turn_id=%q want msg_x", ev.TurnID)
 	}
 	if !ev.Ts.Equal(now) {
 		t.Fatalf("ts=%v want now", ev.Ts)
@@ -74,6 +77,38 @@ func TestUsageScanner_StreamingSSE(t *testing.T) {
 	}
 	if ev.Model != "claude-opus-4-8" {
 		t.Fatalf("model=%q", ev.Model)
+	}
+	if ev.TurnID != "msg_1" {
+		t.Fatalf("turn_id=%q want msg_1", ev.TurnID)
+	}
+}
+
+func TestUsageScanner_StreamingSSEChunkedWrite(t *testing.T) {
+	stream := strings.Join([]string{
+		`event: message_start`,
+		`data: {"type":"message_start","message":{"id":"msg_chunk","model":"claude-opus-4-8","usage":{"input_tokens":200,"cache_creation_input_tokens":10,"cache_read_input_tokens":20,"output_tokens":1}}}`,
+		``,
+		`event: message_delta`,
+		`data: {"type":"message_delta","usage":{"output_tokens":77}}`,
+		``,
+	}, "\n")
+	sc := newUsageScanner("anthropic")
+	split := len(stream) / 2
+	if _, err := sc.Write([]byte(stream[:split])); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sc.Write([]byte(stream[split:])); err != nil {
+		t.Fatal(err)
+	}
+	ev, ok := sc.result(time.Unix(2100, 0).UTC())
+	if !ok {
+		t.Fatal("result ok=false")
+	}
+	if ev.InputTokens != 200 || ev.CacheCreationTokens != 10 || ev.CacheReadTokens != 20 || ev.OutputTokens != 77 {
+		t.Fatalf("tokens wrong after chunked writes: %+v", ev)
+	}
+	if ev.TurnID != "msg_chunk" {
+		t.Fatalf("turn_id=%q want msg_chunk", ev.TurnID)
 	}
 }
 

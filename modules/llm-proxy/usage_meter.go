@@ -45,9 +45,11 @@ type tokenBlock struct {
 // wireUsage covers both layouts: top-level usage (non-streaming + message_delta)
 // and usage nested under message (message_start).
 type wireUsage struct {
+	ID    string      `json:"id"`
 	Model string      `json:"model"`
 	Usage *tokenBlock `json:"usage"`
 	Message struct {
+		ID    string      `json:"id"`
 		Model string      `json:"model"`
 		Usage *tokenBlock `json:"usage"`
 	} `json:"message"`
@@ -61,6 +63,7 @@ type usageScanner struct {
 	tail                             []byte
 	in, cacheCreate, cacheRead, out int64
 	model                            string
+	turnID                           string
 	got                              bool
 }
 
@@ -97,6 +100,11 @@ func (s *usageScanner) scanLine(line []byte) {
 	var w wireUsage
 	if err := json.Unmarshal(line, &w); err != nil {
 		return
+	}
+	if w.ID != "" {
+		s.turnID = w.ID
+	} else if w.Message.ID != "" {
+		s.turnID = w.Message.ID
 	}
 	blk := w.Usage
 	if blk == nil {
@@ -138,6 +146,7 @@ func (s *usageScanner) result(now time.Time) (usage.UsageEvent, bool) {
 	return usage.UsageEvent{
 		Provider:            s.provider,
 		Model:               s.model,
+		TurnID:              s.turnID,
 		InputTokens:         s.in,
 		CacheCreationTokens: s.cacheCreate,
 		CacheReadTokens:     s.cacheRead,

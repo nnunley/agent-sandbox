@@ -94,3 +94,35 @@ func TestMetering_CalibratesOnUpstream429(t *testing.T) {
 		t.Fatalf("calibration limit wrong: %+v", lims[0])
 	}
 }
+
+func TestMetering_CalibrationExcludesCurrentCall(t *testing.T) {
+	t0 := time.Date(2026, 6, 28, 9, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	ledger := filepath.Join(dir, "usage.jsonl")
+	l0, _ := usage.OpenLedger(ledger)
+	_ = l0.Append(usage.UsageEvent{Provider: "anthropic", OutputTokens: 100_000, Ts: t0, Source: usage.SourceFleet})
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"usage":{"output_tokens":50000}}`)
+	}))
+	defer upstream.Close()
+
+	s, _ := newTestServer(t, ledger, upstream.URL, t0.Add(time.Minute))
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	resp, _ := http.Post(srv.URL+"/anthropic/v1/messages", "application/json", nil)
+	_, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	l, _ := usage.OpenLedger(ledger)
+	lims := l.Limits()
+	if len(lims) != 1 {
+		t.Fatalf("limits=%d want 1", len(lims))
+	}
+	if lims[0].UsedAt != 100_000 {
+		t.Fatalf("limit used_at=%d want 100000", lims[0].UsedAt)
+	}
+}
