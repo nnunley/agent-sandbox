@@ -18,10 +18,16 @@ cross the cap. Measurement-only (sub-project 1) becomes measurement + enforcemen
 ## Goal & success criteria
 
 - The `llm-proxy` enforces a per-provider, per-window **reserve cap** on **fleet** traffic:
-  once estimated fleet usage in the active window would cross `cap = ceiling × (1 − reservePct)`,
-  further fleet calls are **refused without being forwarded upstream** (HTTP 429 + `Retry-After`
-  + a `budget-deferred` marker). The fleet daemon treats this like any call failure and requeues
-  the directive durably for a later window.
+  once **total** window usage (interactive + fleet, as recorded in the shared ledger) would cross
+  `cap = ceiling × (1 − reservePct)`, further **fleet** calls are **refused without being forwarded
+  upstream** (HTTP 429 + `Retry-After` + a `budget-deferred` marker). The fleet daemon treats this
+  like any call failure and requeues the directive durably for a later window.
+  **Semantics note (review-driven, 2026-06-28):** the cap is measured against *total* window
+  consumption, not fleet-only. This is deliberate — deferring fleet once total usage reaches
+  `ceiling × (1 − reservePct)` guarantees the remaining `reservePct` of the ceiling stays free for
+  interactive. Measuring fleet-only would let interactive stack on top of a full fleet allowance and
+  overrun the real ceiling, defeating the reserve. Only fleet calls are ever *deferred*; interactive
+  is never blocked.
 - **Interactive traffic is never capped.** When interactive Claude Code is routed through the
   proxy (optional), its calls always forward; the proxy meters them but never defers them.
 - The proxy **records calibration**: on an upstream `429`/rate-limit it appends a `LimitEvent`
@@ -35,8 +41,15 @@ cross the cap. Measurement-only (sub-project 1) becomes measurement + enforcemen
 - The producer, supervisor, tiered strong-model PAR panel, queue draining (sub-projects 3–5).
 - Per-request hard serialization to fully close the cap TOCTOU (see Error handling). v1 is a
   soft cap; the reserve absorbs the slack.
-- Non-Anthropic streaming-usage extraction beyond a documented stub. OpenAI/ollama
-  non-streaming responses are parsed; their streaming usage shapes are a later refinement.
+- **Metering is Anthropic-scoped in v1 (review-driven correction, 2026-06-28).** The usage
+  scanner understands only Anthropic's `input_tokens`/`output_tokens` shapes (streaming SSE +
+  non-streaming). OpenAI (`prompt_tokens`/`completion_tokens`) and ollama responses are **not**
+  parsed, so those providers accumulate no usage and — via fail-open — are simply **not enforced**.
+  This matches the motivation (the Claude-Max quota is the thing worth protecting). Per-provider
+  parsers are a later refinement; until then, reserve-cap enforcement is effectively Anthropic-only.
+- **Scanner line cap (1 MiB).** A response line/body exceeding 1 MiB without a newline is left
+  un-metered (best-effort). Real Anthropic bodies are far smaller; incremental large-JSON parsing
+  is a later refinement, not a v1 requirement.
 - A numeric confidence band on the readout (sub-project 1 carried this as polish; unchanged).
 
 ## Decisions locked during brainstorming
