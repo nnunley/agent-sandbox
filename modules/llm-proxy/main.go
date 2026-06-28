@@ -32,13 +32,7 @@ import (
 func main() {
 	listenAddr := envOrDefault("LLM_PROXY_ADDR", ":12071")
 
-	specs := []struct {
-		prefix      string
-		upstream    string
-		apiKey      string
-		provider    string
-		requiresKey bool
-	}{
+	specs := []routeSpec{
 		{"/anthropic", "https://api.anthropic.com", os.Getenv("ANTHROPIC_API_KEY"), "anthropic", true},
 		{"/openai", "https://api.openai.com", os.Getenv("OPENAI_API_KEY"), "openai", true},
 		{"/ollama-cloud", envOrDefault("OLLAMA_CLOUD_URL", "https://ollama.ai"), os.Getenv("OLLAMA_CLOUD_API_KEY"), "ollama-cloud", true},
@@ -49,13 +43,9 @@ func main() {
 		{"/local-large", envOrDefault("LOCAL_LARGE_URL", "http://ndn.local:8082"), "", "local-large", false},
 	}
 
-	routes := make([]route, 0, len(specs))
-	for _, s := range specs {
-		rt, err := newRoute(s.prefix, s.upstream, s.apiKey, s.provider, s.requiresKey)
-		if err != nil {
-			log.Fatalf("invalid route %s -> %s: %v", s.prefix, s.upstream, err)
-		}
-		routes = append(routes, rt)
+	routes, err := buildRoutes(specs)
+	if err != nil {
+		log.Fatalf("invalid routes: %v", err)
 	}
 
 	// Buffered, mutex-protected log writer to stdout. Wraps os.Stdout so

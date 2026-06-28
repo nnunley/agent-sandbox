@@ -36,7 +36,7 @@ func (c *captureSink) last() logEntry {
 
 func mustRoute(t *testing.T, prefix, upstream, key, provider string, requires bool) route {
 	t.Helper()
-	rt, err := newRoute(prefix, upstream, key, provider, requires)
+	rt, err := newRoute(prefix, upstream, key, provider, requires, classFleet)
 	if err != nil {
 		t.Fatalf("newRoute(%q): %v", upstream, err)
 	}
@@ -70,7 +70,7 @@ func TestStripRoutePrefix(t *testing.T) {
 func TestNewRouteRejectsBadURL(t *testing.T) {
 	cases := []string{"", "not-a-url", "://missing-scheme", "https://"}
 	for _, u := range cases {
-		if _, err := newRoute("/p", u, "", "x", false); err == nil {
+		if _, err := newRoute("/p", u, "", "x", false, classFleet); err == nil {
 			t.Errorf("newRoute(%q) succeeded; expected error", u)
 		}
 	}

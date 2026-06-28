@@ -15,6 +15,15 @@ import (
 	"time"
 )
 
+// routeClass distinguishes interactive traffic (never capped — the protected
+// interactive headroom) from fleet traffic (subject to the reserve cap).
+type routeClass string
+
+const (
+	classFleet       routeClass = "fleet"
+	classInteractive routeClass = "interactive"
+)
+
 // Default request body size cap. Anthropic and OpenAI both have lower
 // per-request limits than this in practice; the cap exists so a misbehaving
 // caller on the bridge can't make the proxy buffer arbitrary memory.
@@ -42,9 +51,19 @@ type route struct {
 	apiKey      string
 	provider    string
 	requiresKey bool
+	class       routeClass
 }
 
-func newRoute(prefix, upstreamStr, apiKey, provider string, requiresKey bool) (route, error) {
+// routeSpec is the declarative description of one upstream provider route.
+type routeSpec struct {
+	prefix      string
+	upstream    string
+	apiKey      string
+	provider    string
+	requiresKey bool
+}
+
+func newRoute(prefix, upstreamStr, apiKey, provider string, requiresKey bool, class routeClass) (route, error) {
 	u, err := url.Parse(upstreamStr)
 	if err != nil {
 		return route{}, err
@@ -58,7 +77,28 @@ func newRoute(prefix, upstreamStr, apiKey, provider string, requiresKey bool) (r
 		apiKey:      apiKey,
 		provider:    provider,
 		requiresKey: requiresKey,
+		class:       class,
 	}, nil
+}
+
+// buildRoutes turns provider specs into routes: one fleet route per spec plus a
+// parallel interactive route under the /interactive prefix. Point Claude Code's
+// ANTHROPIC_BASE_URL at the interactive prefix to route it through the proxy;
+// leave it unset to keep the proxy fleet-only.
+func buildRoutes(specs []routeSpec) ([]route, error) {
+	routes := make([]route, 0, len(specs)*2)
+	for _, s := range specs {
+		fleet, err := newRoute(s.prefix, s.upstream, s.apiKey, s.provider, s.requiresKey, classFleet)
+		if err != nil {
+			return nil, err
+		}
+		inter, err := newRoute("/interactive"+s.prefix, s.upstream, s.apiKey, s.provider, s.requiresKey, classInteractive)
+		if err != nil {
+			return nil, err
+		}
+		routes = append(routes, fleet, inter)
+	}
+	return routes, nil
 }
 
 // Hop-by-hop headers (RFC 7230 §6.1) — must be stripped at proxy boundaries.
