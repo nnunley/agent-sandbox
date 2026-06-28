@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/agent-sandbox/incus-dispatcher/usage"
+	"github.com/agent-sandbox/usage"
 )
 
 // defaultLedgerPath is where the usage ledger lives unless overridden by FLEET_USAGE_LEDGER.
