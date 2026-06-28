@@ -7,12 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/agent-sandbox/usage"
 )
 
 // routeClass distinguishes interactive traffic (never capped — the protected
@@ -127,15 +131,59 @@ type Server struct {
 	client       *http.Client
 	logs         logSink
 	maxBodyBytes int64
+
+	// Budget enforcement (sub-project 2).
+	ledgerPath      string             // usage ledger; fleet gate + metering both use it
+	reservePct      float64            // default reserved interactive headroom fraction [0,1)
+	providerReserve map[string]float64 // per-provider reservePct override
+	priors          map[string]int64   // Estimator.PublishedPrior ceilings per provider
+	now             func() time.Time   // injected clock; defaults to time.Now
 }
 
 func newServer(routes []route, logs logSink) *Server {
 	return &Server{
-		routes:       routes,
-		client:       &http.Client{Timeout: defaultUpstreamTimeout},
-		logs:         logs,
-		maxBodyBytes: defaultMaxBodyBytes,
+		routes:          routes,
+		client:          &http.Client{Timeout: defaultUpstreamTimeout},
+		logs:            logs,
+		maxBodyBytes:    defaultMaxBodyBytes,
+		ledgerPath:      "",
+		reservePct:      0.30,
+		providerReserve: map[string]float64{},
+		priors:          map[string]int64{},
+		now:             time.Now,
 	}
+}
+
+// reserveFor returns the reserved-headroom fraction for a provider (override or default).
+func (s *Server) reserveFor(provider string) float64 {
+	if p, ok := s.providerReserve[provider]; ok {
+		return p
+	}
+	return s.reservePct
+}
+
+// budgetAllows reports whether a fleet call to provider is within the reserve cap
+// for the active 5h window, plus a Retry-After hint (seconds) when deferred. It
+// reads only already-recorded usage (pre-flight) and fails OPEN on any ledger
+// error - a meter bug must never strand the fleet.
+func (s *Server) budgetAllows(provider string, now time.Time) (allow bool, retryAfter int) {
+	if s.ledgerPath == "" {
+		return true, 0
+	}
+	l, err := usage.OpenLedger(s.ledgerPath)
+	if err != nil {
+		s.logs.Log(logEntry{Provider: provider, Error: "budget: ledger open failed (fail-open): " + err.Error()})
+		return true, 0
+	}
+	est := usage.Estimator{PublishedPrior: s.priors}.Estimate(l.Events(), l.Limits(), provider, usage.Window5h, now)
+	if est.AllowFleet(s.reserveFor(provider)) {
+		return true, 0
+	}
+	ra := int(math.Ceil(est.WindowReset.Sub(now).Seconds()))
+	if ra < 1 {
+		ra = 1
+	}
+	return false, ra
 }
 
 // Handler returns an http.Handler with /health and one subtree per route.
@@ -191,6 +239,19 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, rt route) {
 			entry.Error = errMsg
 		}
 		s.logs.Log(entry)
+	}
+
+	// Pre-flight reserve-cap gate: fleet traffic only. Interactive is the
+	// protected headroom and is never deferred. Decision reads only the ledger's
+	// already-recorded usage, so it is independent of this response.
+	if rt.class == classFleet {
+		if allow, retryAfter := s.budgetAllows(rt.provider, s.now()); !allow {
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+			w.Header().Set("X-Budget-Deferred", "1")
+			http.Error(w, "budget-deferred: fleet reserve cap reached for "+rt.provider, http.StatusTooManyRequests)
+			finish(http.StatusTooManyRequests, "budget-deferred", 0, 0)
+			return
+		}
 	}
 
 	// Strip route prefix using a path-segment boundary check, then clean to
