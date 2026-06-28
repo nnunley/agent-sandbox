@@ -62,6 +62,7 @@ func main() {
 			log.Printf("warning: ignoring LLM_PROXY_MAX_BODY=%q (not a positive int)", v)
 		}
 	}
+	configureBudget(srv, os.Getenv)
 
 	httpSrv := &http.Server{
 		Addr:              listenAddr,
