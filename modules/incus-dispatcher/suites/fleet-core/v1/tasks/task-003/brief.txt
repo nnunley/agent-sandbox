@@ -1,0 +1,1 @@
+Fix a tiny aggregation edge case where an empty slice must return zero.

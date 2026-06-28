@@ -47,6 +47,27 @@ func TestLoadBenchSuite_ComputesStableHashAndTasks(t *testing.T) {
 	}
 }
 
+func TestLoadBenchSuite_FleetCoreV1Fixture(t *testing.T) {
+	suite, err := LoadBenchSuite(".", "fleet-core@v1")
+	if err != nil {
+		t.Fatalf("LoadBenchSuite: %v", err)
+	}
+	if len(suite.Tasks) != 3 {
+		t.Fatalf("tasks=%d want 3", len(suite.Tasks))
+	}
+	for _, task := range suite.Tasks {
+		if task.Brief == "" || task.OracleRef == "" {
+			t.Fatalf("task missing hidden-oracle fixture: %+v", task)
+		}
+		if !filepath.IsAbs(task.Repo) {
+			t.Fatalf("repo path not resolved: %q", task.Repo)
+		}
+		if !filepath.IsAbs(task.OracleRef) {
+			t.Fatalf("oracle path not resolved: %q", task.OracleRef)
+		}
+	}
+}
+
 func writeSuiteFixture(t *testing.T, root, name, version string, tasks []suiteFixtureTask) {
 	t.Helper()
 

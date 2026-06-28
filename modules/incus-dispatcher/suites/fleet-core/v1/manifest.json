@@ -1,0 +1,9 @@
+{
+  "name": "fleet-core",
+  "version": "v1",
+  "tasks": [
+    "task-001",
+    "task-002",
+    "task-003"
+  ]
+}

@@ -1,0 +1,1 @@
+Make a small parser reject empty input with a clear error string.

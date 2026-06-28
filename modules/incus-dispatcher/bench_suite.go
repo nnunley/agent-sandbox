@@ -30,6 +30,10 @@ func LoadBenchSuite(root, suiteID string) (*BenchSuite, error) {
 	}
 
 	base := filepath.Join(root, "suites", name, version)
+	base, err = filepath.Abs(base)
+	if err != nil {
+		return nil, fmt.Errorf("resolve suite path: %w", err)
+	}
 	manifestPath := filepath.Join(base, "manifest.json")
 	manifestData, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -75,14 +79,21 @@ func LoadBenchSuite(root, suiteID string) (*BenchSuite, error) {
 		suite.Tasks = append(suite.Tasks, BenchTaskSpec{
 			Name:      taskName,
 			Brief:     strings.TrimRight(string(briefData), "\n"),
-			Repo:      meta.Repo,
+			Repo:      resolveSuitePath(base, meta.Repo),
 			Ref:       meta.Ref,
-			OracleRef: meta.OracleRef,
+			OracleRef: resolveSuitePath(base, meta.OracleRef),
 		})
 	}
 
 	suite.Hash = hex.EncodeToString(hasher.Sum(nil))
 	return suite, nil
+}
+
+func resolveSuitePath(base, value string) string {
+	if value == "" || filepath.IsAbs(value) {
+		return value
+	}
+	return filepath.Clean(filepath.Join(base, value))
 }
 
 func parseSuiteID(suiteID string) (name, version string, err error) {

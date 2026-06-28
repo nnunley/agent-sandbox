@@ -1,0 +1,1 @@
+Add a nil-guard to a tiny helper and keep behavior unchanged otherwise.

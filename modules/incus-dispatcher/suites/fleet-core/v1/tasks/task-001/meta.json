@@ -1,0 +1,5 @@
+{
+  "repo": "fixtures/task-001/repo",
+  "ref": "main",
+  "oracle_ref": "fixtures/task-001/oracle"
+}
