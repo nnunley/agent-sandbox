@@ -1,6 +1,11 @@
 package main
 
-import "sort"
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+)
 
 func BuildScorecard(suite *BenchSuite, results []BenchTaskResult) BenchScorecard {
 	card := BenchScorecard{}
@@ -83,4 +88,52 @@ func BuildScorecard(suite *BenchSuite, results []BenchTaskResult) BenchScorecard
 		})
 	}
 	return card
+}
+
+func (c BenchScorecard) RenderTable() string {
+	var lines []string
+	lines = append(lines, fmt.Sprintf("suite %s@%s hash=%s", c.Suite.Name, c.Suite.Version, c.Suite.Hash))
+	lines = append(lines, "rank candidate pass judge wall_ms cost")
+	for _, entry := range c.Ranking {
+		cost := ""
+		for _, candidate := range c.Candidates {
+			if candidate.Candidate.Name != entry.Candidate.Name {
+				continue
+			}
+			cost = renderProviderCosts(candidate.TokensByProvider)
+			break
+		}
+		lines = append(lines, fmt.Sprintf(
+			"%d %s %.3f %.3f %d %s",
+			entry.Rank,
+			entry.Candidate.Name,
+			entry.PassRate,
+			entry.Judge,
+			entry.WallTimeMs,
+			cost,
+		))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (c BenchScorecard) MarshalJSON() ([]byte, error) {
+	type alias BenchScorecard
+	return json.MarshalIndent(alias(c), "", "  ")
+}
+
+func renderProviderCosts(costs map[string]BenchTokenCost) string {
+	if len(costs) == 0 {
+		return "-"
+	}
+	providers := make([]string, 0, len(costs))
+	for provider := range costs {
+		providers = append(providers, provider)
+	}
+	sort.Strings(providers)
+	parts := make([]string, 0, len(providers))
+	for _, provider := range providers {
+		cost := costs[provider]
+		parts = append(parts, fmt.Sprintf("%s:$%.2f/%d/%d", provider, cost.SpendUSD, cost.InputTokens, cost.OutputTokens))
+	}
+	return strings.Join(parts, ",")
 }

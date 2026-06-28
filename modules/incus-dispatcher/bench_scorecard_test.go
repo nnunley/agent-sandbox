@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestBuildScorecard_RanksByPassRateThenJudgeThenWallTime(t *testing.T) {
 	suite := &BenchSuite{Name: "fleet-core", Version: "v1", Hash: "abc123"}
@@ -32,5 +35,33 @@ func TestBuildScorecard_RanksByPassRateThenJudgeThenWallTime(t *testing.T) {
 	}
 	if got := card.Candidates[0].TaskResults[0].TaskName; got == "" {
 		t.Fatal("expected per-task results to be retained")
+	}
+}
+
+func TestBenchScorecard_RenderIncludesSuiteAndProviderCost(t *testing.T) {
+	card := BenchScorecard{
+		Suite: BenchSuiteRef{Name: "fleet-core", Version: "v1", Hash: "abc123"},
+		Candidates: []BenchCandidateScore{
+			{
+				Candidate:  BenchCandidate{Name: "beta", Provider: ProviderOpenAI, Model: "gpt-4o-mini"},
+				PassRate:   1.0,
+				WallTimeMs: 2300,
+				TokensByProvider: map[string]BenchTokenCost{
+					"openai": {InputTokens: 10, OutputTokens: 20, SpendUSD: 0.12},
+				},
+			},
+		},
+		Ranking: []BenchRankingEntry{{Rank: 1, Candidate: BenchCandidate{Name: "beta"}}},
+	}
+
+	table := card.RenderTable()
+	if !strings.Contains(table, "fleet-core@v1") || !strings.Contains(table, "abc123") {
+		t.Fatalf("table missing suite info:\n%s", table)
+	}
+	if !strings.Contains(table, "0.12") {
+		t.Fatalf("table missing spend:\n%s", table)
+	}
+	if _, err := card.MarshalJSON(); err != nil {
+		t.Fatalf("MarshalJSON: %v", err)
 	}
 }
