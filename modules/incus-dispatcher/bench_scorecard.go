@@ -95,23 +95,24 @@ func (c BenchScorecard) RenderTable() string {
 	lines = append(lines, fmt.Sprintf("suite %s@%s hash=%s", c.Suite.Name, c.Suite.Version, c.Suite.Hash))
 	lines = append(lines, "rank candidate pass judge wall_ms cost")
 	for _, entry := range c.Ranking {
-		cost := ""
 		for _, candidate := range c.Candidates {
 			if candidate.Candidate.Name != entry.Candidate.Name {
 				continue
 			}
-			cost = renderProviderCosts(candidate.TokensByProvider)
+			lines = append(lines, fmt.Sprintf(
+				"%d %s %.3f %.3f %d %s",
+				entry.Rank,
+				entry.Candidate.Name,
+				entry.PassRate,
+				entry.Judge,
+				entry.WallTimeMs,
+				renderProviderCosts(candidate.TokensByProvider),
+			))
+			for _, task := range candidate.TaskResults {
+				lines = append(lines, fmt.Sprintf("  %s %s", task.TaskName, task.Status))
+			}
 			break
 		}
-		lines = append(lines, fmt.Sprintf(
-			"%d %s %.3f %.3f %d %s",
-			entry.Rank,
-			entry.Candidate.Name,
-			entry.PassRate,
-			entry.Judge,
-			entry.WallTimeMs,
-			cost,
-		))
 	}
 	return strings.Join(lines, "\n")
 }
