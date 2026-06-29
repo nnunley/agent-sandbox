@@ -54,6 +54,12 @@ func main() {
 		os.Exit(runUsageCommand(os.Args[2:]))
 	}
 
+	// `bench` runs a versioned model-evaluator suite through the existing dispatcher
+	// runner + external grading path and emits a ranked scorecard.
+	if len(os.Args) > 1 && os.Args[1] == "bench" {
+		os.Exit(runBenchCommand(os.Args[2:]))
+	}
+
 	// CLI flags
 	name := flag.String("name", "", "Task name (required)")
 	repo := flag.String("repo", "", "Git repository path (local) or URL to deliver (optional)")

@@ -1,0 +1,47 @@
+package main
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestRunBenchCommand_DryRunWritesScorecardJSON(t *testing.T) {
+	root := t.TempDir()
+	writeSuiteFixture(t, root, "fleet-core", "v1", []suiteFixtureTask{
+		{name: "task-1", brief: "fix", oracleRef: "/oracle", repo: "/repo", ref: "main"},
+	})
+	outPath := filepath.Join(root, "scorecard.json")
+	fake := &fakeBenchRunner{
+		results: map[string]*Result{
+			"gpt-4o-mini/task-1": {ExitCode: 0, ExternalGradingResult: &GradingResult{ExitCode: 0, PatchApplied: true}},
+		},
+	}
+	var stdout bytes.Buffer
+
+	code := runBenchCommandWithDeps([]string{
+		"--suite", "fleet-core@v1",
+		"--suite-root", root,
+		"--candidate", "alpha=openai:gpt-4o-mini",
+		"--out", outPath,
+		"--dry-run",
+	}, benchCommandDeps{
+		stdout: &stdout,
+		stderr: &stdout,
+		newRunner: func(runnerKind, remote string) (Runner, error) {
+			return fake, nil
+		},
+	})
+
+	if code != 0 {
+		t.Fatalf("exit=%d want 0", code)
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read out: %v", err)
+	}
+	if !bytes.Contains(data, []byte(`"suite"`)) || !bytes.Contains(data, []byte(`"ranking"`)) {
+		t.Fatalf("bad json: %s", data)
+	}
+}
