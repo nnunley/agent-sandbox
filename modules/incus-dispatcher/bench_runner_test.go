@@ -64,3 +64,45 @@ func TestBenchRunner_RunSuite_UsesRunnerAndCollectsOracleOutcome(t *testing.T) {
 		t.Fatalf("provider env=%q", got)
 	}
 }
+
+func TestBenchRunner_RunSuite_RecordsFailuresAndSkipsWithoutAborting(t *testing.T) {
+	fake := &fakeBenchRunner{
+		errs: map[string]error{"qwen3.6/task-2": context.DeadlineExceeded},
+		results: map[string]*Result{
+			"gpt-4o-mini/task-1": {ExitCode: 0, ExternalGradingResult: &GradingResult{ExitCode: 0, PatchApplied: true}},
+			"qwen3.6/task-1":     {ExitCode: 0, ExternalGradingResult: &GradingResult{ExitCode: 1, PatchApplied: true}},
+		},
+	}
+	bench := BenchRunner{Runner: fake, DryRun: true}
+	suite := &BenchSuite{Name: "fleet-core", Version: "v1", Hash: "abc", Tasks: []BenchTaskSpec{
+		{Name: "task-1", Brief: "a", Repo: "/repo", Ref: "main", OracleRef: "/oracle/a"},
+		{Name: "task-2", Brief: "b", Repo: "/repo", Ref: "main", OracleRef: "/oracle/b"},
+	}}
+	candidates := []BenchCandidate{
+		{Name: "alpha", Provider: ProviderOpenAI, Model: "gpt-4o-mini"},
+		{Name: "beta", Provider: ProviderOllamaLocal, Model: "qwen3.6"},
+	}
+
+	results, err := bench.RunSuite(context.Background(), suite, candidates)
+	if err != nil {
+		t.Fatalf("RunSuite: %v", err)
+	}
+	if len(results) != 4 {
+		t.Fatalf("results=%d want 4", len(results))
+	}
+	if !hasStatus(results, "beta", "task-2", "error") {
+		t.Fatalf("missing error record: %+v", results)
+	}
+	if !hasStatus(results, "beta", "task-1", "failed") {
+		t.Fatalf("missing failed grade record: %+v", results)
+	}
+}
+
+func hasStatus(results []BenchTaskResult, candidateName, taskName, want string) bool {
+	for _, result := range results {
+		if result.Candidate.Name == candidateName && result.TaskName == taskName && result.Status == want {
+			return true
+		}
+	}
+	return false
+}

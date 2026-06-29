@@ -28,7 +28,13 @@ func (b BenchRunner) RunSuite(ctx context.Context, suite *BenchSuite, candidates
 			}
 			result, err := b.Runner.Run(ctx, task)
 			if err != nil {
-				return nil, err
+				results = append(results, BenchTaskResult{
+					Candidate: candidate,
+					TaskName:  taskSpec.Name,
+					Status:    "error",
+					Reason:    err.Error(),
+				})
+				continue
 			}
 			results = append(results, benchTaskResultFromRun(candidate, taskSpec, result))
 		}
@@ -40,13 +46,16 @@ func benchTaskResultFromRun(candidate BenchCandidate, taskSpec BenchTaskSpec, re
 	taskResult := BenchTaskResult{
 		Candidate: candidate,
 		TaskName:  taskSpec.Name,
-		Status:    "ok",
+		Status:    "passed",
 	}
 	if result == nil {
 		taskResult.Status = "error"
 		return taskResult
 	}
 	taskResult.Passed = passed(result, nil)
+	if !taskResult.Passed {
+		taskResult.Status = "failed"
+	}
 	taskResult.WallTimeMs = result.Duration.Milliseconds()
 	if result.TokensIn > 0 || result.TokensOut > 0 || result.SpendUSD > 0 {
 		taskResult.TokensByProvider = map[string]BenchTokenCost{
