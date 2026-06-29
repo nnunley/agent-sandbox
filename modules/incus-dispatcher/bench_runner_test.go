@@ -11,6 +11,7 @@ type fakeBenchRunner struct {
 	results  map[string]*Result
 	errs     map[string]error
 	calls    int
+	cleanups int
 	lastTask Task
 }
 
@@ -27,7 +28,10 @@ func (f *fakeBenchRunner) Run(_ context.Context, task Task) (*Result, error) {
 	return &Result{}, nil
 }
 
-func (f *fakeBenchRunner) Cleanup() error { return nil }
+func (f *fakeBenchRunner) Cleanup() error {
+	f.cleanups++
+	return nil
+}
 
 func TestBenchRunner_RunSuite_UsesRunnerAndCollectsOracleOutcome(t *testing.T) {
 	fake := &fakeBenchRunner{
@@ -95,6 +99,28 @@ func TestBenchRunner_RunSuite_RecordsFailuresAndSkipsWithoutAborting(t *testing.
 	}
 	if !hasStatus(results, "beta", "task-1", "failed") {
 		t.Fatalf("missing failed grade record: %+v", results)
+	}
+}
+
+func TestBenchRunner_RunSuite_CleansUpAfterEachTask(t *testing.T) {
+	fake := &fakeBenchRunner{
+		results: map[string]*Result{
+			"gpt-4o-mini/task-1": {ExitCode: 0, ExternalGradingResult: &GradingResult{ExitCode: 0, PatchApplied: true}},
+			"gpt-4o-mini/task-2": {ExitCode: 0, ExternalGradingResult: &GradingResult{ExitCode: 0, PatchApplied: true}},
+		},
+	}
+	bench := BenchRunner{Runner: fake}
+	suite := &BenchSuite{Name: "fleet-core", Version: "v1", Hash: "abc", Tasks: []BenchTaskSpec{
+		{Name: "task-1", Brief: "a", Repo: "/repo", Ref: "main", OracleRef: "/oracle/a"},
+		{Name: "task-2", Brief: "b", Repo: "/repo", Ref: "main", OracleRef: "/oracle/b"},
+	}}
+	candidates := []BenchCandidate{{Name: "alpha", Provider: ProviderOpenAI, Model: "gpt-4o-mini"}}
+
+	if _, err := bench.RunSuite(context.Background(), suite, candidates); err != nil {
+		t.Fatalf("RunSuite: %v", err)
+	}
+	if fake.cleanups != 2 {
+		t.Fatalf("cleanups=%d want 2", fake.cleanups)
 	}
 }
 

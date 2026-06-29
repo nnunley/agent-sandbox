@@ -28,6 +28,7 @@ func (b BenchRunner) RunSuite(ctx context.Context, suite *BenchSuite, candidates
 			}
 			result, err := b.Runner.Run(ctx, task)
 			if err != nil {
+				_ = b.Runner.Cleanup()
 				results = append(results, BenchTaskResult{
 					Candidate: candidate,
 					TaskName:  taskSpec.Name,
@@ -36,6 +37,7 @@ func (b BenchRunner) RunSuite(ctx context.Context, suite *BenchSuite, candidates
 				})
 				continue
 			}
+			_ = b.Runner.Cleanup()
 			results = append(results, benchTaskResultFromRun(candidate, taskSpec, result))
 		}
 	}
