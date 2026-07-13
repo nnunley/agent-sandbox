@@ -65,6 +65,6 @@ PeerIds are public keys; Kademlia lookups expose that *someone* queries a PeerId
 
 ## Open questions
 
-1. Rendezvous placement: agent-host port-forward vs. tiny VPS (see Goals #2). Private DHT of ~2 nodes is degenerate-but-fine for v1 — revisit if the project goes public.
+1. Rendezvous placement: agent-host port-forward vs. tiny VPS (see Goals #2). Plan: test UPnP auto-mapping on agent-host first; serverless signaling mailbox documented as the no-relay contingency. **Test peer provisioned 2026-07-13:** Hetzner cpx11 `dht-push-testpeer`, 5.161.224.11 (Ashburn, Debian 12) — external node for punch/relay testing against agent-host; delete when M2 traversal tests conclude. Private DHT of ~2 nodes is degenerate-but-fine for v1 — revisit if the project goes public.
 2. uniffi vs JNI-by-hand for the Kotlin bridge (decide at M3; uniffi presumed).
 3. Whether the publisher daemon and the fleet coordinator share a process or stay separate units (presumed separate; coordinator stays zero-LLM and this stays zero-coordinator).
