@@ -128,7 +128,6 @@ go build -o dispatcher .
 ./dispatcher \
   --name my-test \
   --cmd "echo 'Hello from worker'" \
-  --root \
   --timeout 30s
 
 # Output (JSON):
@@ -151,8 +150,7 @@ go build -o dispatcher .
   --repo https://github.com/example/repo \
   --ref main \
   --cmd "go test ./..." \
-  --timeout 5m \
-  --root
+  --timeout 5m
 
 # Alternatively, local path:
 ./dispatcher \
@@ -269,7 +267,7 @@ nix build .#devShells.x86_64-linux.default --out-link /tmp/devshell-new
 ./dispatcher --name test --cmd "go version" --runner cli
 ```
 
-### Go Client Runner (`--runner client`, default)
+### Go Client Runner (`--runner client`)
 - Uses `github.com/lxc/incus/v6/client`
 - More efficient, programmatic
 - Requires client certs configured at `~/.config/incus/client.{crt,key}`
@@ -309,7 +307,7 @@ go vet ./...
 - [ ] Daemon socket ready: `incus exec ndn-desktop:nix-server -- test -S /nix/var/nix/daemon-socket/socket`
 - [ ] DevShell closure in store: `incus exec ndn-desktop:nix-server -- nix store ls /nix/store | grep git`
 - [ ] Dispatcher builds: `cd modules/incus-dispatcher && go build -o dispatcher .`
-- [ ] Simple test passes: `./dispatcher --name smoke-test --cmd "echo OK" --root`
+- [ ] Simple test passes: `./dispatcher --name smoke-test --cmd "echo OK"`
 
 ## Future Enhancements
 

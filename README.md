@@ -19,8 +19,7 @@ go build -o dispatcher .
   --repo https://github.com/example/repo \
   --ref main \
   --cmd "go test ./..." \
-  --root \
-  --runner client
+  --runner cli
 ```
 
 **Output** (JSON to stdout):
@@ -102,7 +101,7 @@ runner, _ := NewCLIContainerRunner("ndn-desktop")
 result, _ := runner.Run(ctx, task)
 ```
 
-#### Go Client Runner (`--runner client`, default)
+#### Go Client Runner (`--runner client`)
 
 Uses `github.com/lxc/incus/v6/client`:
 - Pro: Programmatic, efficient, supports streaming
@@ -123,10 +122,10 @@ result, _ := runner.Run(ctx, task)
 | `--ref` | string | `HEAD` | Git ref to check out |
 | `--branch` | string | - | Target branch to create (optional) |
 | `--image` | string | `images:nixos/25.11` | Incus image alias (NixOS-only) |
-| `--root` | bool | `false` | Launch with `security.privileged=true` (allows root ops, deps install) |
+| `--root` | bool | `false` | Launch with `security.privileged=true` (root-only tasks; shared nix cache is disabled for privileged workers due Incus idmap constraints) |
 | `--binary-cache-path` | string | `/srv/nix-shared` | Path to shared nix binary cache on volume |
 | `--remote` | string | `ndn-desktop` | Incus remote name |
-| `--runner` | string | `client` | Runner backend: `client` or `cli` |
+| `--runner` | string | `cli` | Runner backend: `cli` or `client` |
 | `--timeout` | duration | `1h` | Max task duration (e.g., `30m`, `1h30m`) |
 | `--keep-on-failure` | bool | `false` | Keep container alive if command fails (for debugging) |
 | `--external-grading` | string | - | Path to clean checkout for oracle verification |
@@ -255,7 +254,7 @@ go vet ./...
 2. **Declarative toolchain**: All tools come from `flake.nix` devShell, never imperative (`apt`, `nix profile`)
 3. **Shared binary-cache**: One `/srv/nix-shared` volume (read-only) provides prebuilt packages to all workers
 4. **Cache population**: `nix-server` publishes closures to cache via `nix copy --to file:///srv/nix-shared`
-5. **Root/privileged workers**: NixOS containers run as root by default; `--root` enables `security.privileged` flag
+5. **Root/privileged workers**: `--root` enables `security.privileged`; privileged workers do not attach `nix-shared`
 6. **Ephemeral cleanup**: Containers are ephemeral; deleted on exit unless `--keep-on-failure` and task fails
 7. **Exit code passthrough**: Dispatcher exits with the task's command exit code (or -1 on framework error)
 

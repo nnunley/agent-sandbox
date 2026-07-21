@@ -26,10 +26,12 @@
 with lib;
 
 let
+  endpoints = import ../host/endpoints.nix;
   temporalPackage = pkgs.temporal-cli;
   temporalDataDir = "/srv/temporal";
   temporalDbPath = "${temporalDataDir}/temporal.db";
-  temporalPort = "7233";
+  temporalGrpc = endpoints.temporal.grpc;
+  temporalHttp = endpoints.temporal.http;
 in
 
 {
@@ -49,15 +51,14 @@ in
 
     serviceConfig = {
       Type = "simple";
-      # --headless: no Web UI (we only need the gRPC frontend).
       # --ip 0.0.0.0: bind frontend on the cluster bridge (trust boundary, same as laneq).
       # --db-filename: file-backed SQLite on the host volume → durable across restart.
       ExecStart = ''
         ${temporalPackage}/bin/temporal server start-dev \
           --db-filename ${temporalDbPath} \
           --ip 0.0.0.0 \
-          --port ${temporalPort} \
-          --headless \
+          --port ${toString temporalGrpc.port} \
+          --ui-port ${toString temporalHttp.port} \
           --log-level error
       '';
       Restart = "on-failure";

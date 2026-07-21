@@ -6,7 +6,7 @@ buildGoModule {
 
   src = ./.;
 
-  vendorHash = null; # no external deps — stdlib only
+  vendorHash = null; # use the committed vendor tree, including local module replacements
 
   # Run the test suite at build time. Catches regressions before deploy.
   doCheck = true;

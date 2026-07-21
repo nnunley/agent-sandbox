@@ -9,11 +9,12 @@
 with lib;
 
 let
+  endpoints = import ../host/endpoints.nix;
   # Build laneq-grpc from this flake's laneq.nix definition
   laneqPackage = pkgs.callPackage ./laneq.nix {};
   laneqDataDir = "/srv/laneq";
   laneqDbPath = "${laneqDataDir}/laneq.db";
-  laneqPort = "9999";
+  laneqGrpc = endpoints.laneq.grpc;
 
   # ITER-0007c: PASETO grant auth (sender-constrained; off|log-only|enforce).
   # ITER-0007c AC-1b: ENFORCE (rolled forward 2026-06-25 after verifying, against the live
@@ -23,7 +24,7 @@ let
   # The Temporal worker harness attaches grants when LANEQ_GRANT_FILE/LANEQ_CLIENT_KEY/LANEQ_AUD
   # are set (temporal/temporal_live_test.go); the serve_cmd daemon via its --laneq-*-file flags.
   laneqAuthMode = "enforce";
-  laneqAudience = "laneq://agent-host:${laneqPort}";
+  laneqAudience = "laneq://${laneqGrpc.host}:${toString laneqGrpc.port}";
   laneqIssuerPubPath = "${laneqDataDir}/issuer.pub";
   # Issuer PUBLIC key (the Mac trust root holds the private half). Public — safe in-repo.
   laneqIssuerPubPem = ''
@@ -52,7 +53,7 @@ in
 
     serviceConfig = {
       Type = "simple";
-      ExecStart = "${laneqPackage}/bin/laneq-grpc --addr 0.0.0.0:${laneqPort}";
+      ExecStart = "${laneqPackage}/bin/laneq-grpc --addr 0.0.0.0:${toString laneqGrpc.port}";
       # ITER-0007c: LANEQ_DB + PASETO grant-auth config (log-only rollout).
       Environment = [
         "LANEQ_DB=${laneqDbPath}"

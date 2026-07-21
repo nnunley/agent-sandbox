@@ -462,8 +462,10 @@ func (t *Task) validate() error {
 	if len(t.Cmd) == 0 && t.Repo == "" {
 		return fmt.Errorf("task must have either Cmd or Repo")
 	}
-	// Default SharedNixStore to true for NixOS images.
-	if strings.Contains(t.ImageName, "nixos") || t.ImageName == DefaultImageName {
+	// Default SharedNixStore to true for unprivileged NixOS images.
+	// Privileged Incus containers (`--root`) cannot attach the current shared
+	// custom volume because its idmap is already pinned by unprivileged guests.
+	if (strings.Contains(t.ImageName, "nixos") || t.ImageName == DefaultImageName) && !t.RunAsRoot {
 		t.SharedNixStore = true
 	}
 	return nil

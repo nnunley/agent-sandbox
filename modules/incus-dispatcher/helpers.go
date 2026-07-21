@@ -44,6 +44,19 @@ func workerToolPath(existing string) string {
 	return strings.Join(out, ":")
 }
 
+// shellQuoteArgs joins argv into a shell-safe command string for /bin/sh -c.
+func shellQuoteArgs(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	quoted := make([]string, 0, len(args))
+	for _, arg := range args {
+		quoted = append(quoted, "'"+strings.ReplaceAll(arg, "'", `'"'"'`)+"'")
+	}
+	return strings.Join(quoted, " ")
+}
+
 // newCmdContext creates a new exec.Cmd with the given context.
 func newCmdContext(ctx context.Context, name string, arg ...string) *exec.Cmd {
 	return exec.CommandContext(ctx, name, arg...)

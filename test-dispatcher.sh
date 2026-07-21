@@ -22,10 +22,10 @@ echo ""
 
 # Test 1: Simple echo command (no repo)
 echo "TEST 1: Simple echo in NixOS container"
-echo "Command: $DISPATCHER --name test-echo --cmd 'echo hello' --root"
+echo "Command: $DISPATCHER --name test-echo --cmd 'echo hello' --runner cli"
 echo ""
 
-OUTPUT=$($DISPATCHER --name test-echo --cmd 'echo hello' --root --remote "$REMOTE" 2>&1 || true)
+OUTPUT=$($DISPATCHER --name test-echo --cmd 'echo hello' --remote "$REMOTE" --runner cli 2>&1 || true)
 EXIT_CODE=${PIPESTATUS[0]:-0}
 
 echo "Output:"

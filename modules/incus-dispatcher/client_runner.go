@@ -261,15 +261,13 @@ func (cr *ClientContainerRunner) waitReady(ctx context.Context) error {
 		case <-ticker.C:
 			// Try a simple exec to see if container responds.
 			req := api.InstanceExecPost{
-				Command:     []string{"true"},
+				Command:     []string{"/bin/sh", "-c", "true"},
 				WaitForWS:   true,
 				Interactive: false,
 			}
 
 			op, err := cr.client.ExecInstance(cr.containerName, req, nil)
-			if err == nil && op != nil {
-				// Wait for the operation to complete.
-				_ = op.Wait()
+			if err == nil && op != nil && op.Wait() == nil {
 				return nil
 			}
 
@@ -287,12 +285,14 @@ func (cr *ClientContainerRunner) configureNixCache(ctx context.Context, task Tas
 	if cachePath == "" {
 		cachePath = "/srv/nix-shared"
 	}
+	baseEnv := map[string]string{"PATH": workerToolPath("")}
 
 	// Start nix-daemon in the worker
 	daemonReq := api.InstanceExecPost{
-		Command:     []string{"systemctl", "start", "nix-daemon.socket", "nix-daemon.service"},
+		Command:     []string{"/bin/sh", "-c", "command -v systemctl >/dev/null 2>&1 && systemctl start nix-daemon.socket nix-daemon.service || true"},
 		WaitForWS:   true,
 		Interactive: false,
+		Environment: baseEnv,
 	}
 	op, err := cr.client.ExecInstance(cr.containerName, daemonReq, nil)
 	if err != nil {
@@ -310,9 +310,10 @@ EOFCONF
 `, cachePath)
 
 	confReq := api.InstanceExecPost{
-		Command:     []string{"sh", "-c", confCmd},
+		Command:     []string{"/bin/sh", "-c", confCmd},
 		WaitForWS:   true,
 		Interactive: false,
+		Environment: baseEnv,
 	}
 	op, err = cr.client.ExecInstance(cr.containerName, confReq, nil)
 	if err != nil {
@@ -375,9 +376,10 @@ func (cr *ClientContainerRunner) deliverViaBundle(ctx context.Context, localPath
 		filepath.Join(containerPath, "src"))
 
 	req := api.InstanceExecPost{
-		Command:     []string{"sh", "-c", cloneCmd},
+		Command:     []string{"/bin/sh", "-c", cloneCmd},
 		WaitForWS:   true,
 		Interactive: false,
+		Environment: map[string]string{"PATH": workerToolPath("")},
 	}
 
 	op, err := cr.client.ExecInstance(cr.containerName, req, nil)
@@ -400,9 +402,10 @@ func (cr *ClientContainerRunner) deliverViaClone(ctx context.Context, repoURL, r
 		containerPath, ref, repoURL, filepath.Join(containerPath, "src"))
 
 	req := api.InstanceExecPost{
-		Command:     []string{"sh", "-c", cloneCmd},
+		Command:     []string{"/bin/sh", "-c", cloneCmd},
 		WaitForWS:   true,
 		Interactive: false,
+		Environment: map[string]string{"PATH": workerToolPath("")},
 	}
 
 	op, err := cr.client.ExecInstance(cr.containerName, req, nil)
@@ -421,9 +424,10 @@ func (cr *ClientContainerRunner) deliverViaClone(ctx context.Context, repoURL, r
 			filepath.Join(containerPath, "src"), targetBranch)
 
 		req := api.InstanceExecPost{
-			Command:     []string{"bash", "-c", branchCmd},
+			Command:     []string{"/bin/sh", "-c", branchCmd},
 			WaitForWS:   true,
 			Interactive: false,
+			Environment: map[string]string{"PATH": workerToolPath("")},
 		}
 
 		op, err := cr.client.ExecInstance(cr.containerName, req, nil)
@@ -468,7 +472,7 @@ func (cr *ClientContainerRunner) execCommand(ctx context.Context, env map[string
 
 	// Build exec request.
 	req := api.InstanceExecPost{
-		Command:     cmd,
+		Command:     []string{"/bin/sh", "-lc", shellQuoteArgs(cmd)},
 		WaitForWS:   true,
 		Interactive: false,
 		Environment: environment,
@@ -523,10 +527,11 @@ func (cr *ClientContainerRunner) harvestPatch(ctx context.Context) ([]byte, erro
 	patchCmd := "cd /repo/src 2>/dev/null && git format-patch -o /tmp origin/HEAD~1..HEAD 2>/dev/null || true"
 
 	req := api.InstanceExecPost{
-		Command:      []string{"bash", "-c", patchCmd},
+		Command:      []string{"/bin/sh", "-c", patchCmd},
 		WaitForWS:    true,
 		Interactive:  false,
 		RecordOutput: true,
+		Environment:  map[string]string{"PATH": workerToolPath("")},
 	}
 
 	op, err := cr.client.ExecInstance(cr.containerName, req, nil)
@@ -563,9 +568,10 @@ func (cr *ClientContainerRunner) harvestOutputArtifacts(ctx context.Context) (ma
 	filesCmd := "find /output -type f 2>/dev/null"
 
 	req := api.InstanceExecPost{
-		Command:     []string{"bash", "-c", filesCmd},
+		Command:     []string{"/bin/sh", "-c", filesCmd},
 		WaitForWS:   true,
 		Interactive: false,
+		Environment: map[string]string{"PATH": workerToolPath("")},
 	}
 
 	var listOut bytes.Buffer
