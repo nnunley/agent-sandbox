@@ -3,8 +3,9 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; source "$HERE/lib.sh"
 
-DF_NAME="" DF_BRIEF="" DF_REPO="" DF_REF="HEAD" DF_ORACLE="" DF_MODEL="claude-sonnet-4-6"
+DF_NAME="" DF_BRIEF="" DF_REPO="" DF_REF="HEAD" DF_ORACLE="" DF_MODEL=""
 DF_GOLDEN="" DF_OUTDIR="" DF_TIMEOUT="2400"
+DF_PROVIDER="anthropic" DF_PROXY_ADDR="${LLM_PROXY_ADDR:-10.88.0.1:12071}"
 usage() {
   cat <<'EOF'
 fleet-dogfood --name ID --brief FILE --repo PATH --oracle PATH [options]
@@ -25,6 +26,7 @@ while [ $# -gt 0 ]; do case "$1" in
   --oracle) DF_ORACLE="$2"; shift 2;; --model) DF_MODEL="$2"; shift 2;;
   --golden) DF_GOLDEN="$2"; shift 2;; --output-dir) DF_OUTDIR="$2"; shift 2;;
   --timeout) DF_TIMEOUT="$2"; shift 2;;
+  --provider) DF_PROVIDER="$2"; shift 2;; --proxy-addr) DF_PROXY_ADDR="$2"; shift 2;;
   --help|-h) usage; exit 0;; *) die "unknown arg: $1";;
 esac; done
 [ -n "$DF_NAME" ]   || die "--name is required"
@@ -36,8 +38,11 @@ mkdir -p "$DF_OUTDIR"
 ROOT_DIR="$(cd "$HERE/../../.." && pwd)"
 WORKER="df-$DF_NAME"
 MODE="$(cat "$HERE/.mode" 2>/dev/null || echo fresh)"
-[ -n "${FLEET_TOKEN:-}" ] || die "FLEET_TOKEN env not set (worker needs CLAUDE_CODE_OAUTH_TOKEN)"
-log "dispatch $WORKER (mode=$MODE) repo=$DF_REPO ref=$DF_REF -> $DF_OUTDIR"
+# FLEET_TOKEN (Max OAuth) is only needed for the anthropic implementer; ollama-local uses no token.
+if [ "$DF_PROVIDER" = "anthropic" ]; then
+  [ -n "${FLEET_TOKEN:-}" ] || die "FLEET_TOKEN env not set (anthropic worker needs CLAUDE_CODE_OAUTH_TOKEN)"
+fi
+log "dispatch $WORKER (mode=$MODE, provider=$DF_PROVIDER) repo=$DF_REPO ref=$DF_REF -> $DF_OUTDIR"
 
 $INCUS delete "$WORKER" --force >/dev/null 2>&1 || true
 register_teardown "$WORKER"
@@ -88,13 +93,16 @@ log "deliver repo@$DF_REF + brief + token"
 $INCUS file push "/tmp/df-$DF_NAME.bundle" "$WORKER/root/repo.bundle"
 $INCUS file push -r "$ROOT_DIR/fleet-worker" "$WORKER/root/" >/dev/null
 $INCUS file push "$DF_BRIEF" "$WORKER/root/brief.txt"
-printf '%s' "$FLEET_TOKEN" | $INCUS exec "$WORKER" -- tee /root/.fleet-token >/dev/null
+# Token only for the anthropic path; ollama-local needs none.
+[ -n "${FLEET_TOKEN:-}" ] && printf '%s' "$FLEET_TOKEN" | $INCUS exec "$WORKER" -- tee /root/.fleet-token >/dev/null
 $INCUS exec "$WORKER" -- bash -lc 'rm -rf /root/let-go && git clone -q /root/repo.bundle /root/let-go' >/dev/null
 
 # --- run the worker as root (runner.sh inside the flake env; IS_SANDBOX=1 lets claude run
-# as root; toolchain from the local cache) ---
-log "run worker (nix develop … runner.sh as root, timeout=${DF_TIMEOUT}s)"
-$INCUS exec "$WORKER" --env HOME=/root --env IS_SANDBOX=1 -- bash -lc \
+# as root; toolchain from the local cache). FLEET_PROVIDER/FLEET_MODEL route the implementer;
+# LLM_PROXY_ADDR reaches the bridge proxy (ollama-local → ccr → /ollama route). ---
+log "run worker (nix develop … runner.sh as root, provider=$DF_PROVIDER, timeout=${DF_TIMEOUT}s)"
+$INCUS exec "$WORKER" --env HOME=/root --env IS_SANDBOX=1 \
+  --env "FLEET_PROVIDER=$DF_PROVIDER" --env "FLEET_MODEL=$DF_MODEL" --env "LLM_PROXY_ADDR=$DF_PROXY_ADDR" -- bash -lc \
   "nix develop /root/fleet-worker --accept-flake-config --no-sandbox --command bash /root/fleet-worker/runner.sh $DF_TIMEOUT" || true
 
 # --- harvest ---

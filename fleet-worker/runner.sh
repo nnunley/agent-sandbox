@@ -61,45 +61,91 @@ MAX_TURNS=200
 REPO="$HOME/let-go"
 cd "$REPO" || { echo "no repo at $REPO" >&2; exit 1; }
 
-export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$HOME/.fleet-token")"
+# Implementer selection (STORY-0077: quota-free ollama-local floor). FLEET_PROVIDER routes the
+# IMPLEMENTER; unset/anthropic keeps the existing Max-OAuth path byte-for-byte. FLEET_MODEL overrides
+# the model (default per provider). The grader/oracle stays deterministic (no model) either way.
+PROVIDER="${FLEET_PROVIDER:-anthropic}"
+case "$PROVIDER" in
+  ollama-local) MODEL_ARG="${FLEET_MODEL:-ornith:35b}" ;;
+  *)            MODEL_ARG="${FLEET_MODEL:-claude-sonnet-4-6}" ;;
+esac
 
 # Prepare the working tree per the selected mode (STORY-0070 AC-1).
 prepare_worktree "$MODE" "$REPO"
 
 : > "$HOME/events.jsonl"
-echo "=== worker start mode=${MODE} wall=${WALL_CLOCK}s sonnet $(date -u +%FT%TZ) ===" > "$HOME/worker.log"
+echo "=== worker start mode=${MODE} wall=${WALL_CLOCK}s provider=${PROVIDER} model=${MODEL_ARG} $(date -u +%FT%TZ) ===" > "$HOME/worker.log"
 echo "claude: $(command -v claude || echo MISSING)  go: $(go version 2>/dev/null)" >> "$HOME/worker.log"
 
-# STORY-0069: lean-ctx FULL enablement — ctx_* MCP tools (cached reads + shell compression) AND
-# the compression proxy (measured savings). FAIL-OPEN: any lean-ctx hiccup must not break the run;
-# we only route claude through the proxy once it is confirmed up, else fall back to the direct API.
-# (Chain proven 2026-06-20: claude OAuth Bearer → lean-ctx proxy :4444 → api.anthropic.com; the
-# keyless worker→lean-ctx→fleet-llm-proxy leg is the ITER-0005 micro-VM path.)
+# STORY-0069: lean-ctx ctx_* MCP tools (cached reads + shell compression) — provider-agnostic,
+# best-effort, FAIL-OPEN. The anthropic compression proxy (:4444) is wired inside the anthropic
+# branch below (it carries the OAuth Bearer to api.anthropic.com); ollama-local routes via ccr.
 if command -v lean-ctx >/dev/null 2>&1; then
   lean-ctx init --agent claude >> "$HOME/worker.log" 2>&1 || true
   lean-ctx setup               >> "$HOME/worker.log" 2>&1 || true
   lean-ctx serve --daemon      >> "$HOME/worker.log" 2>&1 || true   # AC-2: bridge daemon + ctx_* tools
-  lean-ctx proxy enable        >> "$HOME/worker.log" 2>&1 || true
-  setsid nohup lean-ctx proxy start --port 4444 > "$HOME/lean-ctx-proxy.out" 2>&1 < /dev/null &
-  # Gate on the port actually accepting connections (curl proven reliable in the spike: 401 = up,
-  # token-auth). `proxy status` text was too slow/unreliable mid-startup. Fail-open if curl absent (000).
-  for _i in $(seq 1 15); do
-    code=$(curl -sS -o /dev/null -m 2 -w '%{http_code}' http://127.0.0.1:4444/ 2>/dev/null || echo 000)
-    case "$code" in
-      200|401|404|405)
-        export ANTHROPIC_BASE_URL="http://127.0.0.1:4444"   # route claude through the proxy (keep OAuth Bearer)
-        echo "lean-ctx proxy ON (http $code) → ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL" >> "$HOME/worker.log"
-        break;;
-    esac
-    sleep 1
-  done
-  [ -n "${ANTHROPIC_BASE_URL:-}" ] || echo "lean-ctx proxy not up; claude runs direct (fail-open)" >> "$HOME/worker.log"
 else
-  echo "lean-ctx not found; running without compression" >> "$HOME/worker.log"
+  echo "lean-ctx not found; running without ctx tooling" >> "$HOME/worker.log"
 fi
 
+case "$PROVIDER" in
+  ollama-local)
+    # No Max token. claude (Anthropic API) → ccr (Anthropic↔OpenAI translator) → llm-proxy /ollama
+    # route → local Ollama. ccr's config points its upstream at the proxy's OpenAI-compatible endpoint.
+    : "${LLM_PROXY_ADDR:?ollama-local requires LLM_PROXY_ADDR (e.g. 10.88.0.1:12071)}"
+    mkdir -p "$HOME/.claude-code-router"
+    cat > "$HOME/.claude-code-router/config.json" <<EOF
+{
+  "LOG": false,
+  "Providers": [
+    {
+      "name": "ollama",
+      "api_base_url": "http://${LLM_PROXY_ADDR}/ollama/v1/chat/completions",
+      "api_key": "sk-fleet-dummy",
+      "models": ["${MODEL_ARG}"]
+    }
+  ],
+  "Router": { "default": "ollama,${MODEL_ARG}" }
+}
+EOF
+    export ANTHROPIC_API_KEY="sk-fleet-dummy"   # claude demands some auth header; ccr owns the real upstream
+    setsid nohup ccr start > "$HOME/ccr.out" 2>&1 < /dev/null &
+    for _i in $(seq 1 20); do
+      code=$(curl -sS -o /dev/null -m 2 -w '%{http_code}' http://127.0.0.1:3456/ 2>/dev/null || echo 000)
+      case "$code" in
+        200|401|404|405)
+          export ANTHROPIC_BASE_URL="http://127.0.0.1:3456"
+          echo "ccr ON (http $code) → ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL upstream=http://${LLM_PROXY_ADDR}/ollama model=${MODEL_ARG}" >> "$HOME/worker.log"
+          break;;
+      esac
+      sleep 1
+    done
+    [ -n "${ANTHROPIC_BASE_URL:-}" ] || echo "ccr not up; ollama-local run WILL FAIL (no route)" >> "$HOME/worker.log"
+    ;;
+  *)
+    # anthropic (default, unchanged): claude on the Max OAuth Bearer via the lean-ctx compression
+    # proxy :4444 → api.anthropic.com (chain proven 2026-06-20). Fail-open to the direct API.
+    export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$HOME/.fleet-token")"
+    if command -v lean-ctx >/dev/null 2>&1; then
+      lean-ctx proxy enable        >> "$HOME/worker.log" 2>&1 || true
+      setsid nohup lean-ctx proxy start --port 4444 > "$HOME/lean-ctx-proxy.out" 2>&1 < /dev/null &
+      for _i in $(seq 1 15); do
+        code=$(curl -sS -o /dev/null -m 2 -w '%{http_code}' http://127.0.0.1:4444/ 2>/dev/null || echo 000)
+        case "$code" in
+          200|401|404|405)
+            export ANTHROPIC_BASE_URL="http://127.0.0.1:4444"   # route claude through the proxy (keep OAuth Bearer)
+            echo "lean-ctx proxy ON (http $code) → ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL" >> "$HOME/worker.log"
+            break;;
+        esac
+        sleep 1
+      done
+      [ -n "${ANTHROPIC_BASE_URL:-}" ] || echo "lean-ctx proxy not up; claude runs direct (fail-open)" >> "$HOME/worker.log"
+    fi
+    ;;
+esac
+
 timeout --signal=INT "$WALL_CLOCK" \
-  claude --model claude-sonnet-4-6 \
+  claude --model "$MODEL_ARG" \
          --dangerously-skip-permissions --max-turns "$MAX_TURNS" \
          --output-format stream-json --verbose -p "$(cat "$HOME/brief.txt")" \
   > "$HOME/events.jsonl" 2>> "$HOME/worker.log"
