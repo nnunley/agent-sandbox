@@ -17,6 +17,9 @@
     # Project Nix packages (built on a Nix host — the macOS dev box has no Nix; see the
     # `nix-packaging` skill). cxdb = the StrongDM cxdb context store, S3-sync feature-gated off.
     packages.${system}.cxdb = pkgs.callPackage ./pkgs/cxdb { };
+    # serf = prime-radiant's headless multi-provider coding agent (native Ollama). The fleet's
+    # ollama-local implementer, replacing the claude-code + claude-code-router chain.
+    packages.${system}.serf = pkgs.callPackage ./pkgs/serf { };
 
     nixosConfigurations.agent-host = nixpkgs.lib.nixosSystem {
       inherit system;
