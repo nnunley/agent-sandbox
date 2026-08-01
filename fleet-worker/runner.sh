@@ -88,8 +88,10 @@ case "$PROVIDER" in
     # lean-ctx init (its AGENTS.md/LEAN-CTX.md would pollute the harvested diff). serf writes edits
     # to the working tree with --sandbox off (the disposable container IS the sandbox).
     : "${FLEET_OLLAMA_HOST:?ollama-local requires FLEET_OLLAMA_HOST (e.g. 192.168.86.49:11434)}"
-    export OLLAMA_HOST="$FLEET_OLLAMA_HOST"
-    echo "serf: $(command -v serf || echo MISSING)  OLLAMA_HOST=$OLLAMA_HOST  model=ollama/${MODEL_ARG}" >> "$HOME/worker.log"
+    # Use the explicit full-URL form (OLLAMA_BASE_URL, "…/v1"): serf's bare host:port handling
+    # emits a scheme-less URL that fails to parse ("first path segment cannot contain colon").
+    export OLLAMA_BASE_URL="http://${FLEET_OLLAMA_HOST}/v1"
+    echo "serf: $(command -v serf || echo MISSING)  OLLAMA_BASE_URL=$OLLAMA_BASE_URL  model=ollama/${MODEL_ARG}" >> "$HOME/worker.log"
     timeout --signal=INT "$WALL_CLOCK" \
       serf --model "ollama/${MODEL_ARG}" \
            --dir "$REPO" --sandbox off --max-rounds "$MAX_TURNS" --verbose \
