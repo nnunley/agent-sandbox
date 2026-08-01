@@ -77,56 +77,33 @@ prepare_worktree "$MODE" "$REPO"
 echo "=== worker start mode=${MODE} wall=${WALL_CLOCK}s provider=${PROVIDER} model=${MODEL_ARG} $(date -u +%FT%TZ) ===" > "$HOME/worker.log"
 echo "claude: $(command -v claude || echo MISSING)  go: $(go version 2>/dev/null)" >> "$HOME/worker.log"
 
-# STORY-0069: lean-ctx ctx_* MCP tools (cached reads + shell compression) — provider-agnostic,
-# best-effort, FAIL-OPEN. The anthropic compression proxy (:4444) is wired inside the anthropic
-# branch below (it carries the OAuth Bearer to api.anthropic.com); ollama-local routes via ccr.
-if command -v lean-ctx >/dev/null 2>&1; then
-  lean-ctx init --agent claude >> "$HOME/worker.log" 2>&1 || true
-  lean-ctx setup               >> "$HOME/worker.log" 2>&1 || true
-  lean-ctx serve --daemon      >> "$HOME/worker.log" 2>&1 || true   # AC-2: bridge daemon + ctx_* tools
-else
-  echo "lean-ctx not found; running without ctx tooling" >> "$HOME/worker.log"
-fi
-
+# Implementer routing (STORY-0077): ollama-local runs `serf` (native Ollama, no token, no ccr);
+# anthropic runs claude on the Max OAuth Bearer via the lean-ctx compression proxy. Each branch
+# sets up AND runs its own agent as its LAST command, so `rc=$?` after the case captures it.
+# File edits land in the working tree either way; the diff is harvested below.
 case "$PROVIDER" in
   ollama-local)
-    # No Max token. claude (Anthropic API) → ccr (Anthropic↔OpenAI translator) → llm-proxy /ollama
-    # route → local Ollama. ccr's config points its upstream at the proxy's OpenAI-compatible endpoint.
-    : "${LLM_PROXY_ADDR:?ollama-local requires LLM_PROXY_ADDR (e.g. 10.88.0.1:12071)}"
-    mkdir -p "$HOME/.claude-code-router"
-    cat > "$HOME/.claude-code-router/config.json" <<EOF
-{
-  "LOG": false,
-  "Providers": [
-    {
-      "name": "ollama",
-      "api_base_url": "http://${LLM_PROXY_ADDR}/ollama/v1/chat/completions",
-      "api_key": "sk-fleet-dummy",
-      "models": ["${MODEL_ARG}"]
-    }
-  ],
-  "Router": { "default": "ollama,${MODEL_ARG}" }
-}
-EOF
-    export ANTHROPIC_API_KEY="sk-fleet-dummy"   # claude demands some auth header; ccr owns the real upstream
-    setsid nohup ccr start > "$HOME/ccr.out" 2>&1 < /dev/null &
-    for _i in $(seq 1 20); do
-      code=$(curl -sS -o /dev/null -m 2 -w '%{http_code}' http://127.0.0.1:3456/ 2>/dev/null || echo 000)
-      case "$code" in
-        200|401|404|405)
-          export ANTHROPIC_BASE_URL="http://127.0.0.1:3456"
-          echo "ccr ON (http $code) → ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL upstream=http://${LLM_PROXY_ADDR}/ollama model=${MODEL_ARG}" >> "$HOME/worker.log"
-          break;;
-      esac
-      sleep 1
-    done
-    [ -n "${ANTHROPIC_BASE_URL:-}" ] || echo "ccr not up; ollama-local run WILL FAIL (no route)" >> "$HOME/worker.log"
+    # serf speaks Ollama natively. The worker is NOT on the proxy bridge, so serf reaches Ollama
+    # DIRECTLY — FLEET_OLLAMA_HOST is the Ollama server host:port. No Max token, no ccr, and NO
+    # lean-ctx init (its AGENTS.md/LEAN-CTX.md would pollute the harvested diff). serf writes edits
+    # to the working tree with --sandbox off (the disposable container IS the sandbox).
+    : "${FLEET_OLLAMA_HOST:?ollama-local requires FLEET_OLLAMA_HOST (e.g. 192.168.86.49:11434)}"
+    export OLLAMA_HOST="$FLEET_OLLAMA_HOST"
+    echo "serf: $(command -v serf || echo MISSING)  OLLAMA_HOST=$OLLAMA_HOST  model=ollama/${MODEL_ARG}" >> "$HOME/worker.log"
+    timeout --signal=INT "$WALL_CLOCK" \
+      serf --model "ollama/${MODEL_ARG}" \
+           --dir "$REPO" --sandbox off --max-rounds "$MAX_TURNS" --verbose \
+           "$(cat "$HOME/brief.txt")" \
+      > "$HOME/serf.out" 2> "$HOME/events.jsonl"
     ;;
   *)
-    # anthropic (default, unchanged): claude on the Max OAuth Bearer via the lean-ctx compression
-    # proxy :4444 → api.anthropic.com (chain proven 2026-06-20). Fail-open to the direct API.
+    # anthropic (default): claude on the Max OAuth Bearer via the lean-ctx compression proxy
+    # :4444 → api.anthropic.com (chain proven 2026-06-20). lean-ctx ctx_* tools + proxy live here.
     export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$HOME/.fleet-token")"
     if command -v lean-ctx >/dev/null 2>&1; then
+      lean-ctx init --agent claude >> "$HOME/worker.log" 2>&1 || true
+      lean-ctx setup               >> "$HOME/worker.log" 2>&1 || true
+      lean-ctx serve --daemon      >> "$HOME/worker.log" 2>&1 || true   # AC-2: bridge daemon + ctx_* tools
       lean-ctx proxy enable        >> "$HOME/worker.log" 2>&1 || true
       setsid nohup lean-ctx proxy start --port 4444 > "$HOME/lean-ctx-proxy.out" 2>&1 < /dev/null &
       for _i in $(seq 1 15); do
@@ -141,14 +118,13 @@ EOF
       done
       [ -n "${ANTHROPIC_BASE_URL:-}" ] || echo "lean-ctx proxy not up; claude runs direct (fail-open)" >> "$HOME/worker.log"
     fi
+    timeout --signal=INT "$WALL_CLOCK" \
+      claude --model "$MODEL_ARG" \
+             --dangerously-skip-permissions --max-turns "$MAX_TURNS" \
+             --output-format stream-json --verbose -p "$(cat "$HOME/brief.txt")" \
+      > "$HOME/events.jsonl" 2>> "$HOME/worker.log"
     ;;
 esac
-
-timeout --signal=INT "$WALL_CLOCK" \
-  claude --model "$MODEL_ARG" \
-         --dangerously-skip-permissions --max-turns "$MAX_TURNS" \
-         --output-format stream-json --verbose -p "$(cat "$HOME/brief.txt")" \
-  > "$HOME/events.jsonl" 2>> "$HOME/worker.log"
 rc=$?
 [ "$rc" = 124 ] && echo "WALL-CLOCK TIMEOUT" >> "$HOME/worker.log"
 echo "worker done rc=$rc $(date -u +%FT%TZ)" >> "$HOME/worker.log"

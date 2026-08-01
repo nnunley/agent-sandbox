@@ -6,6 +6,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; source "$HERE/lib.sh"
 DF_NAME="" DF_BRIEF="" DF_REPO="" DF_REF="HEAD" DF_ORACLE="" DF_MODEL=""
 DF_GOLDEN="" DF_OUTDIR="" DF_TIMEOUT="2400"
 DF_PROVIDER="anthropic" DF_PROXY_ADDR="${LLM_PROXY_ADDR:-10.88.0.1:12071}"
+DF_OLLAMA_HOST="${FLEET_OLLAMA_HOST:-192.168.86.49:11434}"  # serf reaches Ollama directly (not via the proxy bridge)
 usage() {
   cat <<'EOF'
 fleet-dogfood --name ID --brief FILE --repo PATH --oracle PATH [options]
@@ -27,6 +28,7 @@ while [ $# -gt 0 ]; do case "$1" in
   --golden) DF_GOLDEN="$2"; shift 2;; --output-dir) DF_OUTDIR="$2"; shift 2;;
   --timeout) DF_TIMEOUT="$2"; shift 2;;
   --provider) DF_PROVIDER="$2"; shift 2;; --proxy-addr) DF_PROXY_ADDR="$2"; shift 2;;
+  --ollama-host) DF_OLLAMA_HOST="$2"; shift 2;;
   --help|-h) usage; exit 0;; *) die "unknown arg: $1";;
 esac; done
 [ -n "$DF_NAME" ]   || die "--name is required"
@@ -102,13 +104,17 @@ $INCUS exec "$WORKER" -- bash -lc 'rm -rf /root/let-go && git clone -q /root/rep
 # LLM_PROXY_ADDR reaches the bridge proxy (ollama-local → ccr → /ollama route). ---
 log "run worker (nix develop … runner.sh as root, provider=$DF_PROVIDER, timeout=${DF_TIMEOUT}s)"
 $INCUS exec "$WORKER" --env HOME=/root --env IS_SANDBOX=1 \
-  --env "FLEET_PROVIDER=$DF_PROVIDER" --env "FLEET_MODEL=$DF_MODEL" --env "LLM_PROXY_ADDR=$DF_PROXY_ADDR" -- bash -lc \
+  --env "FLEET_PROVIDER=$DF_PROVIDER" --env "FLEET_MODEL=$DF_MODEL" --env "LLM_PROXY_ADDR=$DF_PROXY_ADDR" \
+  --env "FLEET_OLLAMA_HOST=$DF_OLLAMA_HOST" -- bash -lc \
   "nix develop /root/fleet-worker --accept-flake-config --no-sandbox --command bash /root/fleet-worker/runner.sh $DF_TIMEOUT" || true
 
 # --- harvest ---
 log "harvest worker.diff + events.jsonl -> $DF_OUTDIR"
 $INCUS file pull "$WORKER/root/worker.diff" "$DF_OUTDIR/worker.diff" 2>/dev/null || : > "$DF_OUTDIR/worker.diff"
 $INCUS file pull "$WORKER/root/events.jsonl" "$DF_OUTDIR/events.jsonl" 2>/dev/null || : > "$DF_OUTDIR/events.jsonl"
+# Diagnostics (best-effort): worker.log always; ccr.out for the ollama-local path.
+$INCUS file pull "$WORKER/root/worker.log" "$DF_OUTDIR/worker.log" 2>/dev/null || true
+$INCUS file pull "$WORKER/root/ccr.out" "$DF_OUTDIR/ccr.out" 2>/dev/null || true
 
 # --- authoritative grade (clean checkout + apply + hidden oracle) ---
 log "grade on clean checkout"
