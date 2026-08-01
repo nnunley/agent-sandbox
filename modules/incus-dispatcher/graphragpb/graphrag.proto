@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package graphrag.v1;
+
+option go_package = "github.com/agent-sandbox/incus-dispatcher/graphragpb;graphragpb";
+
+// GraphRAG is the fleet-facing surface of the first-party graphrag service. The service owns the
+// store and is its sole writer. Slice 1 uses only Ingest + Ask.
+service GraphRAG {
+  rpc Ingest(IngestRequest) returns (IngestResponse);
+  rpc Ask(AskRequest) returns (AskResponse);
+  rpc SubmitSynthesisStep(SynthesisStepResult) returns (SubmitAck);
+}
+
+message StoreRef {
+  string store = 1;
+  string root = 2;
+}
+
+message IngestRequest {
+  StoreRef store = 1;
+  string source_ref = 2;
+  bytes content = 3;
+}
+message IngestResponse {}
+
+message AskRequest {
+  StoreRef store = 1;
+  string query = 2;
+  uint32 top = 3;
+}
+message RankedResult {
+  string text = 1;
+  double score = 2;
+  string source_ref = 3;
+  string via = 4; // "base" | "community"
+}
+message AskResponse {
+  repeated RankedResult results = 1;
+}
+
+message SynthesisStepResult {
+  string nonce = 1;
+  bytes result = 2;
+}
+message SubmitAck {
+  bool merged = 1;
+}

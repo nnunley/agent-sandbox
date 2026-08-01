@@ -142,6 +142,7 @@
           laneqGrpc             # laneq library (importable) + console scripts
           pkgs.python3Packages.grpcio
           pkgs.python3Packages.protobuf
+          pkgs.buf              # protobuf codegen (graphrag gRPC contract — graphragpb/)
         ];
         # claude-code refuses --dangerously-skip-permissions as root; the worker
         # user must be non-root (enforced at container level, not here).
