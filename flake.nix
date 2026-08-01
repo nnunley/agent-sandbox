@@ -18,8 +18,9 @@
     # `nix-packaging` skill). cxdb = the StrongDM cxdb context store, S3-sync feature-gated off.
     packages.${system}.cxdb = pkgs.callPackage ./pkgs/cxdb { };
     # serf = prime-radiant's headless multi-provider coding agent (native Ollama). The fleet's
-    # ollama-local implementer, replacing the claude-code + claude-code-router chain.
-    packages.${system}.serf = pkgs.callPackage ./pkgs/serf { };
+    # ollama-local implementer, replacing the claude-code + claude-code-router chain. Derivation
+    # lives in fleet-worker/ (delivered to workers + cache publisher); referenced from there.
+    packages.${system}.serf = pkgs.callPackage ./fleet-worker/serf.nix { };
 
     nixosConfigurations.agent-host = nixpkgs.lib.nixosSystem {
       inherit system;

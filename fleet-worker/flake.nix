@@ -52,6 +52,10 @@
       # importable library (laneq.grpc.laneq_pb2_grpc) for clients.
       laneqGrpc = pkgs.callPackage ./laneq.nix {};
 
+      # serf — headless native-ollama coding agent; the ollama-local implementer (replaces
+      # claude-code+ccr). go.work needs go >=1.25.6; goPkg (1.26) satisfies GOTOOLCHAIN=local.
+      serf = pkgs.callPackage ./serf.nix { go_1_25 = goPkg; };
+
       # laneq-client: Python environment with laneq library + gRPC deps (no hardcoded paths).
       # Clients use: nix build .#laneq-client && ./result/bin/python client.py
       # or: nix develop -c python -c "import grpc, laneq.grpc.laneq_pb2_grpc"
@@ -120,6 +124,8 @@
                                 #   reads (~13 tok) + map/signatures/density file modes + shell-output
                                 #   compression. Subsumes rtk. Worker runs `lean-ctx init --agent claude`
                                 #   so headless `claude -p` reads via ctx_* and Bash output is compressed.
+          serf                  # headless native-ollama coding agent (ollama-local implementer;
+                                #   replaces the claude-code+ccr chain, which never connected)
           agents.claude-code-router  # `ccr` — Anthropic↔OpenAI translator so claude-code can
                                 #   drive a local OpenAI-compatible model (Ollama qwen3.6 via the
                                 #   llm-proxy /ollama route). Cheap-local-implementer tier (#22).
