@@ -99,14 +99,26 @@ $INCUS file push "$DF_BRIEF" "$WORKER/root/brief.txt"
 [ -n "${FLEET_TOKEN:-}" ] && printf '%s' "$FLEET_TOKEN" | $INCUS exec "$WORKER" -- tee /root/.fleet-token >/dev/null
 $INCUS exec "$WORKER" -- bash -lc 'rm -rf /root/let-go && git clone -q /root/repo.bundle /root/let-go' >/dev/null
 
-# --- run the worker as root (runner.sh inside the flake env; IS_SANDBOX=1 lets claude run
-# as root; toolchain from the local cache). FLEET_PROVIDER/FLEET_MODEL route the implementer;
-# LLM_PROXY_ADDR reaches the bridge proxy (ollama-local → ccr → /ollama route). ---
-log "run worker (nix develop … runner.sh as root, provider=$DF_PROVIDER, timeout=${DF_TIMEOUT}s)"
+# --- run the worker as root, DETACHED (runner.sh inside the flake env; IS_SANDBOX=1 lets claude
+# run as root; toolchain from the local cache). FLEET_PROVIDER/FLEET_MODEL route the implementer;
+# FLEET_OLLAMA_HOST points serf at Ollama directly.
+#
+# Detached + poll (not one long `incus exec`): a single API connection held for a slow local-model
+# run (minutes) gets reset by the incus daemon (192.168.86.49:8443 connection-reset). We launch the
+# run with setsid+nohup so it survives the short exec, and poll a short exec for /root/worker.DONE. ---
+log "run worker DETACHED (provider=$DF_PROVIDER, timeout=${DF_TIMEOUT}s) — polling for completion"
 $INCUS exec "$WORKER" --env HOME=/root --env IS_SANDBOX=1 \
   --env "FLEET_PROVIDER=$DF_PROVIDER" --env "FLEET_MODEL=$DF_MODEL" --env "LLM_PROXY_ADDR=$DF_PROXY_ADDR" \
   --env "FLEET_OLLAMA_HOST=$DF_OLLAMA_HOST" -- bash -lc \
-  "nix develop /root/fleet-worker --accept-flake-config --no-sandbox --command bash /root/fleet-worker/runner.sh $DF_TIMEOUT" || true
+  "rm -f /root/worker.DONE; setsid nohup bash -lc 'nix develop /root/fleet-worker --accept-flake-config --no-sandbox --command bash /root/fleet-worker/runner.sh $DF_TIMEOUT; touch /root/worker.DONE' > /root/worker.run.out 2>&1 < /dev/null &" || true
+
+# Poll budget = worker wall-clock + margin for nix-develop substitution/model cold-load.
+POLL_BUDGET=$(( DF_TIMEOUT + 600 )); waited=0
+while [ "$waited" -lt "$POLL_BUDGET" ]; do
+  if $INCUS exec "$WORKER" -- test -f /root/worker.DONE 2>/dev/null; then break; fi
+  sleep 15; waited=$(( waited + 15 ))
+done
+[ "$waited" -lt "$POLL_BUDGET" ] || log "poll budget (${POLL_BUDGET}s) exceeded — harvesting partial"
 
 # --- harvest ---
 log "harvest worker.diff + events.jsonl -> $DF_OUTDIR"
