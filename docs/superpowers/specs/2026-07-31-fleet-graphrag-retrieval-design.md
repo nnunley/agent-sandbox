@@ -1,231 +1,212 @@
 # Fleet Retrieval + Consolidation over graphrag (slice 1)
 
-**Status:** design approved in brainstorming (2026-07-31); spec for review.
+**Status:** design approved in brainstorming (2026-07-31). **Revised 2026-08-03** — reconciled
+against `graphrag-rs`'s actual architecture and an empirical extraction spike (see "Revision"
+below). Spec for review.
 
-graphrag is a first-party tool, so its fleet-facing surface is **co-designed here as a frozen
-contract** (see "Fleet ↔ graphrag contract"), implemented graphrag-side as a tracked item in
-graphrag's own roadmap. **Transport is gRPC** (the repo already depends on
-`google.golang.org/grpc` and laneq is fully proto/gRPC via `buf` — `queue/laneqpb/`). graphrag
-runs as a **gRPC service** (Rust/`tonic` server, generated Go client here). This repo builds
-against the proto contract, not against CLI text output.
+## Revision note (2026-08-03) — what changed and why
 
-Adds a retrieval/synthesis layer over the fleet's own soft state. graphrag becomes the
-hybrid-retrieval engine and knowledge-graph builder over the diary / curated-knowledge /
-handoff artifacts that runs already emit — never over the operator's personal brain. Origin:
-critical read of the MOMENTUM paper (jeanlabs.ai). MOMENTUM bundles retrieval + assembly +
-synthesis into one ADK monolith with marketing-domain glue; this repo already has better,
-separated primitives (graphrag, lean-ctx, laneq). The one genuinely transferable idea is the
-*composition* MOMENTUM performs that this fleet does not yet: relevance-ranked context
-assembled from accumulated soft state. This spec is that composition, slice 1.
+The 2026-07-31 draft designed a bespoke **graphrag gRPC service** (tonic/proto/buf) whose
+synthesis was **stepwise fleet work**: the service minted a nonce per unit, produced
+synthesis-step directives on **laneq**, and ephemeral workers ran each LLM step. Two discoveries
+supersede that:
+
+1. **graphrag-rs already is the tool.** It implements chunking, embeddings, hierarchical Leiden,
+   HNSW, BM25, RRF hybrid fusion, SQLite persistence, a CLI, a **14-tool MCP server**, LLM
+   entity/relation extraction, and an **`enrich` orchestrator** (extract → Leiden → summarize).
+   There is no bespoke gRPC service to build, no proto to freeze, no nonce/laneq-producer
+   machinery. The fleet **drives graphrag-rs**, it does not reimplement it.
+2. **Synthesis is in-process, not container-dispatched.** `enrichment-engine-design.md:62`:
+   *"Concurrency is graphrag-rs's own bounded tokio semaphore — **not** container/fleet dispatch
+   (a container per sub-second call is the wrong tool)."* So synthesis = one `graphrag enrich`
+   process making concurrent cheap-model calls through the **llm-proxy**, idempotent, resume-by-
+   rerun. The nonce/stepwise/laneq-producer design is **dropped**.
+
+laneq + container dispatch survive **only** for the coding-*worker* tier (running actual coding
+tasks), which is a separate concern and **not on graphrag's critical path**.
+
+**Empirically grounded (2026-08-03 spike, see "Extraction config"):** local models that *fail as
+serf coding agents* (qwen3.6-hermes, gemma4:31b) do **structured extraction flawlessly**. The
+synthesis layer is therefore viable on the cheap local floor, decoupled from the coding-agent
+problem.
+
+## Origin
+
+Critical read of the MOMENTUM paper (jeanlabs.ai): it bundles retrieval + assembly + synthesis
+into one ADK monolith with marketing-domain glue; this repo already has better, separated
+primitives (graphrag-rs, lean-ctx, laneq). The one transferable idea is the *composition* — a
+fleet run's opening context assembled and **relevance-ranked** from accumulated soft state. This
+spec is that composition, over the fleet's own soft state only.
 
 ## Goals
 
-1. A fleet run's opening context is **retrieved by relevance to its task brief** from
-   accumulated fleet soft state, instead of the current all-facts-for-a-thread dump
-   (`ReceiveKnowledge` today returns everything, unranked).
-2. graphrag's knowledge-graph **synthesis** (triples/relations + Leiden communities) runs as
-   **fleet work**: the service decomposes synthesis into stepwise units and enqueues them on
-   laneq; ephemeral workers execute the LLM steps through the llm-proxy. The service is only
-   the orchestrator and sole store-writer.
-3. The whole subsystem is **soft state**: best-effort, never a work source for real tasks,
-   never on the diff/grade path. Disabling it entirely must not change any run's grade.
+1. A fleet run's opening context is **retrieved by relevance to its task brief** from accumulated
+   fleet soft state, instead of the current all-facts-for-a-thread dump (`ReceiveKnowledge`
+   returns everything, unranked).
+2. The knowledge-graph **synthesis** (entity/relation extraction + Leiden communities + community
+   summaries) is produced by **`graphrag enrich`** running concurrent cheap-model calls through
+   the llm-proxy — in-process, idempotent, resume-by-rerun. Not fleet-dispatched.
+3. The whole subsystem is **soft state**: best-effort, never a work source for real tasks, never
+   on the diff/grade path. Disabling it entirely must not change any run's grade.
 
 ## Non-goals (slice 1)
 
-- Context-window token budgeting / multi-source merge (top-k is enough for now) — **slice 2**.
-- Explicit "project soul" summary surfacing — mostly falls out of community summaries once
-  synthesis runs; revisit as **slice 3** only if community output proves insufficient.
+- Context-window token budgeting / multi-source merge (top-k is enough) — **slice 2**.
+- Explicit "project soul" surfacing — falls out of community summaries; **slice 3** if needed.
 - Multi-tenant / cross-thread store scoping — single per-project store for now.
-- Retrieving from the operator's personal graphrag (brain/conversations) stores. Out of
-  bounds by design (privacy boundary).
+- Retrieving from the operator's personal graphrag (brain/conversations) stores — privacy line.
+- The coding-*worker* tier (serf/lace on local models). Separate track; not on this path.
 
-## Key premises (from brainstorming, load-bearing)
+## Key premises (load-bearing)
 
-- **Indexing ≠ a passive reindex; downstream indexing *is* synthesis.** graphrag's triple
-  extraction, consolidation/dedupe, and Leiden community summarization are LLM work. So
-  "retrieval adapter" and "synthesis" are the same subsystem viewed from read vs. write —
-  they cannot be phased apart.
-- **Base indexing is total and immediate; only downstream synthesis lags.** Chunk + embed
-  (HNSW) + BM25 covers *all* soft state as it lands (cheap, non-LLM), so **hybrid base
-  retrieval (RRF) always works right away**. The graph/community layer is built by async
-  stepwise fleet work and may be incomplete at any moment.
-- **Corpus = fleet soft state only.** Diary, curated knowledge, handoff artifacts — the
-  outputs of the existing `ContextProvider` path.
-- **The service is the single store-writer.** graphrag owns the store on the shared volume;
-  nothing else writes it. Workers never touch store files — they return synthesis results to
-  the service by nonce, and the service merges. This removes any file-lock/concurrency race.
-- **Placement.** The graphrag service runs alongside laneq and the llm-proxy (agent-host):
-  the coordinator reaches it for `Ask`/`Ingest`; workers reach it (over the bridge, like the
-  proxy) to submit synthesis steps. The store lives on the shared volume it owns.
+- **Base index is total and immediate; only downstream synthesis lags.** Chunk + embed (HNSW) +
+  BM25 covers *all* soft state as it lands (cheap, non-LLM), so **hybrid base retrieval (RRF)
+  works right away**. The graph/community layer is produced by `enrich` and may lag.
+- **Synthesis is `enrich`, in-process.** Concurrent bounded (`--concurrency`) `complete()` calls
+  through the llm-proxy → a cheap model; idempotent (`extracted_at` column + non-empty
+  `summary`); a mid-run failure is recovered by re-running. No nonce/laneq/stepwise machinery.
+- **graphrag-rs owns the store** (it is the tool; single writer by construction). The fleet feeds
+  it soft state and drives `enrich`/`ask`; it never hand-writes store files.
+- **Corpus = fleet soft state only** — diary, curated knowledge, handoff artifacts (the existing
+  `ContextProvider` outputs).
+- **Placement.** The fleet store + `enrich`/`ask` invocations run where they can reach the
+  llm-proxy and the store: coordinator-side, or one long-lived job — *not* a container per call.
 
 ## Architecture
 
-A per-project **fleet graphrag store**, owned by the graphrag gRPC service. Three flows:
+A per-project **fleet graphrag-rs store**. Three flows, all driven through graphrag-rs (CLI
+`--json` / its MCP tools — structured, no text scraping):
 
 ```
-run completes                                                       (coordinator)
-  └─ ContextProvider.WriteDiary / ShareKnowledge / CreateHandoff    (exists)
-        └─ base-index hook → graphrag.Ingest(RPC)                   (vector+BM25, immediate, best-effort, no LLM)
+run completes                                                    (coordinator)
+  └─ ContextProvider.WriteDiary / ShareKnowledge / CreateHandoff (exists)
+        └─ ingest hook → graphrag store (note/add_document)       (chunk+embed+BM25, immediate, best-effort, no LLM)
 
-synthesis = stepwise fleet work                                     (service orchestrates; workers compute)
-  service detects un-synthesized content
-    └─ decompose into stepwise units (per-chunk triples, per-community summary)
-    └─ for each unit: mint NONCE, enqueue a synthesis-step directive on laneq   (service is a laneq PRODUCER, paseto grant)
-  worker claims a synthesis step (laneq) ── like any other task
-    └─ run LLM extraction via llm-proxy → result
-    └─ graphrag.SubmitSynthesisStep(nonce, result) (RPC)
-  service validates nonce → MERGES into store (single writer) → marks step done
-    └─ re-submitting a nonce is a no-op → graph-stable / idempotent BY CONSTRUCTION
+synthesis (periodic / triggered; in-process, NOT fleet-dispatched)
+  └─ graphrag enrich --extract --summarize --provider-url <llm-proxy /v1> --model <cheap>
+        ├─ extract   chunks → concurrent complete() → entity/relation triples   (validated config below)
+        ├─ Leiden    graph → hierarchical communities
+        └─ summarize communities leaf→root → concurrent complete() → summaries   (sandwiched)
+     idempotent (extracted_at + non-empty summary); resume-by-rerun
 
-next run claims work                                                (coordinator)
-  └─ GraphRAGProvider.Retrieve(threadID, brief, k) → graphrag.Ask(RPC)
-        ├─ base hybrid (RRF)          → always available
-        └─ + community expansion      → when synthesis steps have landed
+next run claims work                                             (coordinator)
+  └─ RetrievalProvider.Retrieve(threadID, brief, k) → graphrag ask --json (or MCP query)
+        ├─ base hybrid (RRF)      → always available
+        └─ + community expansion  → when enrich has run
         └─ []RankedFact { Text, Score, SourceRef, Via }
-  └─ materialize top-k into the task's context                      (handoff bundle / context file on shared volume — existing transport)
+  └─ materialize top-k into the task's context                   (handoff bundle / context file on shared volume — existing transport)
   └─ worker launches with that context in its workspace
 ```
 
-The **query** is the task brief (the story/scenario/`Cmd` already on `Task`). The
-**materialization** reuses the existing handoff / shared-volume path — no new transport into
-the worker VM. There is **no monolithic `consolidate` task**: synthesis is many small nonce'd
-steps, each an ordinary laneq item.
+The **query** is the task brief (story/scenario/`Cmd` on `Task`). **Materialization** reuses the
+existing handoff / shared-volume path — no new worker-VM transport. All of it inherits the
+`ContextProvider` invariants (`context.go`): soft state only, best-effort, never a real-work
+source (STORY-0018 AC-5), never affects correctness (STORY-0018 AC-4).
 
-All of this inherits the `ContextProvider` invariants (`context.go`): soft state only,
-best-effort, never a real-work source (STORY-0018 AC-5), never affects correctness
-(STORY-0018 AC-4). Synthesis steps are ungraded fleet work.
+## Extraction config (empirically validated — 2026-08-03 spike)
 
-## The nonce
+Factorial spike `{JSON, triple-lines} × {single-block, sandwich} × {nemotron3:33b,
+qwen3.6-hermes, gemma4:31b}`, 8 chunks/arm, `think:false` + temp 0, mechanical metrics + a
+deepseek-v4-pro correctness judge (`scratchpad/extract-experiment/{harness,judge}.py`). Results:
 
-Minted by the service, one per stepwise synthesis unit. It is simultaneously:
+- **Single-block, no sandwich, for extraction.** The closing "bread" is neutral-to-harmful on
+  short chunks — worst cell in the sweep was nemotron3+JSON+sandwich (precision 0.83→**0.44**,
+  38% malformed). The sandwich's rationale (recency after a *long* span) does not apply to
+  context-constrained extraction chunks. **Keep the sandwich only for summarization** (long
+  community payloads — leaf→root).
+- **Output format is model-specific** (the correctness judge overturned "triples always wins"
+  that mechanical yield suggested):
+  - `qwen3.6-hermes` → **triple-lines** (`head (Type) -[relation]-> tail (Type)`): prec 0.82,
+    **4.6 correct triples/chunk** — best cell overall.
+  - `gemma4:31b` → **triple-lines** (0.81, 3.9/chunk).
+  - `nemotron3:33b` → **JSON** (0.83, 3.4) — its triple-line output is noisier (prec 0.60).
+- `think:false` (13–22× speedup) + temp 0. Precision ceiling ~0.80–0.83 (~1 in 5 imperfect) —
+  absorbed by graphrag-rs's existing **reflection/continuation passes** (max 2) plus later dedup
+  and community summarization.
+- **Best default pairing: `qwen3.6-hermes` + triple-lines** (highest correctness-weighted yield,
+  ~1.2s/call). Notably qwen3.6-hermes *fails* as a serf agent yet is the *best* extractor.
 
-- **Claim/correlation token** — carried on the laneq directive; ties a queued step to the
-  worker result submitted back via `SubmitSynthesisStep(nonce, …)`.
-- **Idempotency key** — the service dedupes merges by nonce, so a step delivered twice (retry,
-  at-least-once queue semantics) merges once. This is where graph-stability comes from — not
-  from re-running a whole synthesis pass.
-- **Liveness handle** — an unclaimed/failed step's nonce simply never returns; the service can
-  re-mint and re-enqueue on a timer. A dropped step means that unit is unsynthesized (base
-  retrieval still covers its content), never a corrupt graph.
+### graphrag-rs changes this implies (extraction prompt-builder)
 
-## Components & interfaces
+- Make the extraction **output format a knob** (`json` | `triples`) resolved **per model** —
+  default `triples`, `json` for nemotron-class. graphrag-rs already parses `EntityTriple`
+  (`head, head_type, relation, tail, tail_type`) and already has an arrow string form
+  (`format_triple`); extend it with types as the wire format and add a line parser (skip+count
+  malformed lines — degrades gracefully, unlike a broken JSON blob that loses the whole chunk).
+- Make the **sandwich a per-stage flag**: **off for extract**, **on for summarize**.
+- Keep `think:false` + temp 0 on the local path; mirror `required` fields in the prompt body
+  (Ollama drops schema `required` enforcement under `think:false`).
+
+## Components & interfaces (fleet side)
 
 - **`RetrievalProvider`** — new interface, parallels `ContextProvider`:
-
   ```go
   type RetrievalProvider interface {
       Retrieve(threadID, query string, k int) ([]RankedFact, error)
+      Ingest(sourceRef string, content []byte) error
   }
-
   type RankedFact struct {
-      Text      string  // retrieved passage/fact text
+      Text      string  // ranked passage/fact
       Score     float64
-      SourceRef string  // provenance: originating soft-state artifact; reused by later cascade-delete
-      Via       string  // "base" | "community" — which retrieval path produced it (degradation signal)
+      SourceRef string  // provenance: originating soft-state artifact
+      Via       string  // "base" | "community" — retrieval path (degradation signal)
   }
   ```
-
-  `RankedFact` carries retrieved text rather than wrapping `Fact{Key,Value}`: graphrag results
-  are ranked passages. `Via` lets the fleet observe whether community expansion contributed,
-  i.e. whether synthesis has caught up.
-
-- **`GraphRAGProvider`** — the adapter, a **gRPC client** of the graphrag service. Injectable
-  client (a fake in tests), best-effort error handling (RPC error → `nil, nil` at call sites
-  that treat it as soft state). Implements `RetrievalProvider`. No CLI, no text scraping.
-
-- **Base-index hook** — the soft-state write path (`WriteDiary` / `ShareKnowledge`, and the
-  knowledge export in `CreateHandoff`) also calls `graphrag.Ingest`. Best-effort: an ingest
-  failure never fails the underlying write.
-
-- **graphrag service** (first-party, graphrag repo) — owns the store; serves `Ingest`/`Ask`;
-  orchestrates synthesis by minting nonces and **producing** synthesis-step items on laneq;
-  accepts `SubmitSynthesisStep` and is the sole store-writer. Authenticates to laneq as a
-  producer via a paseto grant (see `2026-06-24-laneq-grant-paseto-design.md`).
-
-- **Synthesis-step worker** — an ephemeral fleet worker that claims a synthesis-step directive,
-  runs the LLM unit via the llm-proxy, and submits the result back by nonce. Ungraded.
-
-- **Fleet store** — per-project graphrag store on the shared volume, owned by the service.
+- **`GraphRAGProvider`** — the adapter. Backs onto **graphrag-rs** via its structured surface
+  (`graphrag ask --json` / the MCP query tools) — an injectable runner (fake in tests),
+  best-effort (error → `nil,nil`). Structured output, no text scraping. Implements
+  `RetrievalProvider`. (This replaces the dropped bespoke-gRPC-client design.)
+- **`NoopRetrievalProvider`** — default; drops all reads/writes. Guarantees correctness-
+  independence from day one.
+- **Ingest hook** — the soft-state write path (`WriteDiary`/`ShareKnowledge`, `CreateHandoff`
+  knowledge export) also feeds the fleet store. Best-effort; a failure never fails the write.
+- **`enrich` job** — invokes `graphrag enrich --extract --summarize --provider-url <proxy>
+  --model <cheap>` periodically/triggered. In-process concurrency; ungraded; idempotent.
+- **Materialization** — top-k `RankedFact`s → a context file on the shared volume + a `Task.Env`
+  pointer, reusing the handoff transport.
 
 ## Error handling & degradation
 
 | Failure | Behavior |
 |---|---|
-| `Ingest` RPC fails on write | Soft-state write still succeeds; that item is unsearchable until re-ingested. Run unaffected. |
-| Synthesis step never claimed / worker dies | Nonce never returns; service re-mints on a timer. That unit stays unsynthesized; base hybrid still covers its content. |
-| `SubmitSynthesisStep` delivered twice | Nonce-dedupe → merged once. No duplicate triples. |
-| `Ask` RPC fails / service down | `Retrieve` returns empty; run proceeds with whatever other soft state it had — today's `NoopProvider` behavior. |
-| Community synthesis behind | `Ask` silently falls back to base hybrid; results carry `Via:"base"`. Degradation, not error. |
+| Ingest fails on write | Soft-state write still succeeds; item unsearchable until re-ingested. Run unaffected. |
+| `enrich` run fails partway | Idempotent: re-run resumes (`extracted_at`/`summary` skip). Base retrieval still works meanwhile. Ungraded → no correctness impact. |
+| Malformed model output (a triple line / JSON) | Skip + count (line-level for triples — partial extraction preserved); reflection/continuation passes; still bad → skip. |
+| `ask` fails / store missing | `Retrieve` returns empty; run proceeds — today's `NoopProvider` behavior. |
+| Community synthesis behind | `ask` falls back to base hybrid; results carry `Via:"base"`. Degradation, not error. |
 
-**Correctness-independence invariant (mirrors STORY-0018 AC-4):** with retrieval and synthesis
-fully disabled (service unreachable, `NoopRetrievalProvider`), a run grades identically. A
-required test, not just a property.
+**Correctness-independence invariant (mirrors STORY-0018 AC-4):** with retrieval + synthesis
+disabled (`NoopRetrievalProvider`), a run grades identically. Required test.
 
 ## Testing
 
-- **Unit (fleet side)** — fake graphrag gRPC client: `Retrieve` maps `Ask` responses into
-  `[]RankedFact`, returns `nil` best-effort on RPC error, preserves `SourceRef`/`Via`.
-- **Nonce idempotency** — submitting the same nonce twice merges once (this is the
-  graph-stability guarantee; test it directly on the service's merge, and fleet-side that a
-  retried step submission is safe).
-- **Base-before-synthesis** — content ingested but not yet synthesized is retrievable via
-  `Via:"base"`; after the relevant step lands, a relation-dependent query returns it via
-  `Via:"community"`.
-- **Correctness-independence scenario** — service unreachable → identical grade.
-- **laneq producer** — the service enqueues a well-formed synthesis-step directive under its
-  grant; an ephemeral worker can claim and complete it.
-
-## Fleet ↔ graphrag contract
-
-Frozen here as a **proto service**; implemented graphrag-side as a tracked roadmap item. A
-**named store** is addressed by `store` + `root` (a path on the shared volume), a separate
-namespace from the operator's personal brain/conversations stores.
-
-```proto
-service GraphRAG {
-  // Base index, immediate, no LLM. Best-effort from the caller's view.
-  rpc Ingest(IngestRequest) returns (IngestResponse);
-
-  // Ranked hybrid retrieval. Base (RRF) always eligible; community results appear as
-  // synthesis steps land. Highest score first.
-  rpc Ask(AskRequest) returns (AskResponse);
-
-  // Worker → service: return one synthesis step's result, keyed by its nonce.
-  // Idempotent: a repeated nonce merges once.
-  rpc SubmitSynthesisStep(SynthesisStepResult) returns (SubmitAck);
-}
-
-message StoreRef { string store = 1; string root = 2; }
-
-message IngestRequest { StoreRef store = 1; string source_ref = 2; bytes content = 3; }
-message IngestResponse {}
-
-message AskRequest { StoreRef store = 1; string query = 2; uint32 top = 3; }
-message RankedResult { string text = 1; double score = 2; string source_ref = 3; string via = 4; } // via: "base"|"community"
-message AskResponse { repeated RankedResult results = 1; }
-
-message SynthesisStepResult { string nonce = 1; bytes result = 2; } // result = extracted triples / community summary
-message SubmitAck { bool merged = 1; } // false = already merged (nonce seen before)
-```
-
-The **synthesis-step directive** the service enqueues on laneq carries `{ nonce, StoreRef,
-unit_input_ref }` — the worker fetches the unit input (or receives it inline), runs the LLM
-step, and calls `SubmitSynthesisStep`. Trigger for synthesis is internal to the service
-(on ingest / on a timer); no external "synthesize" RPC is required for slice 1.
-
-**graphrag-side prerequisite (tracked in graphrag's roadmap, not this plan):** implement the
-service against this proto, including the store-owning merge, nonce-dedupe, and laneq producer
-integration. This slice builds against the proto; the two efforts meet at the `.proto`.
+- **Unit (fleet side)** — fake graphrag runner: `Retrieve` maps `ask --json` output into
+  `[]RankedFact`, `nil` best-effort on error, preserves `SourceRef`/`Via`.
+- **Base-before-synthesis** — content ingested but not yet enriched is retrievable via
+  `Via:"base"`; after `enrich`, a relation-dependent query returns it via `Via:"community"`.
+- **Idempotent enrich** — re-running `enrich` over an already-enriched store is a fast no-op (no
+  duplicate entities/relations/summaries).
+- **Correctness-independence scenario** — provider disabled → identical grade.
+- **Extraction config** (graphrag-rs side) — prompt-builder emits single-block for extract /
+  sandwiched for summarize; per-model format resolution; triple-line parser skips malformed lines.
 
 ## Build sequence (for the implementation plan)
 
-1. `RetrievalProvider` + `RankedFact` types; `NoopRetrievalProvider` (drops everything) as the
-   default, proving correctness-independence from day one.
-2. Freeze the `.proto` with the graphrag roadmap owner; generate the Go client (buf, as laneq
-   does).
-3. `GraphRAGProvider.Retrieve` over the `Ask` RPC + fake-client unit tests.
-4. Base-index hook → `Ingest` RPC on the soft-state write path.
-5. Synthesis-step worker + the service's laneq-producer/nonce-merge path (cross-repo; meets at
-   the proto and a laneq directive shape). Nonce-idempotency tests.
-6. Wire retrieval into work-claim → materialize top-k into task context; end-to-end scenario
-   + correctness-independence scenario.
+1. `RetrievalProvider` + `RankedFact` + `NoopRetrievalProvider` (default; proves correctness-
+   independence).
+2. `GraphRAGProvider.Retrieve` over `graphrag ask --json` (or MCP) + fake-runner unit tests.
+3. Ingest hook on the soft-state write path → fleet graphrag store.
+4. `enrich` job wiring: invoke `graphrag enrich … --provider-url <proxy> --model <cheap>`;
+   idempotency test.
+5. graphrag-rs extraction prompt-builder changes (per-model format, per-stage sandwich, triple-
+   line parser) — tracked in graphrag-rs's roadmap; meets the fleet at the `enrich` CLI/config.
+6. Wire retrieval into work-claim → materialize top-k into task context; end-to-end + correctness-
+   independence scenarios.
+
+## Superseded (kept for provenance)
+
+The 2026-07-31 design's **gRPC service + `.proto` contract + nonce + laneq-producer + synthesis-
+step-worker** are **dropped** (see Revision note): graphrag-rs is the tool, and synthesis is
+in-process `enrich`, not container-dispatched stepwise work. The `RankedFact` shape and the
+retrieval read-path/materialization survive; the transport is graphrag-rs's structured CLI/MCP,
+not a bespoke service.
