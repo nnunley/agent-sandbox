@@ -71,8 +71,8 @@ func Build(src Source, now time.Time, opts Options) (Brief, error) {
 		if ms[0].Attention.ContextKey == opts.ContextKey && opts.ContextKey != "" {
 			reason += ": preserves warm context " + opts.ContextKey
 		}
-		if ms[0].Attention.ResumeRef != "" {
-			reason += "; resume from " + ms[0].Attention.ResumeRef
+		if ref := ms[0].Attention.ResumeRef.Display(); ref != "" {
+			reason += "; resume from " + ref
 		}
 		b.Selections = append(b.Selections, Selection{ms[0], reason})
 	}

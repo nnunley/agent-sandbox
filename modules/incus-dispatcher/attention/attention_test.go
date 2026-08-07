@@ -3,6 +3,7 @@ package attention
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,7 +26,15 @@ func TestWalkingSkeletonFourNamedItems(t *testing.T) {
 		item("packet", "Prime Radiant packet approval", queue.Attention{Actor: "human+agent", Kind: "commitment", EstimatedHumanMinutes: 5, CompletionGate: "approve packet"}),
 		item("google", "Google application follow-up", queue.Attention{Actor: "human+agent", Kind: "commitment", ExternalWaiting: true, EstimatedHumanMinutes: 10, CompletionGate: "send follow-up"}),
 		item("leit", "forest-rs/leit PR #18: Bruce review window", queue.Attention{Actor: "human+agent", Kind: "commitment", EstimatedHumanMinutes: 5}),
-		item("compiler", "let-go compiler project: context-warm maker segment", queue.Attention{Actor: "human", Kind: "maker", ContextKey: "let-go/compiler", ResumeRef: "compiler notes"}),
+		item("compiler", "let-go compiler project: context-warm maker segment", queue.Attention{Actor: "human", Kind: "maker", ContextKey: "let-go/compiler", ResumeRef: &queue.ResumeRef{Capsule: &queue.CapsuleRef{
+			SchemaVersion:      1,
+			URI:                "graphrag://capsules/v1/project/graphrag-rs-current",
+			Kind:               "project",
+			CapsuleID:          "graphrag-rs-current",
+			ProjectID:          "graphrag-rs",
+			ContentFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			GeneratedAt:        "2026-08-07T00:00:00Z",
+		}}}),
 	}
 	ds[2].NotBefore = future
 	b, err := Build(source{ds: ds}, now, Options{CommitmentFloorComplete: false, ContextKey: "let-go/compiler"})
@@ -42,6 +51,9 @@ func TestWalkingSkeletonFourNamedItems(t *testing.T) {
 		if s.Reason == "" {
 			t.Fatal("missing reason")
 		}
+	}
+	if !strings.Contains(b.Selections[1].Reason, "graphrag://capsules/v1/project/graphrag-rs-current") {
+		t.Fatalf("maker reason should carry the capsule URI: %q", b.Selections[1].Reason)
 	}
 }
 func TestNotBeforeExcluded(t *testing.T) {

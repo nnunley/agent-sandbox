@@ -63,13 +63,13 @@ type GradeSpec struct {
 // Attention is optional policy metadata stored inside laneq's opaque Directive JSON.
 // Queue scheduling ignores it; old directives therefore retain their behavior.
 type Attention struct {
-	Actor                 string `json:"actor,omitempty"`     // human | agent | either | human+agent
-	Kind                  string `json:"work_kind,omitempty"` // commitment | maker
-	ExternalWaiting       bool   `json:"external_waiting,omitempty"`
-	EstimatedHumanMinutes int    `json:"estimated_human_minutes,omitempty"`
-	ContextKey            string `json:"context_key,omitempty"`
-	ResumeRef             string `json:"resume_ref,omitempty"`
-	CompletionGate        string `json:"completion_gate,omitempty"`
+	Actor                 string     `json:"actor,omitempty"`     // human | agent | either | human+agent
+	Kind                  string     `json:"work_kind,omitempty"` // commitment | maker
+	ExternalWaiting       bool       `json:"external_waiting,omitempty"`
+	EstimatedHumanMinutes int        `json:"estimated_human_minutes,omitempty"`
+	ContextKey            string     `json:"context_key,omitempty"`
+	ResumeRef             *ResumeRef `json:"resume_ref,omitempty"`
+	CompletionGate        string     `json:"completion_gate,omitempty"`
 }
 
 const (
