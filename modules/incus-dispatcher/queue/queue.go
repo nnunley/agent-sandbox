@@ -60,6 +60,32 @@ type GradeSpec struct {
 
 // Directive is one unit of work. No access_cmd, no root flag (D1): the Template
 // (validated against an allowlist + Origin) defines how the work runs.
+// Attention is optional policy metadata stored inside laneq's opaque Directive JSON.
+// Queue scheduling ignores it; old directives therefore retain their behavior.
+type Attention struct {
+	Actor                 string `json:"actor,omitempty"`     // human | agent | either | human+agent
+	Kind                  string `json:"work_kind,omitempty"` // commitment | maker
+	ExternalWaiting       bool   `json:"external_waiting,omitempty"`
+	EstimatedHumanMinutes int    `json:"estimated_human_minutes,omitempty"`
+	ContextKey            string `json:"context_key,omitempty"`
+	ResumeRef             string `json:"resume_ref,omitempty"`
+	CompletionGate        string `json:"completion_gate,omitempty"`
+}
+
+const (
+	GeneralExecutionLane = "default"
+	HumanLane            = "attention-human"
+)
+
+// AgentClaimable is the executable boundary used when routing work to the general daemon.
+// Existing directives remain claimable; the dedicated human lane never is.
+func AgentClaimable(d Directive) bool {
+	if d.Lane == HumanLane {
+		return false
+	}
+	return d.Attention == nil || d.Attention.Actor != "human"
+}
+
 type Directive struct {
 	ID         string     `json:"id"`
 	Intent     string     `json:"intent"`
@@ -87,6 +113,8 @@ type Directive struct {
 	// When set, budget accounting aggregates runs across all directives in the thread.
 	// When empty, the directive's own ID is used as the thread ID (single-directive behavior).
 	Thread string `json:"thread,omitempty"`
+
+	Attention *Attention `json:"attention,omitempty"`
 }
 
 // Lease is a claim token with an expiry. Renew with Touch; release with Done or
@@ -142,3 +170,7 @@ type Queue interface {
 	// Note: LaneqQueue has a separate Defer(id, notBefore) method on the Reprojector interface.
 	DeferDirective(lease Lease, notBefore time.Time) error
 }
+
+// Lister is an optional candidate-enumeration seam for policy/read models.
+// Queue intentionally does not require it: execution continues to use Claim/Peek.
+type Lister interface{ List() ([]Directive, error) }

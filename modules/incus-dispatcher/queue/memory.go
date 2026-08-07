@@ -231,3 +231,14 @@ func (q *MemoryQueue) DeferDirective(lease Lease, notBefore time.Time) error {
 	q.pending = append(q.pending, it.d)
 	return nil
 }
+
+// List returns a snapshot of pending directives, including future NotBefore items.
+func (q *MemoryQueue) List() ([]Directive, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	out := make([]Directive, len(q.pending))
+	for i, d := range q.pending {
+		out[i] = *d
+	}
+	return out, nil
+}

@@ -291,6 +291,26 @@ func (q *LaneqQueue) Requeue(lease Lease, notBefore time.Time) error {
 	return nil
 }
 
+// List enumerates pending candidates in this adapter's lane without claiming them.
+// It is an optional attention/read-model seam; worker dispatch remains Claim-based.
+func (q *LaneqQueue) List() ([]Directive, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := q.client.Listing(ctx, &laneqpb.ListingRequest{Lane: q.lane, AllStatuses: false})
+	if err != nil {
+		return nil, fmt.Errorf("list: gRPC error: %w", err)
+	}
+	out := make([]Directive, 0, len(resp.Directives))
+	for _, pb := range resp.Directives {
+		d, _, err := q.directiveFromProto(pb, "")
+		if err != nil {
+			return nil, fmt.Errorf("list directive %q: %w", pb.GetId(), err)
+		}
+		out = append(out, d)
+	}
+	return out, nil
+}
+
 // ptrInt64 is a helper to create a pointer to an int64.
 func ptrInt64(v int64) *int64 {
 	return &v

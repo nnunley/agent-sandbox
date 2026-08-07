@@ -33,3 +33,6 @@ func ParseDirective(data []byte) (Directive, error) {
 
 	return d, nil
 }
+
+// DecodeListedDirective applies the same strict, backward-compatible boundary to listing bodies.
+func DecodeListedDirective(data []byte) (Directive, error) { return ParseDirective(data) }
