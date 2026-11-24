@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/agent-sandbox/incus-dispatcher/queue"
 )
@@ -24,6 +27,43 @@ type TemplateRule struct {
 // Policy is the allowlist of launchable templates + origin rules.
 type Policy struct {
 	Templates map[string]TemplateRule
+}
+
+// templateFileRule is one entry of a templates file. An omitted tier resolves to
+// TierHard through TierFor; an omitted allow_worker_origin means orchestrator-only.
+type templateFileRule struct {
+	AllowWorkerOrigin bool          `json:"allow_worker_origin"`
+	Tier              IsolationTier `json:"tier"`
+}
+
+// LoadPolicy reads the template allowlist from a JSON file mapping each template
+// name to its rule, e.g. {"fleet-go": {"allow_worker_origin": true, "tier": "fast"}}.
+// An empty allowlist is an error: a daemon that can launch nothing would reject
+// every directive.
+func LoadPolicy(path string) (*Policy, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("templates: %w", err)
+	}
+	var rules map[string]templateFileRule
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&rules); err != nil {
+		return nil, fmt.Errorf("templates %s: %w", path, err)
+	}
+	if len(rules) == 0 {
+		return nil, fmt.Errorf("templates %s: no templates", path)
+	}
+	p := &Policy{Templates: make(map[string]TemplateRule, len(rules))}
+	for name, r := range rules {
+		switch r.Tier {
+		case "", TierFast, TierHard:
+		default:
+			return nil, fmt.Errorf("templates %s: template %q: unknown tier %q", path, name, r.Tier)
+		}
+		p.Templates[name] = TemplateRule{AllowWorkerOrigin: r.AllowWorkerOrigin, Tier: r.Tier}
+	}
+	return p, nil
 }
 
 // OriginOrchestrator is the trusted origin (directives the orchestrator authors).

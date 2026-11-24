@@ -34,8 +34,18 @@ func runServeCommand(args []string) int {
 	laneqGrantFile := fs.String("laneq-grant-file", "", "path to laneq PASETO grant file (enables gRPC auth if set)")
 	laneqClientKey := fs.String("laneq-client-key", "", "path to laneq client Ed25519 private key PEM (enables gRPC auth if set)")
 	laneqAud := fs.String("laneq-aud", "", "laneq audience for grants, e.g. laneq://agent-host:9999 (enables gRPC auth if set)")
+	templates := fs.String("templates", "", "JSON file of launchable templates: {\"name\": {\"allow_worker_origin\": bool, \"tier\": \"fast\"|\"hard\"}} (required)")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+	if *templates == "" {
+		log.Printf("serve: --templates is required; without an allowlist every directive is rejected")
+		return 2
+	}
+	policy, err := LoadPolicy(*templates)
+	if err != nil {
+		log.Printf("serve: %v", err)
+		return 1
 	}
 
 	runner, err := NewClientContainerRunner(*remote)
@@ -74,7 +84,7 @@ func runServeCommand(args []string) int {
 		Q:        q,
 		Runner:   runner, // fallback for directives whose template declares no tier
 		Backend:  backend,
-		Policy:   &Policy{Templates: map[string]TemplateRule{}},
+		Policy:   policy,
 		Consumer: *consumer,
 		LeaseDur: time.Minute,
 	}
