@@ -51,6 +51,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid LLM_PROXY_ALLOW: %v", err)
 	}
+	// /interactive routes skip the fleet reserve cap, so workers must not reach them.
+	interactiveAllow, err := parseAllow(envOrDefault("LLM_PROXY_INTERACTIVE_ALLOW", "127.0.0.0/8,::1/128"), localSubnets)
+	if err != nil {
+		log.Fatalf("invalid LLM_PROXY_INTERACTIVE_ALLOW: %v", err)
+	}
 
 	routes, err := buildRoutes(specs)
 	if err != nil {
@@ -64,8 +69,8 @@ func main() {
 	logs := &jsonLogSink{w: out}
 
 	srv := newServer(routes, logs)
-	srv.allow = allow
-	log.Printf("llm-proxy: callers allowed from %v", allow)
+	srv.allow, srv.interactiveAllow = allow, interactiveAllow
+	log.Printf("llm-proxy: fleet callers allowed from %v, interactive from %v", allow, interactiveAllow)
 	if v := os.Getenv("LLM_PROXY_MAX_BODY"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
 			srv.maxBodyBytes = n

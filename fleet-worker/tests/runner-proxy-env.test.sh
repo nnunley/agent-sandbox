@@ -12,7 +12,7 @@ RUNNER_LIB_ONLY=1 source "$RUNNER" || { note "FAIL: could not source runner in l
 type claude_proxy_env >/dev/null 2>&1 || { note "FAIL: claude_proxy_env not defined"; exit 1; }
 
 # A token left in the environment by the launcher must not survive into claude's environment.
-export CLAUDE_CODE_OAUTH_TOKEN="leaked-token"
+export CLAUDE_CODE_OAUTH_TOKEN="leaked-token" ANTHROPIC_API_KEY="leaked-key"
 claude_proxy_env "agent-host.incus:12071"
 check "$?" "0" "claude_proxy_env succeeds with an address"
 check "$ANTHROPIC_BASE_URL" "http://agent-host.incus:12071/anthropic" "claude calls llm-proxy's fleet route"

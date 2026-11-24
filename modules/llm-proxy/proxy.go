@@ -145,16 +145,25 @@ type Server struct {
 	priors          map[string]int64   // Estimator.PublishedPrior ceilings per provider
 	now             func() time.Time   // injected clock; defaults to time.Now
 
-	// allow lists the source networks that may use a provider route; any other
-	// caller gets 403. /health is open. Defaults to loopback only.
-	allow []*net.IPNet
+	// allow lists the source networks that may use a fleet route, and
+	// interactiveAllow those that may use an /interactive route, which skips the
+	// reserve cap; any other caller gets 403. /health is open. Both default to
+	// loopback only, so workers cannot reach the uncapped routes.
+	allow            []*net.IPNet
+	interactiveAllow []*net.IPNet
 }
 
 func newServer(routes []route, logs logSink) *Server {
 	return &Server{
-		allow:           loopbackNets(),
-		routes:          routes,
-		client:          &http.Client{Timeout: defaultUpstreamTimeout},
+		allow:            loopbackNets(),
+		interactiveAllow: loopbackNets(),
+		routes:           routes,
+		// Never follow an upstream redirect: it would carry the injected
+		// credentials to whatever host the redirect names.
+		client: &http.Client{
+			Timeout:       defaultUpstreamTimeout,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
 		logs:            logs,
 		maxBodyBytes:    defaultMaxBodyBytes,
 		ledgerPath:      "",
@@ -254,7 +263,7 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, rt route) {
 
 	// The proxy spends the host's credentials for whoever reaches it, so only
 	// the worker networks may use it.
-	if !s.callerAllowed(r.RemoteAddr) {
+	if !s.callerAllowedFor(r.RemoteAddr, rt.class) {
 		http.Error(w, "proxy: caller not allowed", http.StatusForbidden)
 		finish(http.StatusForbidden, "caller not allowed: "+r.RemoteAddr, 0, 0)
 		return
@@ -283,6 +292,14 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, rt route) {
 		return
 	}
 	upstreamPath = path.Clean(upstreamPath)
+
+	// The Anthropic credential is a whole subscription; spend it only on the
+	// endpoints an agent needs, not on account, file or batch APIs.
+	if rt.provider == "anthropic" && !anthropicPathAllowed(upstreamPath) {
+		http.Error(w, "proxy: path not allowed", http.StatusForbidden)
+		finish(http.StatusForbidden, "path not allowed: "+upstreamPath, 0, 0)
+		return
+	}
 
 	target := *rt.upstream
 	target.Path = singleJoiningSlash(rt.upstream.Path, upstreamPath)
@@ -328,7 +345,7 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, rt route) {
 	}
 	if rt.provider == "anthropic" && rt.apiKey != "" {
 		if rt.oauth {
-			outReq.Header.Set("anthropic-beta", withBeta(outReq.Header.Get("anthropic-beta"), anthropicOAuthBeta))
+			outReq.Header.Set("anthropic-beta", withBeta(strings.Join(outReq.Header.Values("anthropic-beta"), ","), anthropicOAuthBeta))
 		} else {
 			outReq.Header.Set("x-api-key", rt.apiKey)
 		}

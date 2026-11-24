@@ -90,9 +90,15 @@ func loopbackNets() []*net.IPNet {
 	return []*net.IPNet{v4, v6}
 }
 
-// callerAllowed reports whether a request's RemoteAddr falls in the allowlist.
-// It reads the socket address only; forwarding headers are not trusted.
+// callerAllowed reports whether a request's RemoteAddr falls in the fleet
+// allowlist. It reads the socket address only; forwarding headers are not trusted.
 func (s *Server) callerAllowed(remoteAddr string) bool {
+	return s.callerAllowedFor(remoteAddr, classFleet)
+}
+
+// callerAllowedFor checks RemoteAddr against the allowlist of the route's
+// class: interactive routes skip the reserve cap, so they have their own.
+func (s *Server) callerAllowedFor(remoteAddr string, class routeClass) bool {
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
 		host = remoteAddr
@@ -101,10 +107,27 @@ func (s *Server) callerAllowed(remoteAddr string) bool {
 	if ip == nil {
 		return false
 	}
-	for _, n := range s.allow {
+	if class == classInteractive {
+		return inNets(s.interactiveAllow, ip)
+	}
+	return inNets(s.allow, ip)
+}
+
+func inNets(nets []*net.IPNet, ip net.IP) bool {
+	for _, n := range nets {
 		if n.Contains(ip) {
 			return true
 		}
 	}
 	return false
+}
+
+// anthropicPathAllowed reports whether a cleaned upstream path is one an
+// agent needs: messages, token counting and the model list.
+func anthropicPathAllowed(p string) bool {
+	switch p {
+	case "/v1/messages", "/v1/messages/count_tokens", "/v1/models":
+		return true
+	}
+	return strings.HasPrefix(p, "/v1/models/")
 }

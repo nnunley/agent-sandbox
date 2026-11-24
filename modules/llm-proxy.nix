@@ -51,6 +51,15 @@ in {
       '';
     };
 
+    allowedInteractiveNetworks = lib.mkOption {
+      type = lib.types.str;
+      default = "127.0.0.0/8,::1/128";
+      description = ''
+        CIDRs allowed to use the /interactive routes, which skip the fleet
+        reserve cap. Keep worker networks out of this list.
+      '';
+    };
+
     localFastUrl = lib.mkOption {
       type = lib.types.str;
       default = "http://192.168.86.49:8081";
@@ -122,6 +131,7 @@ in {
       environment = {
         LLM_PROXY_ADDR        = cfg.listenAddr;
         LLM_PROXY_ALLOW       = cfg.allowedNetworks;
+        LLM_PROXY_INTERACTIVE_ALLOW = cfg.allowedInteractiveNetworks;
         LOCAL_FAST_URL        = cfg.localFastUrl;
         LOCAL_LARGE_URL       = cfg.localLargeUrl;
         OLLAMA_CLOUD_URL      = cfg.ollamaCloudUrl;
