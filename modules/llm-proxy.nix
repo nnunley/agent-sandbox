@@ -1,16 +1,22 @@
 # modules/llm-proxy.nix
 #
-# LLM reverse proxy service for agent micro-VMs.
-# Listens on the micro-VM bridge (default: 10.88.0.1:12071).
+# LLM reverse proxy service for agent workers: Incus containers on the host's
+# network reach it as agent-host.incus:12071, micro-VMs as 10.88.0.1:12071.
+# Only callers on allowedNetworks may use it; workers hold no provider
+# credentials. The default admits only the micro-VM bridge: add the fleet
+# containers' range explicitly, preferably an Incus network only workers use,
+# since the default Incus network also carries every other container.
 #
-# API keys are loaded from systemd credentials injected by Incus:
+# Credentials are loaded from systemd credentials injected by Incus. An OAuth
+# token (a Claude subscription) takes precedence over an Anthropic API key:
 #   incus config set ndn-desktop:agent-host \
+#     systemd.credential.anthropic_oauth_token=sk-ant-oat01-... \
 #     systemd.credential.anthropic_api_key=sk-ant-... \
 #     systemd.credential.openai_api_key=sk-...
 #
 # Agents configure their SDK:
-#   ANTHROPIC_BASE_URL=http://10.88.0.1:12071/anthropic
-#   OPENAI_BASE_URL=http://10.88.0.1:12071/openai
+#   ANTHROPIC_BASE_URL=http://agent-host.incus:12071/anthropic
+#   OPENAI_BASE_URL=http://agent-host.incus:12071/openai
 
 { config, lib, pkgs, ... }:
 
@@ -23,8 +29,26 @@ in {
 
     listenAddr = lib.mkOption {
       type = lib.types.str;
-      default = "10.88.0.1:12071";
-      description = "Address and port to listen on (should be the bridge gateway).";
+      default = ":12071";
+      description = ''
+        Address and port to listen on. All interfaces by default, so both the
+        micro-VM bridge and the Incus network reach it; allowedNetworks limits
+        who may use it.
+      '';
+    };
+
+    allowedNetworks = lib.mkOption {
+      type = lib.types.str;
+      default = "10.88.0.0/24";
+      example = "10.88.0.0/24,10.77.0.0/24";
+      description = ''
+        Comma-separated CIDRs allowed to spend the proxy's credentials. The
+        default is the micro-VM bridge only. Add the fleet containers' network
+        here; a dedicated Incus network for workers keeps other containers out.
+        "local-subnets" admits every subnet agent-host is attached to,
+        including the shared default Incus network, so any container there
+        could use the credentials.
+      '';
     };
 
     localFastUrl = lib.mkOption {
@@ -88,6 +112,7 @@ in {
         # refusing to start.
         # Keys land in $CREDENTIALS_DIRECTORY/<name>
         ImportCredential = [
+          "anthropic_oauth_token"
           "anthropic_api_key"
           "openai_api_key"
           "ollama_cloud_api_key"
@@ -96,6 +121,7 @@ in {
 
       environment = {
         LLM_PROXY_ADDR        = cfg.listenAddr;
+        LLM_PROXY_ALLOW       = cfg.allowedNetworks;
         LOCAL_FAST_URL        = cfg.localFastUrl;
         LOCAL_LARGE_URL       = cfg.localLargeUrl;
         OLLAMA_CLOUD_URL      = cfg.ollamaCloudUrl;
@@ -104,12 +130,14 @@ in {
 
       # Read credentials from $CREDENTIALS_DIRECTORY into env vars before exec
       script = ''
+        export ANTHROPIC_OAUTH_TOKEN=""
         export ANTHROPIC_API_KEY=""
         export OPENAI_API_KEY=""
         export OLLAMA_CLOUD_API_KEY=""
 
         creds="''${CREDENTIALS_DIRECTORY:-}"
         if [ -n "$creds" ]; then
+          [ -f "$creds/anthropic_oauth_token" ] && ANTHROPIC_OAUTH_TOKEN=$(cat "$creds/anthropic_oauth_token")
           [ -f "$creds/anthropic_api_key" ]     && ANTHROPIC_API_KEY=$(cat "$creds/anthropic_api_key")
           [ -f "$creds/openai_api_key" ]        && OPENAI_API_KEY=$(cat "$creds/openai_api_key")
           [ -f "$creds/ollama_cloud_api_key" ]  && OLLAMA_CLOUD_API_KEY=$(cat "$creds/ollama_cloud_api_key")
@@ -119,7 +147,11 @@ in {
       '';
     };
 
-    # Note: no firewall rule needed — br-microvm is already a trustedInterface
-    # in host/networking.nix, so all traffic from the bridge is accepted.
+    # br-microvm is a trustedInterface (host/networking.nix); the Incus
+    # network arrives on eth0, so open the port there. The proxy's own
+    # allowlist decides who may spend the credentials.
+    networking.firewall.interfaces.eth0.allowedTCPPorts = [
+      (lib.toInt (lib.last (lib.splitString ":" cfg.listenAddr)))
+    ];
   };
 }

@@ -2,7 +2,8 @@
 //
 // Routes:
 //
-//	/anthropic/*   → https://api.anthropic.com/*  (injects Authorization: Bearer $ANTHROPIC_API_KEY + x-api-key)
+//	/anthropic/*   → https://api.anthropic.com/*  (injects Authorization: Bearer $ANTHROPIC_OAUTH_TOKEN plus the
+//	                 OAuth beta flag when set, else Bearer $ANTHROPIC_API_KEY + x-api-key)
 //	/openai/*      → https://api.openai.com/*      (injects Authorization: Bearer $OPENAI_API_KEY)
 //	/ollama-cloud/*→ $OLLAMA_CLOUD_URL (injects Authorization: Bearer $OLLAMA_CLOUD_API_KEY)
 //	/ollama/*      → $OLLAMA_URL       (default: http://ndn.local:11434; local Ollama setup)
@@ -10,10 +11,14 @@
 //	/local-large/* → $LOCAL_LARGE_URL (default: http://ndn.local:8082)
 //	/health        → 200 OK
 //
-// Agents configure:
-//   ANTHROPIC_BASE_URL=http://10.88.0.1:12071/anthropic
-//   OPENAI_BASE_URL=http://10.88.0.1:12071/openai
-//   OLLAMA_CLOUD_BASE_URL=http://10.88.0.1:12071/ollama-cloud
+// Agents configure (agent-host.incus from Incus containers, 10.88.0.1 from microVMs):
+//   ANTHROPIC_BASE_URL=http://agent-host.incus:12071/anthropic
+//   OPENAI_BASE_URL=http://agent-host.incus:12071/openai
+//   OLLAMA_CLOUD_BASE_URL=http://agent-host.incus:12071/ollama-cloud
+//
+// Only callers in $LLM_PROXY_ALLOW may use the routes: comma-separated CIDRs
+// and "local-subnets" (every subnet this host is attached to). Unset means
+// loopback only; the NixOS module sets the worker networks.
 //
 // Log format: JSONL to stdout, one record per request.
 
@@ -33,14 +38,18 @@ func main() {
 	listenAddr := envOrDefault("LLM_PROXY_ADDR", ":12071")
 
 	specs := []routeSpec{
-		{"/anthropic", "https://api.anthropic.com", os.Getenv("ANTHROPIC_API_KEY"), "anthropic", true},
-		{"/openai", "https://api.openai.com", os.Getenv("OPENAI_API_KEY"), "openai", true},
-		{"/ollama-cloud", envOrDefault("OLLAMA_CLOUD_URL", "https://ollama.ai"), os.Getenv("OLLAMA_CLOUD_API_KEY"), "ollama-cloud", true},
+		anthropicSpec(os.Getenv("ANTHROPIC_API_KEY"), os.Getenv("ANTHROPIC_OAUTH_TOKEN")),
+		{prefix: "/openai", upstream: "https://api.openai.com", apiKey: os.Getenv("OPENAI_API_KEY"), provider: "openai", requiresKey: true},
+		{prefix: "/ollama-cloud", upstream: envOrDefault("OLLAMA_CLOUD_URL", "https://ollama.ai"), apiKey: os.Getenv("OLLAMA_CLOUD_API_KEY"), provider: "ollama-cloud", requiresKey: true},
 		// Local Ollama instance (user's local setup at http://ndn.local:11434)
-		{"/ollama", envOrDefault("OLLAMA_URL", "http://ndn.local:11434"), "", "ollama", false},
+		{prefix: "/ollama", upstream: envOrDefault("OLLAMA_URL", "http://ndn.local:11434"), provider: "ollama"},
 		// Local llama.cpp instances — no API key needed
-		{"/local-fast", envOrDefault("LOCAL_FAST_URL", "http://ndn.local:8081"), "", "local-fast", false},
-		{"/local-large", envOrDefault("LOCAL_LARGE_URL", "http://ndn.local:8082"), "", "local-large", false},
+		{prefix: "/local-fast", upstream: envOrDefault("LOCAL_FAST_URL", "http://ndn.local:8081"), provider: "local-fast"},
+		{prefix: "/local-large", upstream: envOrDefault("LOCAL_LARGE_URL", "http://ndn.local:8082"), provider: "local-large"},
+	}
+	allow, err := parseAllow(envOrDefault("LLM_PROXY_ALLOW", "127.0.0.0/8,::1/128"), localSubnets)
+	if err != nil {
+		log.Fatalf("invalid LLM_PROXY_ALLOW: %v", err)
 	}
 
 	routes, err := buildRoutes(specs)
@@ -55,6 +64,8 @@ func main() {
 	logs := &jsonLogSink{w: out}
 
 	srv := newServer(routes, logs)
+	srv.allow = allow
+	log.Printf("llm-proxy: callers allowed from %v", allow)
 	if v := os.Getenv("LLM_PROXY_MAX_BODY"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
 			srv.maxBodyBytes = n

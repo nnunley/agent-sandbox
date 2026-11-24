@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -56,6 +57,9 @@ type route struct {
 	provider    string
 	requiresKey bool
 	class       routeClass
+	// oauth marks apiKey as an Anthropic OAuth token (a Claude subscription),
+	// sent as a Bearer token with the OAuth beta flag and no x-api-key.
+	oauth bool
 }
 
 // routeSpec is the declarative description of one upstream provider route.
@@ -65,6 +69,7 @@ type routeSpec struct {
 	apiKey      string
 	provider    string
 	requiresKey bool
+	oauth       bool
 }
 
 func newRoute(prefix, upstreamStr, apiKey, provider string, requiresKey bool, class routeClass) (route, error) {
@@ -100,6 +105,7 @@ func buildRoutes(specs []routeSpec) ([]route, error) {
 		if err != nil {
 			return nil, err
 		}
+		fleet.oauth, inter.oauth = s.oauth, s.oauth
 		routes = append(routes, fleet, inter)
 	}
 	return routes, nil
@@ -138,10 +144,15 @@ type Server struct {
 	providerReserve map[string]float64 // per-provider reservePct override
 	priors          map[string]int64   // Estimator.PublishedPrior ceilings per provider
 	now             func() time.Time   // injected clock; defaults to time.Now
+
+	// allow lists the source networks that may use a provider route; any other
+	// caller gets 403. /health is open. Defaults to loopback only.
+	allow []*net.IPNet
 }
 
 func newServer(routes []route, logs logSink) *Server {
 	return &Server{
+		allow:           loopbackNets(),
 		routes:          routes,
 		client:          &http.Client{Timeout: defaultUpstreamTimeout},
 		logs:            logs,
@@ -241,6 +252,14 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, rt route) {
 		s.logs.Log(entry)
 	}
 
+	// The proxy spends the host's credentials for whoever reaches it, so only
+	// the worker networks may use it.
+	if !s.callerAllowed(r.RemoteAddr) {
+		http.Error(w, "proxy: caller not allowed", http.StatusForbidden)
+		finish(http.StatusForbidden, "caller not allowed: "+r.RemoteAddr, 0, 0)
+		return
+	}
+
 	// Pre-flight reserve-cap gate: fleet traffic only. Interactive is the
 	// protected headroom and is never deferred. Decision reads only the ledger's
 	// already-recorded usage, so it is independent of this response.
@@ -308,7 +327,11 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, rt route) {
 		outReq.Header.Set("Authorization", "Bearer "+rt.apiKey)
 	}
 	if rt.provider == "anthropic" && rt.apiKey != "" {
-		outReq.Header.Set("x-api-key", rt.apiKey)
+		if rt.oauth {
+			outReq.Header.Set("anthropic-beta", withBeta(outReq.Header.Get("anthropic-beta"), anthropicOAuthBeta))
+		} else {
+			outReq.Header.Set("x-api-key", rt.apiKey)
+		}
 		if outReq.Header.Get("anthropic-version") == "" {
 			outReq.Header.Set("anthropic-version", "2023-06-01")
 		}
