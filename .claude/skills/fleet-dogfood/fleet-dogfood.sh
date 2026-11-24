@@ -5,7 +5,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; source "$HERE/lib.sh"
 
 DF_NAME="" DF_BRIEF="" DF_REPO="" DF_REF="HEAD" DF_ORACLE="" DF_MODEL=""
 DF_GOLDEN="" DF_OUTDIR="" DF_TIMEOUT="2400"
-DF_PROVIDER="anthropic" DF_PROXY_ADDR="${LLM_PROXY_ADDR:-10.88.0.1:12071}"
+# Workers reach llm-proxy on agent-host over the Incus network; the proxy holds the credentials.
+DF_PROVIDER="anthropic" DF_PROXY_ADDR="${LLM_PROXY_ADDR:-agent-host.incus:12071}"
 DF_OLLAMA_HOST="${FLEET_OLLAMA_HOST:-192.168.86.49:11434}"  # serf reaches Ollama directly (not via the proxy bridge)
 usage() {
   cat <<'EOF'
@@ -40,10 +41,9 @@ mkdir -p "$DF_OUTDIR"
 ROOT_DIR="$(cd "$HERE/../../.." && pwd)"
 WORKER="df-$DF_NAME"
 MODE="$(cat "$HERE/.mode" 2>/dev/null || echo fresh)"
-# FLEET_TOKEN (Max OAuth) is only needed for the anthropic implementer; ollama-local uses no token.
-if [ "$DF_PROVIDER" = "anthropic" ]; then
-  [ -n "${FLEET_TOKEN:-}" ] || die "FLEET_TOKEN env not set (anthropic worker needs CLAUDE_CODE_OAUTH_TOKEN)"
-fi
+# No provider credential goes into the worker: the anthropic implementer goes through llm-proxy,
+# which holds the OAuth token (systemd credential anthropic_oauth_token on agent-host).
+[ -z "${FLEET_TOKEN:-}" ] || log "FLEET_TOKEN is set but no longer used: workers call llm-proxy at $DF_PROXY_ADDR"
 log "dispatch $WORKER (mode=$MODE, provider=$DF_PROVIDER) repo=$DF_REPO ref=$DF_REF -> $DF_OUTDIR"
 
 $INCUS delete "$WORKER" --force >/dev/null 2>&1 || true
@@ -84,8 +84,8 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# --- deliver repo@ref + brief + token + fleet-worker flake ---
-log "deliver repo@$DF_REF + brief + token"
+# --- deliver repo@ref + brief + fleet-worker flake ---
+log "deliver repo@$DF_REF + brief"
 # Deliver + run AS ROOT in /root. The disposable container IS the sandbox, so claude runs
 # as root via IS_SANDBOX=1 (verified) — no non-root worker, no uid/gid, no ownership dance:
 # root owns/writes everything (repo, flake.lock, claude's edits). Much simpler than the
@@ -95,8 +95,6 @@ log "deliver repo@$DF_REF + brief + token"
 $INCUS file push "/tmp/df-$DF_NAME.bundle" "$WORKER/root/repo.bundle"
 $INCUS file push -r "$ROOT_DIR/fleet-worker" "$WORKER/root/" >/dev/null
 $INCUS file push "$DF_BRIEF" "$WORKER/root/brief.txt"
-# Token only for the anthropic path; ollama-local needs none.
-[ -n "${FLEET_TOKEN:-}" ] && printf '%s' "$FLEET_TOKEN" | $INCUS exec "$WORKER" -- tee /root/.fleet-token >/dev/null
 $INCUS exec "$WORKER" -- bash -lc 'rm -rf /root/let-go && git clone -q /root/repo.bundle /root/let-go' >/dev/null
 
 # --- run the worker as root, DETACHED (runner.sh inside the flake env; IS_SANDBOX=1 lets claude

@@ -32,7 +32,6 @@ cd modules/incus-dispatcher && go test ./queue/ -run TestPendingOracle
 EOF
 chmod +x /tmp/df-pending-oracle.sh
 
-FLEET_TOKEN="${FLEET_TOKEN:-$(cat ~/.fleet-token 2>/dev/null)}" \
 bash "$HERE/fleet-dogfood.sh" --name pending-meta --brief /tmp/df-pending-brief.txt \
   --repo "$ROOT" --ref HEAD --oracle /tmp/df-pending-oracle.sh --output-dir /tmp/df-pending --timeout 900
 rc=$?

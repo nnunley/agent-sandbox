@@ -24,9 +24,9 @@ Prereq: the local nix cache must be populated — `scripts/populate-nix-cache.sh
 
 ## Dispatch
 ```
-FLEET_TOKEN="$(cat ~/.fleet-token)" bash .claude/skills/fleet-dogfood/fleet-dogfood.sh \
+bash .claude/skills/fleet-dogfood/fleet-dogfood.sh \
   --name ID --brief FILE --repo PATH --oracle PATH \
-  [--ref REF --model M --output-dir DIR --timeout SECS --golden SNAP]
+  [--ref REF --model M --output-dir DIR --timeout SECS --golden SNAP --proxy-addr HOST:PORT]
 ```
 Outputs in `--output-dir` (default `./dogfood-out/ID`): `worker.diff`, `events.jsonl`,
 `grade.json`. **Exit 0 iff the oracle passed.**
@@ -58,7 +58,10 @@ holdout agree. See `test/meta-dogfood.sh` and `.iter-scratch/iter0001-t1-*` for 
   captured and the patch is a clean unified diff.
 - Teardown is stop-then-delete and ALWAYS runs (never `delete --force` a running container).
 - The grade runs on a CLEAN checkout the worker never saw — authoritative.
-- `FLEET_TOKEN` injects the worker's `CLAUDE_CODE_OAUTH_TOKEN`; never bake it into a snapshot.
+- No provider credential enters the worker. The anthropic implementer goes through `llm-proxy`
+  on agent-host (`--proxy-addr`, default `agent-host.incus:12071`), which holds the OAuth token as
+  the systemd credential `anthropic_oauth_token` and admits only `services.llm-proxy.allowedNetworks`.
+  Add the worker containers' network there, or the proxy answers 403.
 
 ## Tests
 - `test/test-args.sh`, `test/test-grade.sh` — pure-local (arg validation, grading).

@@ -8,7 +8,6 @@ repo=$(mktemp -d); ( cd "$repo" && git init -q && echo hi > README.md && git add
 printf 'Create a NEW file SMOKE.txt at the repo root containing exactly the line: dogfood smoke ok\nDo not commit.\n' > /tmp/df-brief.txt
 printf '#!/usr/bin/env bash\ngrep -qx "dogfood smoke ok" SMOKE.txt\n' > /tmp/df-oracle.sh; chmod +x /tmp/df-oracle.sh
 
-FLEET_TOKEN="${FLEET_TOKEN:-$(cat ~/.fleet-token 2>/dev/null)}" \
 bash "$HERE/fleet-dogfood.sh" --name smoke --brief /tmp/df-brief.txt \
   --repo "$repo" --ref HEAD --oracle /tmp/df-oracle.sh --output-dir /tmp/df-smoke --timeout 600
 rc=$?

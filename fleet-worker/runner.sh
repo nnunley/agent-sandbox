@@ -48,6 +48,25 @@ prepare_worktree() {
   esac
 }
 
+# claude_proxy_env points claude, and the lean-ctx proxy in front of it, at llm-proxy's fleet
+# route at ADDR (host:port). The worker holds no credential: claude gets a placeholder that
+# llm-proxy strips before injecting the host's OAuth token. Any credential the launcher left
+# in the environment is removed, so no path reaches api.anthropic.com around llm-proxy.
+claude_proxy_env() {
+  local addr="$1"
+  if [ -z "$addr" ]; then
+    echo "claude_proxy_env: anthropic requires LLM_PROXY_ADDR (llm-proxy host:port, e.g. agent-host.incus:12071)" >&2
+    return 1
+  fi
+  unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY
+  LLM_PROXY_BASE="http://${addr}/anthropic"
+  export ANTHROPIC_AUTH_TOKEN="llm-proxy"   # placeholder: claude needs a credential to start
+  export ANTHROPIC_BASE_URL="$LLM_PROXY_BASE"
+  # lean-ctx forwards the placeholder as-is and never injects a credential; llm-proxy is a
+  # plain-HTTP host on the Incus network, which lean-ctx must be told is allowed.
+  export LEAN_CTX_ANTHROPIC_UPSTREAM="$LLM_PROXY_BASE" LEAN_CTX_ALLOW_INSECURE_HTTP_UPSTREAM=1 LEAN_CTX_ALLOW_CUSTOM_UPSTREAM=1
+}
+
 # Library-only mode: let tests source the functions above without running a worker.
 # `return` works when sourced (the intended path); fall back to `exit` if this
 # guard is ever hit in an executed context so bash doesn't error on a bare return.
@@ -99,9 +118,10 @@ case "$PROVIDER" in
       > "$HOME/serf.out" 2> "$HOME/events.jsonl"
     ;;
   *)
-    # anthropic (default): claude on the Max OAuth Bearer via the lean-ctx compression proxy
-    # :4444 → api.anthropic.com (chain proven 2026-06-20). lean-ctx ctx_* tools + proxy live here.
-    export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$HOME/.fleet-token")"
+    # anthropic (default): claude → lean-ctx compression proxy :4444 → llm-proxy on agent-host →
+    # api.anthropic.com. llm-proxy holds the OAuth token; the worker has only a placeholder, which
+    # llm-proxy strips. With lean-ctx down, claude calls llm-proxy directly. No path skips llm-proxy.
+    claude_proxy_env "${LLM_PROXY_ADDR:-}" 2>> "$HOME/worker.log" || exit 1
     if command -v lean-ctx >/dev/null 2>&1; then
       lean-ctx init --agent claude >> "$HOME/worker.log" 2>&1 || true
       lean-ctx setup               >> "$HOME/worker.log" 2>&1 || true
@@ -112,13 +132,13 @@ case "$PROVIDER" in
         code=$(curl -sS -o /dev/null -m 2 -w '%{http_code}' http://127.0.0.1:4444/ 2>/dev/null || echo 000)
         case "$code" in
           200|401|404|405)
-            export ANTHROPIC_BASE_URL="http://127.0.0.1:4444"   # route claude through the proxy (keep OAuth Bearer)
+            export ANTHROPIC_BASE_URL="http://127.0.0.1:4444"   # claude → lean-ctx → llm-proxy
             echo "lean-ctx proxy ON (http $code) → ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL" >> "$HOME/worker.log"
             break;;
         esac
         sleep 1
       done
-      [ -n "${ANTHROPIC_BASE_URL:-}" ] || echo "lean-ctx proxy not up; claude runs direct (fail-open)" >> "$HOME/worker.log"
+      [ "$ANTHROPIC_BASE_URL" != "$LLM_PROXY_BASE" ] || echo "lean-ctx proxy not up; claude calls llm-proxy directly" >> "$HOME/worker.log"
     fi
     timeout --signal=INT "$WALL_CLOCK" \
       claude --model "$MODEL_ARG" \
